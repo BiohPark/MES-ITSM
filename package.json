@@ -1,0 +1,42 @@
+{
+  "name": "test-1",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "init-db": "tsx scripts/init-db.ts",
+    "migrate": "tsx scripts/migrate-csv-to-db.ts",
+    "migrate-ids": "tsx scripts/migrate-ids.ts",
+    "migrate-null-project": "tsx scripts/migrate-null-project.ts",
+    "add-description": "tsx scripts/add-description-column.ts",
+    "add-start-description": "tsx scripts/add-start-description-columns.ts",
+    "add-progress": "tsx scripts/add-progress-column.ts",
+    "add-users-table": "tsx scripts/add-users-table.ts",
+    "clear-owners": "tsx scripts/clear-owners.ts",
+    "add-auth-columns": "tsx scripts/add-auth-columns.ts",
+    "create-admin": "tsx scripts/create-admin-account.ts"
+  },
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "csv-parse": "^6.1.0",
+    "csv-stringify": "^6.6.0",
+    "jose": "^6.1.2",
+    "mysql2": "^3.15.3",
+    "next": "^14.2.5",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
+    "@types/node": "^20.14.12",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "^14.2.5",
+    "tsx": "^4.20.6",
+    "typescript": "^5.5.4"
+  }
+}

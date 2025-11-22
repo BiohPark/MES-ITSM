@@ -1,0 +1,5 @@
+id,name,owner,members,status,progress,due,children
+PJT-2401,내부 도구 현대화,김리더,6,In Progress,72,2025-01-15,"[{""id"":""CH-1763646946005"",""title"":""Validation"",""owner"":""유승진"",""status"":""Planning"",""due"":""2025-11-20""},{""id"":""CH-1763646989188"",""title"":""개발"",""owner"":""유승진"",""status"":""Planning"",""due"":""2025-11-20""}]"
+PJT-2405,모바일 앱 퍼포먼스 개선,이프론트,4,Completed,35,2025-02-28,[]
+PJT-2409,AI 추천 시스템 PoC,박AI,5,Blocked,18,2025-03-07,[]
+PJT-2412,Global SaaS 온보딩,정Growth,8,In Progress,54,2025-04-01,[]
