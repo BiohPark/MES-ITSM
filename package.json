@@ -17,7 +17,11 @@
     "add-users-table": "tsx scripts/add-users-table.ts",
     "clear-owners": "tsx scripts/clear-owners.ts",
     "add-auth-columns": "tsx scripts/add-auth-columns.ts",
-    "create-admin": "tsx scripts/create-admin-account.ts"
+    "create-admin": "tsx scripts/create-admin-account.ts",
+    "apply-risk-management": "tsx scripts/apply-risk-management.ts",
+    "check-planned-progress": "tsx scripts/check-planned-progress.ts",
+    "update-completed-status": "tsx scripts/update-completed-status.ts",
+    "add-comments-table": "tsx scripts/add-comments-table.ts"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",

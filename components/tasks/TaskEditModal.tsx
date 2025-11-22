@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import type { Project, ProjectChild } from '@/types/project'
+import { CommentsSection } from '../common/CommentsSection'
 
 export function TaskEditModal({
   task,
@@ -13,6 +14,7 @@ export function TaskEditModal({
   onClose,
   onSave,
   isGmpRecord = false,
+  currentUser,
 }: {
   task: ProjectChild
   projectId: string | null
@@ -22,6 +24,7 @@ export function TaskEditModal({
   onClose: () => void
   onSave: (task: ProjectChild, projectId: string | null) => Promise<void> | void
   isGmpRecord?: boolean
+  currentUser?: { name: string; username: string }
 }) {
   const [formData, setFormData] = useState<any>({ ...task, description: (task as any).description || '', progress: (task as any).progress || 0 })
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(projectId || null)
@@ -311,6 +314,14 @@ export function TaskEditModal({
               />
             </div>
           </div>
+
+          {mode === 'edit' && currentUser && (
+            <CommentsSection
+              entityType={isGmpRecord ? 'gmp_record' : 'task'}
+              entityId={task.id}
+              currentUser={currentUser}
+            />
+          )}
         </form>
       </div>
     </div>

@@ -19,7 +19,13 @@ export function Progress({ value, start, due }: { value: number; start?: string;
     const totalDays = Math.ceil((dueDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
     const elapsedDays = Math.ceil((today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
     
-    if (totalDays <= 0) return 0
+    // 시작일과 마감일이 같은 경우 (totalDays = 0)
+    if (totalDays <= 0) {
+      // 오늘이 시작일/마감일과 같거나 이후면 100%, 이전이면 0%
+      if (elapsedDays >= 0) return 100
+      return 0
+    }
+    
     if (elapsedDays < 0) return 0
     if (elapsedDays > totalDays) return 100
     

@@ -353,7 +353,13 @@ export function ProjectsTable({
                     <td>
                       <StatusBadge status={child.status} />
                     </td>
-                    <td>-</td>
+                    <td>
+                      <Progress 
+                        value={(child as any).progress || 0} 
+                        start={(child as any).start}
+                        due={child.due}
+                      />
+                    </td>
                     <td>-</td>
                     <td>{(child as any).start || '-'}</td>
                     <td>{child.due || '-'}</td>

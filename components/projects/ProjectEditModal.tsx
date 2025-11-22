@@ -3,17 +3,20 @@
 import { useState, useEffect } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import type { Project, ProjectChild } from '@/types/project'
+import { CommentsSection } from '../common/CommentsSection'
 
 export function ProjectEditModal({
   project,
   mode,
   onClose,
   onSave,
+  currentUser,
 }: {
   project: Project
   mode: 'create' | 'edit'
   onClose: () => void
   onSave: (project: Project) => Promise<void> | void
+  currentUser?: { name: string; username: string }
 }) {
   const [formData, setFormData] = useState<any>({ ...project, description: (project as any).description || '', start: (project as any).start || new Date().toISOString().slice(0, 10), srb_ver: (project as any).srb_ver || '' })
   const [saving, setSaving] = useState(false)
@@ -192,7 +195,7 @@ export function ProjectEditModal({
                 value={formData.srb_ver || ''}
                 onChange={handleChange}
                 className="form-input"
-                placeholder="예: 1.0.0"
+                placeholder="예: SRB 26.1"
               />
             </div>
 
@@ -246,8 +249,8 @@ export function ProjectEditModal({
             <div className="child-preview">
               <p>하위 아이템</p>
               <ul>
-                {formData.children.map((child: ProjectChild) => (
-                  <li key={child.id}>
+                {formData.children.map((child: ProjectChild, index: number) => (
+                  <li key={`${formData.id}-${child.id}-${index}`}>
                     <span>{child.title}</span>
                     <span>{child.status}</span>
                   </li>
@@ -255,6 +258,14 @@ export function ProjectEditModal({
               </ul>
             </div>
           ) : null}
+
+          {mode === 'edit' && currentUser && (
+            <CommentsSection
+              entityType="project"
+              entityId={project.id}
+              currentUser={currentUser}
+            />
+          )}
 
         </form>
       </div>

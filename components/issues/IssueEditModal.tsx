@@ -19,15 +19,17 @@ const CAUSE_CATEGORIES = [
 
 // 모듈 옵션 (예시, 실제로는 시스템에 맞게 수정 필요)
 const MODULES = [
-  '인증 모듈',
-  '데이터 처리 모듈',
-  'UI 모듈',
-  'API 모듈',
-  '데이터베이스 모듈',
-  '리포트 모듈',
-  '시스템 관리 모듈',
-  '통합 모듈',
-  '기타',
+  'MES 1.0(eOM)',
+  'MES 1.0(eDM)',
+  'MES 1.0(eWF)',
+  'MES 1.0(Report)',
+  '1단지 WD',
+  '2단지 WD',
+  '1단지 ET',
+  '2단지 ET',
+  '1단지 eMBR(MX)',
+  'EAI',
+  'GMP 절차 위반',
 ]
 
 interface IssueEditModalProps {
@@ -261,7 +263,7 @@ export function IssueEditModal({
                 value={formData.sw_version || ''}
                 onChange={handleChange}
                 className="form-input"
-                placeholder="예: 1.0.0"
+                placeholder="예: SRB 26.1"
               />
             </div>
 

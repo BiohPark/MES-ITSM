@@ -838,7 +838,7 @@ export default function Home() {
             style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
           >
             {tab.key === 'search' ? (
-              <SearchIcon size={16} color={activeTab === tab.key ? '#fff' : 'currentColor'} />
+              <SearchIcon size={16} color="currentColor" />
             ) : (
               tab.label
             )}
@@ -936,6 +936,7 @@ export default function Home() {
                   setEditMode('edit')
                 }}
                 onSave={(updatedProject: Project) => handleProjectSave(updatedProject, editMode)}
+                currentUser={user ? { name: user.name, username: user.username } : undefined}
               />
             )}
 
@@ -1173,6 +1174,7 @@ export default function Home() {
             projects={projects}
             mode={taskEditMode}
             isGmpRecord={activeTab === 'gmp-record' || activeTab === 'search' && ((selectedTask.task as any).type === 'gmp-record') || !!(selectedTask.task as any).kind_number || !!(selectedTask.task as any).isGmpRecord}
+            currentUser={user ? { name: user.name, username: user.username } : undefined}
             onClose={() => {
               setIsTaskEditing(false)
               setSelectedTask(null)
@@ -1299,6 +1301,7 @@ export default function Home() {
             projectName={selectedTask.projectName}
             projects={projects}
             mode={taskEditMode}
+            currentUser={user ? { name: user.name, username: user.username } : undefined}
             onClose={() => {
               setIsTaskEditing(false)
               setSelectedTask(null)

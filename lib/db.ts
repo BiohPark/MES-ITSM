@@ -1,6 +1,7 @@
 import mysql from 'mysql2/promise'
 import type { Project, ProjectChild } from '@/types/project'
 import type { Issue } from '@/types/issue'
+import type { Comment, CommentEntityType } from '@/types/comment'
 
 // 데이터베이스 연결 설정
 const dbConfig = {
@@ -273,6 +274,12 @@ export async function updateProject(project: Project): Promise<void> {
   try {
     await connection.beginTransaction()
 
+    // 실적 진척도가 100%이면 상태를 "Completed"로 자동 변경
+    let finalStatus = project.status
+    if (project.progress >= 100) {
+      finalStatus = 'Completed'
+    }
+
     // 프로젝트 업데이트
     await connection.query(
       `UPDATE projects 
@@ -282,7 +289,7 @@ export async function updateProject(project: Project): Promise<void> {
         project.name,
         project.owner,
         project.members,
-        project.status,
+        finalStatus,
         project.progress,
         project.start || null,
         project.due,
@@ -297,13 +304,19 @@ export async function updateProject(project: Project): Promise<void> {
       project.id,
     ])
 
-    // 새로운 하위 아이템 추가
+    // 새로운 하위 아이템 추가 (GMP Record는 제외)
     if (project.children && project.children.length > 0) {
       for (const child of project.children) {
+        // GMP Record는 별도 테이블에 있으므로 건너뛰기
+        const isGmpRecord = !!(child as any).kind_number || !!(child as any).isGmpRecord
+        if (isGmpRecord) {
+          continue
+        }
+        
         await connection.query(
-          `INSERT INTO project_children (id, project_id, title, owner, status, progress, due, description)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [child.id, project.id, child.title, child.owner, child.status, child.progress || 0, child.due || null, child.description || null]
+          `INSERT INTO project_children (id, project_id, title, owner, status, progress, start, due, description)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [child.id, project.id, child.title, child.owner, child.status, child.progress || 0, (child as any).start || null, child.due || null, child.description || null]
         )
       }
     }
@@ -326,6 +339,42 @@ export async function deleteProject(projectId: string): Promise<void> {
   await pool.query('DELETE FROM projects WHERE id = ?', [projectId])
   // CASCADE로 자동 삭제되지만 명시적으로 삭제
   await pool.query('DELETE FROM project_children WHERE project_id = ?', [projectId])
+}
+
+// 계획 진척도 계산 (시작일과 마감일 기반)
+function calculatePlannedProgress(start: string | null | undefined, due: string | null | undefined): number {
+  if (!start || !due) return 0
+  
+  const startDate = new Date(start)
+  const dueDate = new Date(due)
+  const today = new Date()
+  
+  // 날짜를 자정으로 설정하여 일 단위 계산
+  startDate.setHours(0, 0, 0, 0)
+  dueDate.setHours(0, 0, 0, 0)
+  today.setHours(0, 0, 0, 0)
+  
+  const totalDays = Math.ceil((dueDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
+  const elapsedDays = Math.ceil((today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
+  
+  // 시작일과 마감일이 같은 경우 (totalDays = 0)
+  if (totalDays <= 0) {
+    // 오늘이 시작일/마감일과 같거나 이후면 100%, 이전이면 0%
+    if (elapsedDays >= 0) return 100
+    return 0
+  }
+  
+  if (elapsedDays < 0) return 0
+  if (elapsedDays > totalDays) return 100
+  
+  return Math.round((elapsedDays / totalDays) * 100)
+}
+
+// Risk 체크: 계획 진척도와 실적 진척도의 차이가 10% 이상인지 확인
+function checkRiskStatus(start: string | null | undefined, due: string | null | undefined, actualProgress: number): boolean {
+  const plannedProgress = calculatePlannedProgress(start, due)
+  const difference = Math.abs(plannedProgress - actualProgress)
+  return difference >= 10
 }
 
 // 하위 아이템 추가 (projectId가 null일 수 있음)
@@ -405,11 +454,19 @@ export async function updateChild(
   )
   const oldProjectId = existingRows.length > 0 ? existingRows[0].project_id : null
   
+  // 상태 자동 관리: 실적 진척도가 100%이면 "Completed", 그 외 Risk 체크
+  let finalStatus = child.status
+  if ((child.progress || 0) >= 100) {
+    finalStatus = 'Completed'
+  } else if (checkRiskStatus(child.start, child.due, child.progress || 0)) {
+    finalStatus = 'Issued'
+  }
+  
   await pool.query(
     `UPDATE project_children 
      SET project_id = ?, title = ?, owner = ?, status = ?, progress = ?, start = ?, due = ?, description = ?
      WHERE id = ?`,
-    [projectId, child.title, child.owner, child.status, child.progress || 0, child.start || null, child.due || null, child.description || null, child.id]
+    [projectId, child.title, child.owner, finalStatus, child.progress || 0, child.start || null, child.due || null, child.description || null, child.id]
   )
   
   // 프로젝트가 변경되었거나 업데이트된 경우 마감일 자동 업데이트
@@ -635,6 +692,14 @@ export async function updateGmpRecord(
   const number = recordAny.number || 0
   const kindNumber = `${kind}-${String(number).padStart(5, '0')}`
   
+  // 상태 자동 관리: 실적 진척도가 100%이면 "Completed", 그 외 Risk 체크
+  let finalStatus = record.status
+  if ((record.progress || 0) >= 100) {
+    finalStatus = 'Completed'
+  } else if (checkRiskStatus(record.start, record.due, record.progress || 0)) {
+    finalStatus = 'Issued'
+  }
+  
   await pool.query(
     `UPDATE gmp_records 
      SET project_id = ?, title = ?, kind = ?, number = ?, kind_number = ?, owner = ?, status = ?, progress = ?, start = ?, due = ?, description = ?
@@ -646,7 +711,7 @@ export async function updateGmpRecord(
       number,
       kindNumber,
       record.owner, 
-      record.status, 
+      finalStatus, 
       record.progress || 0, 
       record.start || null, 
       record.due || null, 
@@ -998,5 +1063,72 @@ export async function searchAll(keyword: string): Promise<SearchResult> {
     console.error('Error in searchAll:', error)
     throw new Error(`검색 실패: ${error instanceof Error ? error.message : 'Unknown error'}`)
   }
+}
+
+// 댓글 관리 관련 함수들
+
+// 댓글 조회
+export async function getComments(entityType: CommentEntityType, entityId: string): Promise<Comment[]> {
+  const pool = getPool()
+  const [comments] = await pool.query<any[]>(
+    'SELECT * FROM comments WHERE entity_type = ? AND entity_id = ? ORDER BY created_at DESC',
+    [entityType, entityId]
+  )
+
+  return comments.map((comment) => ({
+    id: comment.id,
+    entity_type: comment.entity_type as CommentEntityType,
+    entity_id: comment.entity_id,
+    author: comment.author,
+    content: comment.content,
+    created_at: comment.created_at ? (typeof comment.created_at === 'string' ? comment.created_at : new Date(comment.created_at).toISOString()) : '',
+    updated_at: comment.updated_at ? (typeof comment.updated_at === 'string' ? comment.updated_at : new Date(comment.updated_at).toISOString()) : '',
+  }))
+}
+
+// 댓글 추가
+export async function addComment(comment: Comment): Promise<void> {
+  const pool = getPool()
+  await pool.query(
+    `INSERT INTO comments (id, entity_type, entity_id, author, content)
+     VALUES (?, ?, ?, ?, ?)`,
+    [comment.id, comment.entity_type, comment.entity_id, comment.author, comment.content]
+  )
+}
+
+// 댓글 업데이트
+export async function updateComment(commentId: string, content: string): Promise<void> {
+  const pool = getPool()
+  await pool.query(
+    'UPDATE comments SET content = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+    [content, commentId]
+  )
+}
+
+// 댓글 삭제
+export async function deleteComment(commentId: string): Promise<void> {
+  const pool = getPool()
+  await pool.query('DELETE FROM comments WHERE id = ?', [commentId])
+}
+
+// 다음 댓글 ID 생성
+export async function getNextCommentId(): Promise<string> {
+  const pool = getPool()
+  const [rows] = await pool.query<any[]>(
+    `SELECT id FROM comments WHERE id LIKE 'CMT-%' ORDER BY id DESC LIMIT 1`
+  )
+
+  if (rows.length === 0) {
+    return 'CMT-00001'
+  }
+
+  const lastId = rows[0].id
+  const match = lastId.match(/CMT-(\d+)/)
+  if (match) {
+    const nextNum = parseInt(match[1], 10) + 1
+    return `CMT-${String(nextNum).padStart(5, '0')}`
+  }
+
+  return 'CMT-00001'
 }
 
