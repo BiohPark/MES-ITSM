@@ -85,21 +85,28 @@ export function TasksTable({
       })
     } else if (projects) {
       // 일반 일감 모드: projects에서 children 추출
+      // "GMP-"로 시작하는 일감은 제외 (일감 목록에서는 GMP Record를 제외)
       projects.forEach((project) => {
         project.children?.forEach((child) => {
-          tasks.push({
-            task: child,
-            projectId: project.id,
-            projectName: project.name,
-          })
+          // GMP-로 시작하는 ID를 가진 일감은 제외
+          if (!child.id.startsWith('GMP-')) {
+            tasks.push({
+              task: child,
+              projectId: project.id,
+              projectName: project.name,
+            })
+          }
         })
       })
+      // orphan tasks도 GMP-로 시작하는 것은 제외
       orphanTasks.forEach((task) => {
-        tasks.push({
-          task,
-          projectId: null,
-          projectName: 'N/A',
-        })
+        if (!task.id.startsWith('GMP-')) {
+          tasks.push({
+            task,
+            projectId: null,
+            projectName: 'N/A',
+          })
+        }
       })
     }
     return tasks

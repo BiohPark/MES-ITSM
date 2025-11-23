@@ -190,51 +190,51 @@ export function CommentsSection({ entityType, entityId, currentUser }: CommentsS
   }
 
   return (
-    <div style={{ marginTop: '1.5rem', borderTop: '1px solid #e5e7eb', paddingTop: '1.5rem' }}>
-      <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '1rem', color: '#111827' }}>
+    <div style={{ marginTop: '1rem', borderTop: '1px solid #e5e7eb', paddingTop: '1rem' }}>
+      <h3 style={{ fontSize: '0.875rem', fontWeight: 600, marginBottom: '0.75rem', color: '#111827' }}>
         진행 상황 기록
       </h3>
 
       {/* 댓글 목록 */}
       <div 
         id="comments-list"
-        style={{ marginBottom: '1rem', maxHeight: '300px', overflowY: 'auto' }}
+        style={{ marginBottom: '0.75rem', maxHeight: '200px', overflowY: 'auto' }}
       >
         {loading ? (
-          <p style={{ color: '#6b7280', fontSize: '0.875rem' }}>로딩 중...</p>
+          <p style={{ color: '#6b7280', fontSize: '0.75rem' }}>로딩 중...</p>
         ) : comments.length === 0 ? (
-          <p style={{ color: '#6b7280', fontSize: '0.875rem' }}>아직 기록이 없습니다.</p>
+          <p style={{ color: '#6b7280', fontSize: '0.75rem' }}>아직 기록이 없습니다.</p>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
             {comments.map((comment) => (
               <div
                 key={comment.id}
                 style={{
-                  padding: '0.75rem',
+                  padding: '0.5rem',
                   background: '#f9fafb',
-                  borderRadius: '0.5rem',
+                  borderRadius: '0.375rem',
                   border: '1px solid #e5e7eb',
                 }}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.375rem' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.125rem' }}>
                     <div>
-                      <span style={{ fontWeight: 600, fontSize: '0.875rem', color: '#111827' }}>
+                      <span style={{ fontWeight: 600, fontSize: '0.75rem', color: '#111827' }}>
                         {comment.author}
                       </span>
-                      <span style={{ fontSize: '0.75rem', color: '#6b7280', marginLeft: '0.5rem' }}>
+                      <span style={{ fontSize: '0.65rem', color: '#6b7280', marginLeft: '0.375rem' }}>
                         {formatDate(comment.created_at)}
                       </span>
                       {comment.updated_at !== comment.created_at && (
-                        <span style={{ fontSize: '0.75rem', color: '#9ca3af', marginLeft: '0.5rem' }}>
+                        <span style={{ fontSize: '0.65rem', color: '#9ca3af', marginLeft: '0.375rem' }}>
                           (수정됨)
                         </span>
                       )}
                     </div>
-                    <div style={{ fontSize: '0.7rem', color: '#9ca3af' }}>
+                    <div style={{ fontSize: '0.625rem', color: '#9ca3af' }}>
                       작성: {formatFullDate(comment.created_at)}
                       {comment.updated_at !== comment.created_at && (
-                        <span style={{ marginLeft: '0.5rem' }}>
+                        <span style={{ marginLeft: '0.375rem' }}>
                           수정: {formatFullDate(comment.updated_at)}
                         </span>
                       )}
@@ -250,9 +250,9 @@ export function CommentsSection({ entityType, entityId, currentUser }: CommentsS
                               background: '#3b82f6',
                               border: 'none',
                               color: 'white',
-                              fontSize: '0.75rem',
+                              fontSize: '0.65rem',
                               cursor: 'pointer',
-                              padding: '0.25rem 0.5rem',
+                              padding: '0.2rem 0.4rem',
                               borderRadius: '0.25rem',
                             }}
                           >
@@ -264,9 +264,9 @@ export function CommentsSection({ entityType, entityId, currentUser }: CommentsS
                               background: '#6b7280',
                               border: 'none',
                               color: 'white',
-                              fontSize: '0.75rem',
+                              fontSize: '0.65rem',
                               cursor: 'pointer',
-                              padding: '0.25rem 0.5rem',
+                              padding: '0.2rem 0.4rem',
                               borderRadius: '0.25rem',
                             }}
                           >
@@ -281,9 +281,9 @@ export function CommentsSection({ entityType, entityId, currentUser }: CommentsS
                               background: 'none',
                               border: 'none',
                               color: '#3b82f6',
-                              fontSize: '0.75rem',
+                              fontSize: '0.65rem',
                               cursor: 'pointer',
-                              padding: '0.25rem 0.5rem',
+                              padding: '0.2rem 0.4rem',
                             }}
                           >
                             수정
@@ -294,9 +294,9 @@ export function CommentsSection({ entityType, entityId, currentUser }: CommentsS
                               background: 'none',
                               border: 'none',
                               color: '#ef4444',
-                              fontSize: '0.75rem',
+                              fontSize: '0.65rem',
                               cursor: 'pointer',
-                              padding: '0.25rem 0.5rem',
+                              padding: '0.2rem 0.4rem',
                             }}
                           >
                             삭제
@@ -310,20 +310,20 @@ export function CommentsSection({ entityType, entityId, currentUser }: CommentsS
                   <textarea
                     value={editingContent}
                     onChange={(e) => setEditingContent(e.target.value)}
-                    rows={3}
+                    rows={2}
                     style={{
                       width: '100%',
-                      padding: '0.5rem',
+                      padding: '0.375rem',
                       border: '1px solid #3b82f6',
-                      borderRadius: '0.5rem',
-                      fontSize: '0.875rem',
+                      borderRadius: '0.375rem',
+                      fontSize: '0.75rem',
                       fontFamily: 'inherit',
                       resize: 'vertical',
                     }}
                     autoFocus
                   />
                 ) : (
-                  <p style={{ fontSize: '0.875rem', color: '#374151', lineHeight: '1.5', margin: 0, whiteSpace: 'pre-wrap' }}>
+                  <p style={{ fontSize: '0.75rem', color: '#374151', lineHeight: '1.4', margin: 0, whiteSpace: 'pre-wrap' }}>
                     {comment.content}
                   </p>
                 )}
@@ -334,7 +334,7 @@ export function CommentsSection({ entityType, entityId, currentUser }: CommentsS
       </div>
 
       {/* 댓글 입력 폼 */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
         <textarea
           value={newComment}
           onChange={(e) => setNewComment(e.target.value)}
@@ -345,16 +345,16 @@ export function CommentsSection({ entityType, entityId, currentUser }: CommentsS
             }
           }}
           placeholder="진행 상황을 기록하세요... (Ctrl+Enter로 등록)"
-          rows={3}
+          rows={2}
           style={{
             width: '100%',
-            padding: '0.75rem',
+            padding: '0.5rem',
             border: '1px solid #d1d5db',
-            borderRadius: '0.5rem',
-            fontSize: '0.875rem',
+            borderRadius: '0.375rem',
+            fontSize: '0.75rem',
             fontFamily: 'inherit',
             resize: 'vertical',
-            minHeight: '80px',
+            minHeight: '60px',
           }}
         />
         <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
@@ -363,12 +363,12 @@ export function CommentsSection({ entityType, entityId, currentUser }: CommentsS
             onClick={handleSubmit}
             disabled={submitting || !newComment.trim()}
             style={{
-              padding: '0.5rem 1rem',
+              padding: '0.375rem 0.75rem',
               background: submitting || !newComment.trim() ? '#d1d5db' : '#3b82f6',
               color: 'white',
               border: 'none',
-              borderRadius: '0.5rem',
-              fontSize: '0.875rem',
+              borderRadius: '0.375rem',
+              fontSize: '0.75rem',
               fontWeight: 500,
               cursor: submitting || !newComment.trim() ? 'not-allowed' : 'pointer',
             }}

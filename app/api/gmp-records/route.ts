@@ -6,8 +6,13 @@ import {
   updateGmpRecord,
   deleteGmpRecord,
   getNextGmpRecordId,
+  getAllIssues,
+  addIssue,
+  updateIssue,
+  getNextIssueId,
 } from '@/lib/db'
 import type { ProjectChild } from '@/types/project'
+import type { Issue } from '@/types/issue'
 
 const toNumber = (value: unknown, fallback: number) => {
   if (typeof value === 'number' && !Number.isNaN(value)) {
@@ -67,11 +72,85 @@ export async function POST(request: NextRequest) {
       }
 
       await addGmpRecord(body.projectId || null, newRecord)
+      
+      // Deviation인 경우 이슈 자동 생성
+      if (newRecord.kind === 'Deviation') {
+        try {
+          // 기존 이슈 확인 (title로 매칭)
+          const allIssues = await getAllIssues()
+          const existingIssue = allIssues.find(issue => 
+            issue.title === newRecord.title && issue.is_deviation
+          )
+          
+          if (!existingIssue) {
+            // 새 이슈 생성
+            const issueId = await getNextIssueId()
+            const issue: Issue = {
+              id: issueId,
+              title: newRecord.title,
+              description: newRecord.description || '',
+              status: 'Open',
+              owner: newRecord.owner,
+              occurred_date: newRecord.start || new Date().toISOString().slice(0, 10),
+              due_date: newRecord.due || undefined,
+              is_deviation: true,
+            }
+            await addIssue(issue)
+          }
+        } catch (error) {
+          console.error('이슈 자동 생성 실패:', error)
+          // 이슈 생성 실패해도 GMP Record 저장은 성공한 것으로 처리
+        }
+      }
+      
       const records = await getAllGmpRecords()
       return NextResponse.json({ success: true, records })
     } else if (body.action === 'update') {
       // GMP Record 업데이트
+      const updatedRecord = body.child as any
       await updateGmpRecord(body.projectId || null, body.child)
+      
+      // Deviation인 경우 이슈 동기화
+      if (updatedRecord.kind === 'Deviation') {
+        try {
+          const allIssues = await getAllIssues()
+          // title로 매칭하여 기존 이슈 찾기
+          const existingIssue = allIssues.find(issue => 
+            issue.title === updatedRecord.title && issue.is_deviation
+          )
+          
+          if (existingIssue) {
+            // 기존 이슈 업데이트
+            const updatedIssue: Issue = {
+              ...existingIssue,
+              title: updatedRecord.title,
+              description: updatedRecord.description || '',
+              owner: updatedRecord.owner,
+              due_date: updatedRecord.due || undefined,
+              is_deviation: true,
+            }
+            await updateIssue(updatedIssue)
+          } else {
+            // 새 이슈 생성
+            const issueId = await getNextIssueId()
+            const issue: Issue = {
+              id: issueId,
+              title: updatedRecord.title,
+              description: updatedRecord.description || '',
+              status: 'Open',
+              owner: updatedRecord.owner,
+              occurred_date: updatedRecord.start || new Date().toISOString().slice(0, 10),
+              due_date: updatedRecord.due || undefined,
+              is_deviation: true,
+            }
+            await addIssue(issue)
+          }
+        } catch (error) {
+          console.error('이슈 동기화 실패:', error)
+          // 이슈 동기화 실패해도 GMP Record 업데이트는 성공한 것으로 처리
+        }
+      }
+      
       const records = await getAllGmpRecords()
       return NextResponse.json({ success: true, records })
     } else if (body.action === 'delete') {

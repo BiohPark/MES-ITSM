@@ -218,15 +218,15 @@ export function UserManagementModal({ onClose, currentUser }: UserManagementModa
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px' }}>
-        <div className="modal-header">
+      <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '800px', maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <div className="modal-header" style={{ flexShrink: 0 }}>
           <h2>사용자 관리</h2>
           <button className="modal-close" onClick={onClose}>
             ×
           </button>
         </div>
 
-        <div className="project-form">
+        <div className="project-form" style={{ overflowY: 'auto', flex: 1, minHeight: 0 }}>
           <div className="form-group">
             <label htmlFor="new-user-username">ID *</label>
             <input

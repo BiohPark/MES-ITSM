@@ -111,8 +111,9 @@ export function TaskEditModal({
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+    <>
+      <div className="modal-overlay side-panel" onClick={onClose} />
+      <div className="modal-content side-panel" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2>{mode === 'edit' ? 'Record 일감 수정' : '새 일감 추가'}</h2>
           <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
@@ -225,13 +226,13 @@ export function TaskEditModal({
               value={formData.description || ''}
               onChange={handleChange}
               className="form-input"
-              rows={10}
+              rows={6}
               style={{
-                minHeight: '200px',
+                minHeight: '120px',
                 resize: 'vertical',
                 fontFamily: 'inherit',
-                fontSize: '0.95rem',
-                lineHeight: '1.5',
+                fontSize: '0.875rem',
+                lineHeight: '1.4',
               }}
               placeholder="일감의 상세 내용을 입력하세요..."
             />
@@ -324,7 +325,7 @@ export function TaskEditModal({
           )}
         </form>
       </div>
-    </div>
+    </>
   )
 }
 

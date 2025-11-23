@@ -71,8 +71,9 @@ export function ProjectEditModal({
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+    <>
+      <div className="modal-overlay side-panel" onClick={onClose} />
+      <div className="modal-content side-panel" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2>{mode === 'edit' ? '프로젝트 수정' : '새 프로젝트 추가'}</h2>
           <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
@@ -233,13 +234,13 @@ export function ProjectEditModal({
               value={formData.description || ''}
               onChange={handleChange}
               className="form-input"
-              rows={10}
+              rows={6}
               style={{
-                minHeight: '200px',
+                minHeight: '120px',
                 resize: 'vertical',
                 fontFamily: 'inherit',
-                fontSize: '0.95rem',
-                lineHeight: '1.5',
+                fontSize: '0.875rem',
+                lineHeight: '1.4',
               }}
               placeholder="프로젝트의 상세 내용을 입력하세요..."
             />
@@ -269,7 +270,7 @@ export function ProjectEditModal({
 
         </form>
       </div>
-    </div>
+    </>
   )
 }
 

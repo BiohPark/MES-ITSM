@@ -124,9 +124,9 @@ export async function getProjects(): Promise<Project[]> {
 
     const today = new Date().toISOString().slice(0, 10)
     for (const project of projects) {
-      // 일반 일감 조회
+      // 일반 일감 조회 (GMP-로 시작하는 ID는 제외 - GMP Record는 별도 테이블에서 조회)
       const [children] = await pool.query<any[]>(
-        'SELECT * FROM project_children WHERE project_id = ? ORDER BY created_at ASC',
+        'SELECT * FROM project_children WHERE project_id = ? AND id NOT LIKE "GMP-%" ORDER BY created_at ASC',
         [project.id]
       )
 
@@ -171,7 +171,20 @@ export async function getProjects(): Promise<Project[]> {
       })
 
       // 일반 일감과 GMP Record를 합쳐서 정렬
-      const allChildren = [...childrenList, ...gmpRecordsList].sort((a, b) => {
+      // ID 기준으로 중복 제거 (GMP Record가 우선)
+      const childrenMap = new Map<string, any>()
+      
+      // 먼저 일반 일감 추가
+      childrenList.forEach((child) => {
+        childrenMap.set(child.id, child)
+      })
+      
+      // GMP Record 추가 (같은 ID가 있으면 덮어씀)
+      gmpRecordsList.forEach((record) => {
+        childrenMap.set(record.id, record)
+      })
+      
+      const allChildren = Array.from(childrenMap.values()).sort((a, b) => {
         // GMP Record를 먼저 표시하거나, 생성일 기준으로 정렬
         if (a.isGmpRecord && !b.isGmpRecord) return -1
         if (!a.isGmpRecord && b.isGmpRecord) return 1
