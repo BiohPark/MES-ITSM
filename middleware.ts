@@ -29,10 +29,19 @@ export async function middleware(request: NextRequest) {
 
     const session = await verifySession(token)
     if (!session) {
-      return NextResponse.json(
+      const response = NextResponse.json(
         { error: '인증이 유효하지 않습니다.' },
         { status: 401 }
       )
+      // 만료된 쿠키 삭제
+      response.cookies.set('session', '', {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 0,
+        path: '/',
+      })
+      return response
     }
 
     // Admin 권한이 필요한 경로 확인
@@ -68,11 +77,20 @@ export async function middleware(request: NextRequest) {
 
   const session = await verifySession(token)
   if (!session) {
-    // 세션이 유효하지 않으면 로그인 페이지로 리다이렉트
+    // 세션이 유효하지 않으면 쿠키 삭제 후 로그인 페이지로 리다이렉트
     const loginUrl = new URL('/login', request.url)
     loginUrl.searchParams.set('from', pathname)
     loginUrl.searchParams.set('expired', 'true')
-    return NextResponse.redirect(loginUrl)
+    const response = NextResponse.redirect(loginUrl)
+    // 만료된 쿠키 삭제
+    response.cookies.set('session', '', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 0,
+      path: '/',
+    })
+    return response
   }
 
   return NextResponse.next()

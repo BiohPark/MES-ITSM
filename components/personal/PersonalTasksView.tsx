@@ -129,7 +129,6 @@ export function PersonalTasksView({
     // 상태별 갯수 계산
     const statusCounts = {
       Planning: 0,
-      'In progress': 0,
       'In Progress': 0,
       Issued: 0,
       Completed: 0,
@@ -138,9 +137,8 @@ export function PersonalTasksView({
     myTasks.forEach(({ task }) => {
       const status = task.status || 'Planning'
       if (status === 'Planning') statusCounts.Planning++
-      else if (status?.toLowerCase() === 'in progress') {
-        if (status === 'In Progress') statusCounts['In Progress']++
-        else statusCounts['In progress']++
+      else if (status?.toLowerCase() === 'in progress' || status === 'In Progress') {
+        statusCounts['In Progress']++
       }
       else if (status === 'Issued') statusCounts.Issued++
       else if (status === 'Completed') statusCounts.Completed++
@@ -149,9 +147,8 @@ export function PersonalTasksView({
     myProjects.forEach((project) => {
       const status = project.status || 'Planning'
       if (status === 'Planning') statusCounts.Planning++
-      else if (status?.toLowerCase() === 'in progress') {
-        if (status === 'In Progress') statusCounts['In Progress']++
-        else statusCounts['In progress']++
+      else if (status?.toLowerCase() === 'in progress' || status === 'In Progress') {
+        statusCounts['In Progress']++
       }
       else if (status === 'Issued') statusCounts.Issued++
       else if (status === 'Completed') statusCounts.Completed++
@@ -222,9 +219,9 @@ export function PersonalTasksView({
                       Planning: {myTasksData.statusCounts.Planning}
                     </span>
                   )}
-                  {(myTasksData.statusCounts['In progress'] > 0 || myTasksData.statusCounts['In Progress'] > 0) && (
+                  {myTasksData.statusCounts['In Progress'] > 0 && (
                     <span style={{ color: '#15803d' }}>
-                      In Progress: {(myTasksData.statusCounts['In progress'] || 0) + (myTasksData.statusCounts['In Progress'] || 0)}
+                      In Progress: {myTasksData.statusCounts['In Progress']}
                     </span>
                   )}
                   {myTasksData.statusCounts.Issued > 0 && (

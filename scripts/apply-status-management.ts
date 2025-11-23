@@ -36,14 +36,14 @@ function checkRiskStatus(start: string | null | undefined, due: string | null | 
   return difference >= 10 // 계획이 실적보다 10% 이상 높은 경우만 true
 }
 
-// 상태 결정 로직: progress >= 100 → "Completed", Risk 체크 → "Issued", progress > 0 → "In progress"
+// 상태 결정 로직: progress >= 100 → "Completed", Risk 체크 → "Issued", progress > 0 → "In Progress"
 function determineStatus(start: string | null | undefined, due: string | null | undefined, progress: number, currentStatus: string): string {
   if (progress >= 100) {
     return 'Completed'
   } else if (checkRiskStatus(start, due, progress)) {
     return 'Issued'
   } else if (progress > 0) {
-    return 'In progress'
+    return 'In Progress'
   }
   return currentStatus // 그 외는 원래 상태 유지
 }

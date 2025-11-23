@@ -22,7 +22,13 @@
     "check-planned-progress": "tsx scripts/check-planned-progress.ts",
     "update-completed-status": "tsx scripts/update-completed-status.ts",
     "add-comments-table": "tsx scripts/add-comments-table.ts",
-    "apply-status-management": "tsx scripts/apply-status-management.ts"
+    "apply-status-management": "tsx scripts/apply-status-management.ts",
+    "generate-test-data": "tsx scripts/generate-performance-test-data.ts",
+    "measure-performance": "tsx scripts/measure-performance.ts",
+    "add-indexes": "tsx scripts/add-performance-indexes.ts",
+    "cleanup-test-data": "tsx scripts/cleanup-test-data.ts",
+    "update-in-progress-status": "tsx scripts/update-in-progress-status.ts",
+    "check-auth-security": "tsx scripts/check-auth-security.ts"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",

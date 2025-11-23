@@ -20,7 +20,9 @@ export async function POST(request: NextRequest) {
 
       const account = await verifyLogin(username, password)
       if (!account) {
-        console.log('로그인 실패: 계정을 찾을 수 없음')
+        // 보안을 위해 구체적인 실패 이유를 노출하지 않음
+        // 로그에는 기록하지만 사용자에게는 일반적인 메시지만 반환
+        console.log('로그인 실패: ID 또는 비밀번호가 올바르지 않음')
         return NextResponse.json(
           { error: 'ID 또는 비밀번호가 올바르지 않습니다.' },
           { status: 401 }
@@ -136,8 +138,16 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'logout') {
-      await deleteSession()
-      return NextResponse.json({ success: true, message: '로그아웃되었습니다.' })
+      const response = NextResponse.json({ success: true, message: '로그아웃되었습니다.' })
+      // 쿠키 명시적으로 삭제
+      response.cookies.set('session', '', {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 0, // 즉시 만료
+        path: '/',
+      })
+      return response
     }
 
     if (action === 'request-reset') {

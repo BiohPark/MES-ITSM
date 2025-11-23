@@ -2,6 +2,9 @@ import { SignJWT, jwtVerify } from 'jose'
 import { cookies } from 'next/headers'
 
 const secretKey = process.env.JWT_SECRET || 'default-secret-key-change-in-production'
+if (process.env.NODE_ENV === 'production' && secretKey === 'default-secret-key-change-in-production') {
+  console.warn('⚠️  WARNING: JWT_SECRET이 기본값을 사용하고 있습니다. 프로덕션 환경에서는 반드시 변경해야 합니다!')
+}
 const encodedKey = new TextEncoder().encode(secretKey)
 
 export interface SessionPayload {

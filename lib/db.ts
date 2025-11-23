@@ -112,7 +112,7 @@ export async function initializeDatabase(): Promise<void> {
   }
 }
 
-// 프로젝트 조회
+// 프로젝트 조회 (최적화: N+1 문제 해결)
 export async function getProjects(): Promise<Project[]> {
   try {
     const pool = getPool()
@@ -120,21 +120,50 @@ export async function getProjects(): Promise<Project[]> {
       'SELECT * FROM projects ORDER BY created_at DESC'
     )
 
+    if (projects.length === 0) {
+      return []
+    }
+
+    const projectIds = projects.map(p => p.id)
+    const placeholders = projectIds.map(() => '?').join(',')
+
+    // 모든 일감을 한 번에 조회 (배치 쿼리)
+    const [allChildren] = await pool.query<any[]>(
+      `SELECT * FROM project_children WHERE project_id IN (${placeholders}) AND id NOT LIKE "GMP-%" ORDER BY project_id, created_at ASC`,
+      projectIds
+    )
+
+    // 모든 GMP Record를 한 번에 조회 (배치 쿼리)
+    const [allGmpRecords] = await pool.query<any[]>(
+      `SELECT * FROM gmp_records WHERE project_id IN (${placeholders}) ORDER BY project_id, created_at ASC`,
+      projectIds
+    )
+
+    // 프로젝트별로 일감과 GMP Record를 그룹화
+    const childrenByProject = new Map<string, any[]>()
+    const gmpRecordsByProject = new Map<string, any[]>()
+
+    allChildren.forEach((child) => {
+      if (!childrenByProject.has(child.project_id)) {
+        childrenByProject.set(child.project_id, [])
+      }
+      childrenByProject.get(child.project_id)!.push(child)
+    })
+
+    allGmpRecords.forEach((record) => {
+      if (!gmpRecordsByProject.has(record.project_id)) {
+        gmpRecordsByProject.set(record.project_id, [])
+      }
+      gmpRecordsByProject.get(record.project_id)!.push(record)
+    })
+
     const projectsWithChildren: Project[] = []
-
     const today = new Date().toISOString().slice(0, 10)
-    for (const project of projects) {
-      // 일반 일감 조회 (GMP-로 시작하는 ID는 제외 - GMP Record는 별도 테이블에서 조회)
-      const [children] = await pool.query<any[]>(
-        'SELECT * FROM project_children WHERE project_id = ? AND id NOT LIKE "GMP-%" ORDER BY created_at ASC',
-        [project.id]
-      )
 
-      // GMP Record 조회
-      const [gmpRecords] = await pool.query<any[]>(
-        'SELECT * FROM gmp_records WHERE project_id = ? ORDER BY created_at ASC',
-        [project.id]
-      )
+    for (const project of projects) {
+      // 프로젝트별 일감 가져오기
+      const children = childrenByProject.get(project.id) || []
+      const gmpRecords = gmpRecordsByProject.get(project.id) || []
 
       // 일반 일감 매핑
       const childrenList: any[] = children.map((child) => ({
@@ -287,14 +316,14 @@ export async function updateProject(project: Project): Promise<void> {
   try {
     await connection.beginTransaction()
 
-    // 상태 자동 관리: 실적 진척도가 100%이면 "Completed", 그 외 Risk 체크, 0%보다 크면 "In progress"
+    // 상태 자동 관리: 실적 진척도가 100%이면 "Completed", 그 외 Risk 체크, 0%보다 크면 "In Progress"
     let finalStatus = project.status
     if (project.progress >= 100) {
       finalStatus = 'Completed'
     } else if (checkRiskStatus(project.start, project.due, project.progress || 0)) {
       finalStatus = 'Issued'
     } else if (project.progress > 0) {
-      finalStatus = 'In progress'
+      finalStatus = 'In Progress'
     }
 
     // 프로젝트 업데이트
@@ -478,14 +507,14 @@ export async function updateChild(
   )
   const oldProjectId = existingRows.length > 0 ? existingRows[0].project_id : null
   
-  // 상태 자동 관리: 실적 진척도가 100%이면 "Completed", 그 외 Risk 체크, 0%보다 크면 "In progress"
+  // 상태 자동 관리: 실적 진척도가 100%이면 "Completed", 그 외 Risk 체크, 0%보다 크면 "In Progress"
   let finalStatus = child.status
   if ((child.progress || 0) >= 100) {
     finalStatus = 'Completed'
   } else if (checkRiskStatus(child.start, child.due, child.progress || 0)) {
     finalStatus = 'Issued'
   } else if ((child.progress || 0) > 0) {
-    finalStatus = 'In progress'
+    finalStatus = 'In Progress'
   }
   
   await pool.query(
@@ -718,14 +747,14 @@ export async function updateGmpRecord(
   const number = recordAny.number || 0
   const kindNumber = `${kind}-${String(number).padStart(5, '0')}`
   
-  // 상태 자동 관리: 실적 진척도가 100%이면 "Completed", 그 외 Risk 체크, 0%보다 크면 "In progress"
+  // 상태 자동 관리: 실적 진척도가 100%이면 "Completed", 그 외 Risk 체크, 0%보다 크면 "In Progress"
   let finalStatus = record.status
   if ((record.progress || 0) >= 100) {
     finalStatus = 'Completed'
   } else if (checkRiskStatus(record.start, record.due, record.progress || 0)) {
     finalStatus = 'Issued'
   } else if ((record.progress || 0) > 0) {
-    finalStatus = 'In progress'
+    finalStatus = 'In Progress'
   }
   
   await pool.query(
