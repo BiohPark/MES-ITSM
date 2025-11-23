@@ -287,10 +287,14 @@ export async function updateProject(project: Project): Promise<void> {
   try {
     await connection.beginTransaction()
 
-    // 실적 진척도가 100%이면 상태를 "Completed"로 자동 변경
+    // 상태 자동 관리: 실적 진척도가 100%이면 "Completed", 그 외 Risk 체크, 0%보다 크면 "In progress"
     let finalStatus = project.status
     if (project.progress >= 100) {
       finalStatus = 'Completed'
+    } else if (checkRiskStatus(project.start, project.due, project.progress || 0)) {
+      finalStatus = 'Issued'
+    } else if (project.progress > 0) {
+      finalStatus = 'In progress'
     }
 
     // 프로젝트 업데이트
@@ -334,10 +338,10 @@ export async function updateProject(project: Project): Promise<void> {
       }
     }
 
-    await connection.commit()
+    // 하위 아이템이 있으면 마감일 자동 업데이트 (트랜잭션 내에서)
+    await updateProjectDueDateWithConnection(connection, project.id)
     
-    // 하위 아이템이 있으면 마감일 자동 업데이트
-    await updateProjectDueDate(project.id)
+    await connection.commit()
   } catch (error) {
     await connection.rollback()
     throw error
@@ -383,26 +387,33 @@ function calculatePlannedProgress(start: string | null | undefined, due: string 
   return Math.round((elapsedDays / totalDays) * 100)
 }
 
-// Risk 체크: 계획 진척도와 실적 진척도의 차이가 10% 이상인지 확인
+// Risk 체크: 계획 진척도가 실적 진척도보다 10% 이상 높은지 확인 (계획이 실적보다 뒤처진 경우만)
 function checkRiskStatus(start: string | null | undefined, due: string | null | undefined, actualProgress: number): boolean {
   const plannedProgress = calculatePlannedProgress(start, due)
-  const difference = Math.abs(plannedProgress - actualProgress)
-  return difference >= 10
+  const difference = plannedProgress - actualProgress
+  return difference >= 10 // 계획이 실적보다 10% 이상 높은 경우만 true
 }
 
 // 하위 아이템 추가 (projectId가 null일 수 있음)
 // 프로젝트의 마감일을 하위 아이템의 가장 늦은 마감일로 자동 업데이트
 async function updateProjectDueDate(projectId: string): Promise<void> {
   const pool = getPool()
-  
+  await updateProjectDueDateWithConnection(pool, projectId)
+}
+
+// connection을 받아서 마감일 업데이트 (트랜잭션 내부에서 사용)
+async function updateProjectDueDateWithConnection(
+  connection: mysql.PoolConnection | mysql.Pool,
+  projectId: string
+): Promise<void> {
   // 일반 일감 조회
-  const [children] = await pool.query<any[]>(
+  const [children] = await connection.query<any[]>(
     'SELECT due FROM project_children WHERE project_id = ? AND due IS NOT NULL AND due != ""',
     [projectId]
   )
   
   // GMP Record 조회
-  const [gmpRecords] = await pool.query<any[]>(
+  const [gmpRecords] = await connection.query<any[]>(
     'SELECT due FROM gmp_records WHERE project_id = ? AND due IS NOT NULL AND due != ""',
     [projectId]
   )
@@ -429,7 +440,7 @@ async function updateProjectDueDate(projectId: string): Promise<void> {
     })[0]
     
     // 프로젝트 마감일 업데이트
-    await pool.query(
+    await connection.query(
       'UPDATE projects SET due = ? WHERE id = ?',
       [latestDueDate, projectId]
     )
@@ -467,12 +478,14 @@ export async function updateChild(
   )
   const oldProjectId = existingRows.length > 0 ? existingRows[0].project_id : null
   
-  // 상태 자동 관리: 실적 진척도가 100%이면 "Completed", 그 외 Risk 체크
+  // 상태 자동 관리: 실적 진척도가 100%이면 "Completed", 그 외 Risk 체크, 0%보다 크면 "In progress"
   let finalStatus = child.status
   if ((child.progress || 0) >= 100) {
     finalStatus = 'Completed'
   } else if (checkRiskStatus(child.start, child.due, child.progress || 0)) {
     finalStatus = 'Issued'
+  } else if ((child.progress || 0) > 0) {
+    finalStatus = 'In progress'
   }
   
   await pool.query(
@@ -705,12 +718,14 @@ export async function updateGmpRecord(
   const number = recordAny.number || 0
   const kindNumber = `${kind}-${String(number).padStart(5, '0')}`
   
-  // 상태 자동 관리: 실적 진척도가 100%이면 "Completed", 그 외 Risk 체크
+  // 상태 자동 관리: 실적 진척도가 100%이면 "Completed", 그 외 Risk 체크, 0%보다 크면 "In progress"
   let finalStatus = record.status
   if ((record.progress || 0) >= 100) {
     finalStatus = 'Completed'
   } else if (checkRiskStatus(record.start, record.due, record.progress || 0)) {
     finalStatus = 'Issued'
+  } else if ((record.progress || 0) > 0) {
+    finalStatus = 'In progress'
   }
   
   await pool.query(

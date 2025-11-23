@@ -96,6 +96,7 @@ export async function POST(request: NextRequest) {
           data.progress !== undefined
             ? toNumber(data.progress, existingProject.progress)
             : existingProject.progress,
+        start: data.start !== undefined ? data.start : existingProject.start,
         children: data.children ?? existingProject.children ?? [],
       }
 
@@ -149,8 +150,9 @@ export async function POST(request: NextRequest) {
     )
   } catch (error) {
     console.error('Error processing request:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     return NextResponse.json(
-      { error: 'Failed to process request' },
+      { error: `Failed to process request: ${errorMessage}` },
       { status: 500 }
     )
   }

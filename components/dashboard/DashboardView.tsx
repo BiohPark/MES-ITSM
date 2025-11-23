@@ -32,8 +32,8 @@ export function DashboardView({
     return {
       totalProjects: projects.length,
       totalTasks: allTasks.length,
-      activeProjects: projects.filter((p) => p.status === 'In Progress').length,
-      activeTasks: allTasks.filter((t) => t.status === 'In Progress').length,
+      activeProjects: projects.filter((p) => p.status?.toLowerCase() === 'in progress' || p.status === 'In Progress').length,
+      activeTasks: allTasks.filter((t) => t.status?.toLowerCase() === 'in progress' || t.status === 'In Progress').length,
       completedProjects: projects.filter((p) => p.status === 'Completed').length,
       completedTasks: allTasks.filter((t) => t.status === 'Completed').length,
       issuedProjects: projects.filter((p) => p.status === 'Issued').length,
@@ -131,13 +131,13 @@ export function DashboardView({
     return {
       projects: {
         Planning: projects.filter((p) => p.status === 'Planning').length,
-        'In Progress': projects.filter((p) => p.status === 'In Progress').length,
+        'In Progress': projects.filter((p) => p.status?.toLowerCase() === 'in progress' || p.status === 'In Progress').length,
         Issued: projects.filter((p) => p.status === 'Issued').length,
         Completed: projects.filter((p) => p.status === 'Completed').length,
       },
       tasks: {
         Planning: allTasks.filter((t) => t.status === 'Planning').length,
-        'In Progress': allTasks.filter((t) => t.status === 'In Progress').length,
+        'In Progress': allTasks.filter((t) => t.status?.toLowerCase() === 'in progress' || t.status === 'In Progress').length,
         Issued: allTasks.filter((t) => t.status === 'Issued').length,
         Completed: allTasks.filter((t) => t.status === 'Completed').length,
       },

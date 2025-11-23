@@ -57,51 +57,51 @@ export async function POST(request: NextRequest) {
           if (!existingRecord) {
             console.log('기존 GMP Record 없음, 새로 생성')
             // Dev매니저 사용자 확인 및 생성
-            const users = await getUsers()
+          const users = await getUsers()
             let devManager = users.find(u => u.name === 'Dev매니저') || users.find(u => u.name === 'DevManager')
-            
-            // Dev매니저가 없으면 생성
-            if (!devManager) {
-              try {
-                const userId = await getNextUserId()
-                await createUser({
-                  id: userId,
-                  name: 'Dev매니저',
-                  email: undefined,
-                })
+          
+          // Dev매니저가 없으면 생성
+          if (!devManager) {
+            try {
+              const userId = await getNextUserId()
+              await createUser({
+                id: userId,
+                name: 'Dev매니저',
+                email: undefined,
+              })
                 console.log('Dev매니저 사용자 생성 완료')
                 devManager = { name: 'Dev매니저' }
-              } catch (error) {
-                console.error('Dev매니저 사용자 생성 실패:', error)
-                // 사용자 생성 실패해도 계속 진행
-              }
+            } catch (error) {
+              console.error('Dev매니저 사용자 생성 실패:', error)
+              // 사용자 생성 실패해도 계속 진행
             }
+          }
             
             // GMP Record의 담당자는 항상 Dev매니저로 설정
             const ownerName = 'Dev매니저'
             console.log('Owner:', ownerName)
-            
-            // GMP Record 생성
-            const gmpRecordId = await getNextGmpRecordId()
+          
+          // GMP Record 생성
+          const gmpRecordId = await getNextGmpRecordId()
             console.log('GMP Record ID:', gmpRecordId)
-            const deviationNumber = await getNextGmpRecordNumberForKind('Deviation')
+          const deviationNumber = await getNextGmpRecordNumberForKind('Deviation')
             console.log('Deviation Number:', deviationNumber)
-            
-            const gmpRecord: ProjectChild = {
-              id: gmpRecordId,
-              title: issue.title,
-              owner: ownerName,
-              status: 'Planning',
-              progress: 0,
+          
+          const gmpRecord: ProjectChild = {
+            id: gmpRecordId,
+            title: issue.title,
+            owner: ownerName,
+            status: 'Planning',
+            progress: 0,
               start: issue.occurred_date || new Date().toISOString().slice(0, 10),
-              due: issue.due_date || new Date().toISOString().slice(0, 10),
-              description: issue.description || '',
-              kind: 'Deviation',
-              number: deviationNumber,
-            }
-            
+            due: issue.due_date || new Date().toISOString().slice(0, 10),
+            description: issue.description || '',
+            kind: 'Deviation',
+            number: deviationNumber,
+          }
+          
             console.log('GMP Record 생성 시도:', gmpRecord)
-            await addGmpRecord(null, gmpRecord) // 프로젝트는 N/A (null)
+          await addGmpRecord(null, gmpRecord) // 프로젝트는 N/A (null)
             console.log('GMP Record 생성 완료')
           } else {
             console.log('기존 GMP Record 존재:', existingRecord.id)

@@ -70,9 +70,15 @@ export function TaskEditModal({
       (formData as any).number = 0
     }
     
+    // 진척률이 빈 값이면 0으로 변환
+    const submitData = {
+      ...formData,
+      progress: (formData as any).progress === '' ? 0 : ((formData as any).progress || 0)
+    }
+    
     setSaving(true)
     try {
-      await onSave(formData, selectedProjectId)
+      await onSave(submitData, selectedProjectId)
     } finally {
       setSaving(false)
     }
@@ -84,7 +90,7 @@ export function TaskEditModal({
       ...prev,
       [name]:
         name === 'progress'
-          ? parseInt(value, 10) || 0
+          ? value === '' ? '' : (isNaN(parseInt(value, 10)) ? 0 : parseInt(value, 10))
           : name === 'number'
           ? parseInt(value, 10) || 0
           : value,
@@ -281,7 +287,7 @@ export function TaskEditModal({
                 type="number"
                 id="progress"
                 name="progress"
-                value={(formData as any).progress || 0}
+                value={(formData as any).progress === '' ? '' : ((formData as any).progress || 0)}
                 onChange={handleChange}
                 min="0"
                 max="100"

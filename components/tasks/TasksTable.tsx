@@ -90,22 +90,22 @@ export function TasksTable({
         project.children?.forEach((child) => {
           // GMP-로 시작하는 ID를 가진 일감은 제외
           if (!child.id.startsWith('GMP-')) {
-            tasks.push({
-              task: child,
-              projectId: project.id,
-              projectName: project.name,
-            })
+          tasks.push({
+            task: child,
+            projectId: project.id,
+            projectName: project.name,
+          })
           }
         })
       })
       // orphan tasks도 GMP-로 시작하는 것은 제외
       orphanTasks.forEach((task) => {
         if (!task.id.startsWith('GMP-')) {
-          tasks.push({
-            task,
-            projectId: null,
-            projectName: 'N/A',
-          })
+        tasks.push({
+          task,
+          projectId: null,
+          projectName: 'N/A',
+        })
         }
       })
     }
@@ -337,21 +337,21 @@ export function TasksTable({
           <p>필터 조건에 맞는 {title === '일감 목록' ? '일감' : 'GMP Record'}이 없습니다.</p>
         </div>
       ) : (
-        <table>
-          <thead>
-            <tr>
-              {isDeleteMode && <th style={{ width: '40px' }}></th>}
-              <th>일감</th>
-              {isGmpRecords && <th>종류-번호</th>}
-              <th>프로젝트</th>
-              <th>담당자</th>
-              <th>상태</th>
-              <th>진척도(계획/실적)</th>
-              <th>시작일</th>
-              <th>마감일</th>
-            </tr>
-          </thead>
-          <tbody>
+      <table>
+        <thead>
+          <tr>
+            {isDeleteMode && <th style={{ width: '40px' }}></th>}
+            <th>일감</th>
+            {isGmpRecords && <th>종류-번호</th>}
+            <th>프로젝트</th>
+            <th>담당자</th>
+            <th>상태</th>
+            <th>진척도(계획/실적)</th>
+            <th>시작일</th>
+            <th>마감일</th>
+          </tr>
+        </thead>
+        <tbody>
             {filteredTasks.map(({ task, projectId, projectName }) => (
             <tr
               key={`${projectId || 'null'}-${task.id}`}
@@ -396,9 +396,9 @@ export function TasksTable({
               <td>{(task as any).start || '-'}</td>
               <td>{task.due}</td>
             </tr>
-            ))}
-          </tbody>
-        </table>
+          ))}
+        </tbody>
+      </table>
       )}
     </div>
   )

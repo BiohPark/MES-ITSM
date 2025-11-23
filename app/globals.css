@@ -395,6 +395,24 @@ td {
   background: #f87171;
 }
 
+.badge--yellow {
+  background: rgba(251, 191, 36, 0.15);
+  color: #92400e;
+}
+
+.badge--yellow::before {
+  background: #fbbf24;
+}
+
+.badge--gray {
+  background: rgba(156, 163, 175, 0.15);
+  color: #4b5563;
+}
+
+.badge--gray::before {
+  background: #9ca3af;
+}
+
 .progress {
   display: flex;
   align-items: center;

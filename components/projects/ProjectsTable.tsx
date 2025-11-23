@@ -90,11 +90,11 @@ export function ProjectsTable({
   }
 
   if (projects.length === 0) {
-    return (
-      <div className="table-wrapper">
-        <div className="table-header">
-          <h2>프로젝트 목록</h2>
-          <div className="table-actions">
+  return (
+    <div className="table-wrapper">
+      <div className="table-header">
+        <h2>프로젝트 목록</h2>
+        <div className="table-actions">
             <button onClick={onRefresh} className="refresh-button">
               새로고침
             </button>
@@ -252,21 +252,21 @@ export function ProjectsTable({
           <p>필터 조건에 맞는 프로젝트가 없습니다.</p>
         </div>
       ) : (
-        <table>
-          <thead>
-            <tr>
-              {isDeleteMode && <th style={{ width: '40px' }}></th>}
-              <th>프로젝트</th>
-              <th>담당 리더</th>
-              <th>인원</th>
-              <th>상태</th>
-              <th>진척도(계획/실적)</th>
-              <th>SRB Ver.</th>
-              <th>시작일</th>
-              <th>마감일</th>
-            </tr>
-          </thead>
-          <tbody>
+      <table>
+        <thead>
+          <tr>
+            {isDeleteMode && <th style={{ width: '40px' }}></th>}
+            <th>프로젝트</th>
+            <th>담당 리더</th>
+            <th>인원</th>
+            <th>상태</th>
+            <th>진척도(계획/실적)</th>
+            <th>SRB Ver.</th>
+            <th>시작일</th>
+            <th>마감일</th>
+          </tr>
+        </thead>
+        <tbody>
             {filteredProjects.flatMap((project) => [
             <tr
               key={project.id}
@@ -366,9 +366,9 @@ export function ProjectsTable({
                   </tr>
                 ))
               : []),
-            ])}
-          </tbody>
-        </table>
+          ])}
+        </tbody>
+      </table>
       )}
     </div>
   )

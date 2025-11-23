@@ -75,7 +75,7 @@ export function UserManagementModal({ onClose, currentUser }: UserManagementModa
           action: 'create',
           user: {
             username: newUserUsername,
-            name: newUserName,
+          name: newUserName,
             email: newUserEmail,
             password: newUserPassword,
             role: newUserRole,

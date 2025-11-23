@@ -86,13 +86,13 @@ export default function Home() {
         // 세션이 없으면 로그인 페이지로 리다이렉트
         // middleware에서 이미 처리되지만, 클라이언트에서도 확인
         if (window.location.pathname !== '/login') {
-          window.location.href = '/login'
+        window.location.href = '/login'
         }
       }
     } catch (error) {
       console.error('Session check error:', error)
       if (window.location.pathname !== '/login') {
-        window.location.href = '/login'
+      window.location.href = '/login'
       }
     } finally {
       setIsLoadingSession(false)
@@ -191,7 +191,8 @@ export default function Home() {
       })
 
       if (!response.ok) {
-        throw new Error('Failed to save project')
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Failed to save project')
       }
 
       await fetchProjects()
@@ -200,7 +201,8 @@ export default function Home() {
       setEditMode('edit')
     } catch (err) {
       console.error('Error saving project:', err)
-      alert('프로젝트 저장에 실패했습니다.')
+      const errorMessage = err instanceof Error ? err.message : '프로젝트 저장에 실패했습니다.'
+      alert(errorMessage)
     }
   }
 
@@ -704,7 +706,7 @@ export default function Home() {
   const summary = useMemo(
     () => ({
       total: projects.length,
-      inProgress: projects.filter((p) => p.status === 'In Progress').length,
+      inProgress: projects.filter((p) => p.status?.toLowerCase() === 'in progress' || p.status === 'In Progress').length,
       planning: projects.filter((p) => p.status === 'Planning').length,
       blocked: projects.filter((p) => p.status === 'Issued').length,
     }),
@@ -1091,6 +1093,7 @@ export default function Home() {
               setEditMode('edit')
               setIsEditing(true)
             }}
+            currentUser={user ? { name: user.name, username: user.username } : undefined}
           />
         ) : activeTab === 'gantt' ? (
           <GanttChartView

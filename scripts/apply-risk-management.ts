@@ -27,11 +27,11 @@ function calculatePlannedProgress(start: string | null | undefined, due: string 
   return Math.round((elapsedDays / totalDays) * 100)
 }
 
-// Risk 체크: 계획 진척도와 실적 진척도의 차이가 10% 이상인지 확인
+// Risk 체크: 계획 진척도가 실적 진척도보다 10% 이상 높은지 확인 (계획이 실적보다 뒤처진 경우만)
 function checkRiskStatus(start: string | null | undefined, due: string | null | undefined, actualProgress: number): boolean {
   const plannedProgress = calculatePlannedProgress(start, due)
-  const difference = Math.abs(plannedProgress - actualProgress)
-  return difference >= 10
+  const difference = plannedProgress - actualProgress
+  return difference >= 10 // 계획이 실적보다 10% 이상 높은 경우만 true
 }
 
 async function applyRiskManagement() {

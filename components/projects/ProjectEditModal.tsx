@@ -51,9 +51,15 @@ export function ProjectEditModal({
       return
     }
     
+    // 진척률이 빈 값이면 0으로 변환
+    const submitData = {
+      ...formData,
+      progress: formData.progress === '' ? 0 : (formData.progress || 0)
+    }
+    
     setSaving(true)
     try {
-      await onSave(formData)
+      await onSave(submitData)
     } finally {
       setSaving(false)
     }
@@ -64,8 +70,10 @@ export function ProjectEditModal({
     setFormData((prev: any) => ({
       ...prev,
       [name]:
-        name === 'members' || name === 'progress'
+        name === 'members'
           ? parseInt(value, 10) || 0
+          : name === 'progress'
+          ? value === '' ? '' : (isNaN(parseInt(value, 10)) ? 0 : parseInt(value, 10))
           : value,
     }))
   }
@@ -159,11 +167,10 @@ export function ProjectEditModal({
                 type="number"
                 id="progress"
                 name="progress"
-                value={formData.progress}
+                value={formData.progress === '' ? '' : formData.progress}
                 onChange={handleChange}
                 min="0"
                 max="100"
-                required
                 className="form-input"
               />
             </div>
