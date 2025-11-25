@@ -33,7 +33,12 @@ export function PersonalTasksView({
     projects.forEach((project) => {
       if (project.owner) owners.add(project.owner)
       project.children?.forEach((child) => {
+        // 대표 담당자
         if (child.owner) owners.add(child.owner)
+        // 단계별 담당자들도 추가
+        if ((child as any).phases?.pi?.owner) owners.add((child as any).phases.pi.owner)
+        if ((child as any).phases?.pm?.owner) owners.add((child as any).phases.pm.owner)
+        if ((child as any).phases?.development?.owner) owners.add((child as any).phases.development.owner)
       })
     })
     // GMP Record 중 Deviation인 것들의 owner도 추가
@@ -64,7 +69,13 @@ export function PersonalTasksView({
           ownerProjects.push(project)
         }
         project.children?.forEach((child: ProjectChild) => {
-          if (child.owner === owner) {
+          // 대표 담당자(PI) 또는 단계별 담당자 중 하나라도 일치하면 포함
+          const isOwner = child.owner === owner
+          const isPiOwner = (child as any).phases?.pi?.owner === owner
+          const isPmOwner = (child as any).phases?.pm?.owner === owner
+          const isDevOwner = (child as any).phases?.development?.owner === owner
+          
+          if (isOwner || isPiOwner || isPmOwner || isDevOwner) {
             ownerTasks.push({
               task: child,
               projectId: project.id,
@@ -105,7 +116,13 @@ export function PersonalTasksView({
         myProjects.push(project)
       }
       project.children?.forEach((child: ProjectChild) => {
-        if (child.owner === currentUser.name) {
+        // 대표 담당자(PI) 또는 단계별 담당자 중 하나라도 일치하면 포함
+        const isOwner = child.owner === currentUser.name
+        const isPiOwner = (child as any).phases?.pi?.owner === currentUser.name
+        const isPmOwner = (child as any).phases?.pm?.owner === currentUser.name
+        const isDevOwner = (child as any).phases?.development?.owner === currentUser.name
+        
+        if (isOwner || isPiOwner || isPmOwner || isDevOwner) {
           myTasks.push({
             task: child,
             projectId: project.id,

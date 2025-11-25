@@ -5,7 +5,7 @@ async function resetAdminPassword() {
   const pool = getPool()
   
   try {
-    const newPassword = 'Samsung1!'
+    const newPassword = '1q2w3e4r'
     
     console.log('='.repeat(80))
     console.log('admin 계정 비밀번호 리셋')

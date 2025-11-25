@@ -28,7 +28,12 @@
     "add-indexes": "tsx scripts/add-performance-indexes.ts",
     "cleanup-test-data": "tsx scripts/cleanup-test-data.ts",
     "update-in-progress-status": "tsx scripts/update-in-progress-status.ts",
-    "check-auth-security": "tsx scripts/check-auth-security.ts"
+    "check-auth-security": "tsx scripts/check-auth-security.ts",
+    "add-task-phases-column": "tsx scripts/add-task-phases-column.ts",
+    "add-task-link-columns": "tsx scripts/add-task-link-columns.ts",
+    "add-performance-indexes": "tsx scripts/add-performance-indexes.ts",
+    "performance-test": "tsx scripts/performance-test.ts",
+    "memory-leak-check": "node --expose-gc scripts/memory-leak-check.ts"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",

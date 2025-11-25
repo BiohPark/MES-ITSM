@@ -1,116 +1,116 @@
 import { getPool } from '../lib/db'
 
-// 성능 최적화를 위한 인덱스 추가 스크립트
-async function addIndexes() {
+async function addPerformanceIndexes() {
   const pool = getPool()
   const connection = await pool.getConnection()
 
   try {
-    await connection.beginTransaction()
+    console.log('='.repeat(80))
+    console.log('성능 최적화 인덱스 추가')
+    console.log('='.repeat(80))
+    console.log()
 
-    console.log('🔧 성능 최적화 인덱스 추가 시작...\n')
+    // 1. project_children 테이블 인덱스
+    console.log('📊 project_children 테이블 인덱스 추가...')
+    const projectChildrenIndexes = [
+      { name: 'idx_owner', sql: 'CREATE INDEX IF NOT EXISTS idx_owner ON project_children(owner)' },
+      { name: 'idx_status', sql: 'CREATE INDEX IF NOT EXISTS idx_status ON project_children(status)' },
+      { name: 'idx_created_at', sql: 'CREATE INDEX IF NOT EXISTS idx_created_at ON project_children(created_at)' },
+      { name: 'idx_linked_gmp_record_id', sql: 'CREATE INDEX IF NOT EXISTS idx_linked_gmp_record_id ON project_children(linked_gmp_record_id)' },
+    ]
 
-    // 1. projects 테이블 인덱스
+    for (const idx of projectChildrenIndexes) {
+      try {
+        await connection.query(idx.sql)
+        console.log(`   ✅ ${idx.name} 인덱스 추가 완료`)
+      } catch (error: any) {
+        if (error.code === 'ER_DUP_KEYNAME') {
+          console.log(`   ℹ️  ${idx.name} 인덱스가 이미 존재합니다.`)
+        } else {
+          console.error(`   ❌ ${idx.name} 인덱스 추가 실패:`, error.message)
+        }
+      }
+    }
+    console.log()
+
+    // 2. gmp_records 테이블 인덱스
+    console.log('📊 gmp_records 테이블 인덱스 추가...')
+    const gmpRecordsIndexes = [
+      { name: 'idx_owner', sql: 'CREATE INDEX IF NOT EXISTS idx_owner ON gmp_records(owner)' },
+      { name: 'idx_status', sql: 'CREATE INDEX IF NOT EXISTS idx_status ON gmp_records(status)' },
+      { name: 'idx_kind', sql: 'CREATE INDEX IF NOT EXISTS idx_kind ON gmp_records(kind)' },
+      { name: 'idx_created_at', sql: 'CREATE INDEX IF NOT EXISTS idx_created_at ON gmp_records(created_at)' },
+      { name: 'idx_linked_task_id', sql: 'CREATE INDEX IF NOT EXISTS idx_linked_task_id ON gmp_records(linked_task_id)' },
+    ]
+
+    for (const idx of gmpRecordsIndexes) {
+      try {
+        await connection.query(idx.sql)
+        console.log(`   ✅ ${idx.name} 인덱스 추가 완료`)
+      } catch (error: any) {
+        if (error.code === 'ER_DUP_KEYNAME') {
+          console.log(`   ℹ️  ${idx.name} 인덱스가 이미 존재합니다.`)
+        } else {
+          console.error(`   ❌ ${idx.name} 인덱스 추가 실패:`, error.message)
+        }
+      }
+    }
+    console.log()
+
+    // 3. projects 테이블 인덱스
     console.log('📊 projects 테이블 인덱스 추가...')
-    try {
-      await connection.query(`
-        CREATE INDEX IF NOT EXISTS idx_projects_created_at ON projects(created_at DESC)
-      `)
-      console.log('   ✅ idx_projects_created_at 인덱스 추가 완료')
-    } catch (error: any) {
-      if (error.code !== 'ER_DUP_KEYNAME') {
-        console.log('   ⚠️  idx_projects_created_at 인덱스 추가 실패:', error.message)
-      } else {
-        console.log('   ℹ️  idx_projects_created_at 인덱스 이미 존재')
+    const projectsIndexes = [
+      { name: 'idx_owner', sql: 'CREATE INDEX IF NOT EXISTS idx_owner ON projects(owner)' },
+      { name: 'idx_status', sql: 'CREATE INDEX IF NOT EXISTS idx_status ON projects(status)' },
+      { name: 'idx_created_at', sql: 'CREATE INDEX IF NOT EXISTS idx_created_at ON projects(created_at)' },
+    ]
+
+    for (const idx of projectsIndexes) {
+      try {
+        await connection.query(idx.sql)
+        console.log(`   ✅ ${idx.name} 인덱스 추가 완료`)
+      } catch (error: any) {
+        if (error.code === 'ER_DUP_KEYNAME') {
+          console.log(`   ℹ️  ${idx.name} 인덱스가 이미 존재합니다.`)
+        } else {
+          console.error(`   ❌ ${idx.name} 인덱스 추가 실패:`, error.message)
+        }
       }
     }
+    console.log()
 
-    try {
-      await connection.query(`
-        CREATE INDEX IF NOT EXISTS idx_projects_owner ON projects(owner)
-      `)
-      console.log('   ✅ idx_projects_owner 인덱스 추가 완료')
-    } catch (error: any) {
-      if (error.code !== 'ER_DUP_KEYNAME') {
-        console.log('   ⚠️  idx_projects_owner 인덱스 추가 실패:', error.message)
-      } else {
-        console.log('   ℹ️  idx_projects_owner 인덱스 이미 존재')
+    // 4. 복합 인덱스 (자주 함께 조회되는 컬럼들)
+    console.log('📊 복합 인덱스 추가...')
+    const compositeIndexes = [
+      { 
+        name: 'idx_project_children_project_status', 
+        sql: 'CREATE INDEX IF NOT EXISTS idx_project_children_project_status ON project_children(project_id, status)' 
+      },
+      { 
+        name: 'idx_gmp_records_project_kind', 
+        sql: 'CREATE INDEX IF NOT EXISTS idx_gmp_records_project_kind ON gmp_records(project_id, kind)' 
+      },
+    ]
+
+    for (const idx of compositeIndexes) {
+      try {
+        await connection.query(idx.sql)
+        console.log(`   ✅ ${idx.name} 복합 인덱스 추가 완료`)
+      } catch (error: any) {
+        if (error.code === 'ER_DUP_KEYNAME') {
+          console.log(`   ℹ️  ${idx.name} 인덱스가 이미 존재합니다.`)
+        } else {
+          console.error(`   ❌ ${idx.name} 인덱스 추가 실패:`, error.message)
+        }
       }
     }
+    console.log()
 
-    // 2. project_children 테이블 인덱스
-    console.log('\n📊 project_children 테이블 인덱스 추가...')
-    try {
-      await connection.query(`
-        CREATE INDEX IF NOT EXISTS idx_project_children_created_at ON project_children(created_at ASC)
-      `)
-      console.log('   ✅ idx_project_children_created_at 인덱스 추가 완료')
-    } catch (error: any) {
-      if (error.code !== 'ER_DUP_KEYNAME') {
-        console.log('   ⚠️  idx_project_children_created_at 인덱스 추가 실패:', error.message)
-      } else {
-        console.log('   ℹ️  idx_project_children_created_at 인덱스 이미 존재')
-      }
-    }
+    console.log('='.repeat(80))
+    console.log('✅ 성능 최적화 인덱스 추가 완료!')
+    console.log('='.repeat(80))
 
-    try {
-      await connection.query(`
-        CREATE INDEX IF NOT EXISTS idx_project_children_owner ON project_children(owner)
-      `)
-      console.log('   ✅ idx_project_children_owner 인덱스 추가 완료')
-    } catch (error: any) {
-      if (error.code !== 'ER_DUP_KEYNAME') {
-        console.log('   ⚠️  idx_project_children_owner 인덱스 추가 실패:', error.message)
-      } else {
-        console.log('   ℹ️  idx_project_children_owner 인덱스 이미 존재')
-      }
-    }
-
-    // 3. gmp_records 테이블 인덱스
-    console.log('\n📊 gmp_records 테이블 인덱스 추가...')
-    try {
-      await connection.query(`
-        CREATE INDEX IF NOT EXISTS idx_gmp_records_created_at ON gmp_records(created_at ASC)
-      `)
-      console.log('   ✅ idx_gmp_records_created_at 인덱스 추가 완료')
-    } catch (error: any) {
-      if (error.code !== 'ER_DUP_KEYNAME') {
-        console.log('   ⚠️  idx_gmp_records_created_at 인덱스 추가 실패:', error.message)
-      } else {
-        console.log('   ℹ️  idx_gmp_records_created_at 인덱스 이미 존재')
-      }
-    }
-
-    try {
-      await connection.query(`
-        CREATE INDEX IF NOT EXISTS idx_gmp_records_owner ON gmp_records(owner)
-      `)
-      console.log('   ✅ idx_gmp_records_owner 인덱스 추가 완료')
-    } catch (error: any) {
-      if (error.code !== 'ER_DUP_KEYNAME') {
-        console.log('   ⚠️  idx_gmp_records_owner 인덱스 추가 실패:', error.message)
-      } else {
-        console.log('   ℹ️  idx_gmp_records_owner 인덱스 이미 존재')
-      }
-    }
-
-    try {
-      await connection.query(`
-        CREATE INDEX IF NOT EXISTS idx_gmp_records_kind ON gmp_records(kind)
-      `)
-      console.log('   ✅ idx_gmp_records_kind 인덱스 추가 완료')
-    } catch (error: any) {
-      if (error.code !== 'ER_DUP_KEYNAME') {
-        console.log('   ⚠️  idx_gmp_records_kind 인덱스 추가 실패:', error.message)
-      } else {
-        console.log('   ℹ️  idx_gmp_records_kind 인덱스 이미 존재')
-      }
-    }
-
-    await connection.commit()
-    console.log('\n🎉 인덱스 추가 완료!')
   } catch (error) {
-    await connection.rollback()
     console.error('❌ 인덱스 추가 실패:', error)
     throw error
   } finally {
@@ -120,7 +120,7 @@ async function addIndexes() {
 
 async function main() {
   try {
-    await addIndexes()
+    await addPerformanceIndexes()
     process.exit(0)
   } catch (error) {
     console.error('Error:', error)
@@ -129,4 +129,3 @@ async function main() {
 }
 
 main()
-

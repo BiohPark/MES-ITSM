@@ -10,6 +10,7 @@ import {
   getNextProjectId,
   getNextTaskId,
   getOrphanTasks,
+  getPool,
 } from '@/lib/db'
 import type { Project, ProjectChild } from '@/types/project'
 
@@ -26,6 +27,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const type = searchParams.get('type')
+    const taskId = searchParams.get('taskId')
 
     if (type === 'project') {
       const nextId = await getNextProjectId()
@@ -36,11 +38,29 @@ export async function GET(request: NextRequest) {
     } else if (type === 'orphan-tasks') {
       const orphanTasks = await getOrphanTasks()
       return NextResponse.json(orphanTasks)
+    } else if (taskId) {
+      // 특정 일감 조회 (Link 상태 확인용)
+      const pool = getPool()
+      const [tasks] = await pool.query<any[]>(
+        'SELECT * FROM project_children WHERE id = ?',
+        [taskId]
+      )
+      if (tasks.length > 0) {
+        return NextResponse.json(tasks[0])
+      }
+      return NextResponse.json(null, { status: 404 })
     }
 
     // 기본: 프로젝트 목록 조회
     const projects = await getProjects()
-    return NextResponse.json(projects)
+    const response = NextResponse.json(projects)
+    // 개발 모드에서는 캐싱 비활성화, 프로덕션에서는 짧은 캐시 시간 설정
+    if (process.env.NODE_ENV === 'production') {
+      response.headers.set('Cache-Control', 'private, max-age=30, stale-while-revalidate=60')
+    } else {
+      response.headers.set('Cache-Control', 'no-store')
+    }
+    return response
   } catch (error) {
     console.error('Error processing GET request:', error)
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
@@ -116,8 +136,11 @@ export async function POST(request: NextRequest) {
         title: body.child?.title,
         owner: body.child?.owner,
         status: body.child?.status || 'Planning',
+        progress: body.child?.progress ?? 0,
+        start: body.child?.start ?? null,
         due: body.child?.due || '',
         description: body.child?.description || '',
+        phases: body.child?.phases,
       }
 
       await addChildToProject(body.projectId, newChild)

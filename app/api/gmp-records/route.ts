@@ -40,7 +40,14 @@ export async function GET(request: NextRequest) {
 
     // 기본: 모든 GMP Record 목록 조회
     const records = await getAllGmpRecords()
-    return NextResponse.json(records)
+    const response = NextResponse.json(records)
+    // 개발 모드에서는 캐싱 비활성화, 프로덕션에서는 짧은 캐시 시간 설정
+    if (process.env.NODE_ENV === 'production') {
+      response.headers.set('Cache-Control', 'private, max-age=30, stale-while-revalidate=60')
+    } else {
+      response.headers.set('Cache-Control', 'no-store')
+    }
+    return response
   } catch (error) {
     console.error('Error processing GET request:', error)
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
@@ -69,6 +76,7 @@ export async function POST(request: NextRequest) {
         start: body.child?.start || '',
         kind: body.child?.kind || 'CC',
         number: body.child?.number || 0,
+        phases: body.child?.phases,
       }
 
       await addGmpRecord(body.projectId || null, newRecord)

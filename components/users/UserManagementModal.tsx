@@ -21,6 +21,7 @@ export function UserManagementModal({ onClose, currentUser }: UserManagementModa
   const [editEmail, setEditEmail] = useState('')
   const [editPassword, setEditPassword] = useState('')
   const [editRole, setEditRole] = useState<'admin' | 'user'>('user')
+  const [addingUser, setAddingUser] = useState(false)
   
   const isAdmin = currentUser?.role === 'admin'
 
@@ -64,7 +65,18 @@ export function UserManagementModal({ onClose, currentUser }: UserManagementModa
       alert('비밀번호는 최소 8자 이상이어야 합니다.')
       return
     }
+    
+    // 비밀번호 강도 검증 (영문자와 숫자 포함)
+    if (!/[A-Za-z]/.test(newUserPassword)) {
+      alert('비밀번호는 영문자를 포함해야 합니다.')
+      return
+    }
+    if (!/[0-9]/.test(newUserPassword)) {
+      alert('비밀번호는 숫자를 포함해야 합니다.')
+      return
+    }
 
+    setAddingUser(true)
     try {
       const response = await fetch('/api/users', {
         method: 'POST',
@@ -74,16 +86,19 @@ export function UserManagementModal({ onClose, currentUser }: UserManagementModa
         body: JSON.stringify({
           action: 'create',
           user: {
-            username: newUserUsername,
-          name: newUserName,
-            email: newUserEmail,
+            username: newUserUsername.trim(),
+            name: newUserName.trim(),
+            email: newUserEmail.trim(),
             password: newUserPassword,
             role: newUserRole,
           },
         }),
       })
 
+      const data = await response.json()
+      
       if (response.ok) {
+        alert('사용자가 성공적으로 추가되었습니다.')
         setNewUserUsername('')
         setNewUserName('')
         setNewUserEmail('')
@@ -91,12 +106,13 @@ export function UserManagementModal({ onClose, currentUser }: UserManagementModa
         setNewUserRole('user')
         await fetchUsers()
       } else {
-        const data = await response.json()
         alert(data.error || '사용자 추가에 실패했습니다.')
       }
     } catch (error) {
       console.error('Error adding user:', error)
-      alert('사용자 추가에 실패했습니다.')
+      alert('사용자 추가에 실패했습니다. 네트워크 오류가 발생했을 수 있습니다.')
+    } finally {
+      setAddingUser(false)
     }
   }
 
@@ -298,8 +314,10 @@ export function UserManagementModal({ onClose, currentUser }: UserManagementModa
               type="button"
               onClick={handleAddUser}
               className="btn btn-primary"
+              disabled={addingUser}
+              style={{ opacity: addingUser ? 0.6 : 1, cursor: addingUser ? 'not-allowed' : 'pointer' }}
             >
-              사용자 추가
+              {addingUser ? '추가 중...' : '사용자 추가'}
             </button>
           </div>
 

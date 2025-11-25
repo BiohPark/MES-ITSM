@@ -2,10 +2,11 @@ import mysql from 'mysql2/promise'
 import type { Project, ProjectChild } from '@/types/project'
 import type { Issue } from '@/types/issue'
 import type { Comment, CommentEntityType } from '@/types/comment'
+import { getUsers, createUser, getNextUserId } from '@/lib/users'
 
 // 데이터베이스 연결 설정
 const dbConfig = {
-  host: process.env.DB_HOST || 'localhost',
+  host: process.env.DB_HOST || '127.0.0.1',
   port: parseInt(process.env.DB_PORT || '3306', 10),
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || '',
@@ -13,6 +14,8 @@ const dbConfig = {
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
+  enableKeepAlive: true,
+  keepAliveInitialDelay: 0,
 }
 
 // 연결 풀 생성
@@ -166,16 +169,28 @@ export async function getProjects(): Promise<Project[]> {
       const gmpRecords = gmpRecordsByProject.get(project.id) || []
 
       // 일반 일감 매핑
-      const childrenList: any[] = children.map((child) => ({
-        id: child.id,
-        title: child.title,
-        owner: child.owner,
-        status: child.status,
-        progress: child.progress || 0,
-        start: child.start ? (typeof child.start === 'string' ? child.start : new Date(child.start).toISOString().slice(0, 10)) : today,
-        due: child.due ? (typeof child.due === 'string' ? child.due : new Date(child.due).toISOString().slice(0, 10)) : '',
-        description: child.description || '',
-      }))
+      const childrenList: any[] = children.map((child) => {
+        let phases = null
+        if (child.phases) {
+          try {
+            phases = typeof child.phases === 'string' ? JSON.parse(child.phases) : child.phases
+          } catch (e) {
+            phases = null
+          }
+        }
+        return {
+          id: child.id,
+          title: child.title,
+          owner: child.owner,
+          status: child.status,
+          progress: child.progress || 0,
+          start: child.start ? (typeof child.start === 'string' ? child.start : new Date(child.start).toISOString().slice(0, 10)) : today,
+          due: child.due ? (typeof child.due === 'string' ? child.due : new Date(child.due).toISOString().slice(0, 10)) : '',
+          description: child.description || '',
+          phases: phases,
+          linked_gmp_record_id: child.linked_gmp_record_id || null,
+        }
+      })
 
       // GMP Record 매핑 (kind_number 포함)
       const gmpRecordsList: any[] = gmpRecords.map((record) => {
@@ -196,6 +211,7 @@ export async function getProjects(): Promise<Project[]> {
           number: number,
           kind_number: kindNumber,
           isGmpRecord: true, // GMP Record 구분용 플래그
+          linked_task_id: record.linked_task_id || null,
         }
       })
 
@@ -237,7 +253,9 @@ export async function getProjects(): Promise<Project[]> {
 
     return projectsWithChildren
   } catch (error) {
-    console.error('Error in getProjects:', error)
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Error in getProjects:', error)
+    }
     throw new Error(`데이터베이스 조회 실패: ${error instanceof Error ? error.message : 'Unknown error'}`)
   }
 }
@@ -250,16 +268,28 @@ export async function getOrphanTasks(): Promise<ProjectChild[]> {
   )
 
   const today = new Date().toISOString().slice(0, 10)
-  return tasks.map((task) => ({
-    id: task.id,
-    title: task.title,
-    owner: task.owner,
-    status: task.status,
-    progress: task.progress || 0,
-    start: task.start ? (typeof task.start === 'string' ? task.start : new Date(task.start).toISOString().slice(0, 10)) : today,
-    due: task.due ? (typeof task.due === 'string' ? task.due : new Date(task.due).toISOString().slice(0, 10)) : '',
-    description: task.description || '',
-  }))
+  return tasks.map((task) => {
+    let phases = null
+    if (task.phases) {
+      try {
+        phases = typeof task.phases === 'string' ? JSON.parse(task.phases) : task.phases
+      } catch (e) {
+        phases = null
+      }
+    }
+    return {
+      id: task.id,
+      title: task.title,
+      owner: task.owner,
+      status: task.status,
+      progress: task.progress || 0,
+      start: task.start ? (typeof task.start === 'string' ? task.start : new Date(task.start).toISOString().slice(0, 10)) : today,
+      due: task.due ? (typeof task.due === 'string' ? task.due : new Date(task.due).toISOString().slice(0, 10)) : '',
+      description: task.description || '',
+      phases: phases,
+      linked_gmp_record_id: task.linked_gmp_record_id || null,
+    }
+  })
 }
 
 // 프로젝트 추가
@@ -291,10 +321,11 @@ export async function createProject(project: Project): Promise<void> {
     // 하위 아이템 추가
     if (project.children && project.children.length > 0) {
       for (const child of project.children) {
+        const phasesJson = (child as any).phases ? JSON.stringify((child as any).phases) : null
         await connection.query(
-          `INSERT INTO project_children (id, project_id, title, owner, status, progress, due, description)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [child.id, project.id, child.title, child.owner, child.status, child.progress || 0, child.due || null, child.description || null]
+          `INSERT INTO project_children (id, project_id, title, owner, status, progress, due, description, phases)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [child.id, project.id, child.title, child.owner, child.status, child.progress || 0, child.due || null, child.description || null, phasesJson]
         )
       }
     }
@@ -359,10 +390,11 @@ export async function updateProject(project: Project): Promise<void> {
           continue
         }
         
+        const phasesJson = (child as any).phases ? JSON.stringify((child as any).phases) : null
         await connection.query(
-          `INSERT INTO project_children (id, project_id, title, owner, status, progress, start, due, description)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [child.id, project.id, child.title, child.owner, child.status, child.progress || 0, (child as any).start || null, child.due || null, child.description || null]
+          `INSERT INTO project_children (id, project_id, title, owner, status, progress, start, due, description, phases)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [child.id, project.id, child.title, child.owner, child.status, child.progress || 0, (child as any).start || null, child.due || null, child.description || null, phasesJson]
         )
       }
     }
@@ -481,10 +513,12 @@ export async function addChildToProject(
   child: ProjectChild
 ): Promise<void> {
   const pool = getPool()
+  const phasesJson = (child as any).phases ? JSON.stringify((child as any).phases) : null
+  const linkedGmpRecordId = (child as any).linked_gmp_record_id || null
   await pool.query(
-    `INSERT INTO project_children (id, project_id, title, owner, status, progress, start, due, description)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [child.id, projectId, child.title, child.owner, child.status, child.progress || 0, child.start || null, child.due || null, child.description || null]
+    `INSERT INTO project_children (id, project_id, title, owner, status, progress, start, due, description, phases, linked_gmp_record_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [child.id, projectId, child.title, child.owner, child.status, child.progress || 0, child.start || null, child.due || null, child.description || null, phasesJson, linkedGmpRecordId]
   )
   
   // 프로젝트가 있는 경우 마감일 자동 업데이트
@@ -517,11 +551,13 @@ export async function updateChild(
     finalStatus = 'In Progress'
   }
   
+  const phasesJson = (child as any).phases ? JSON.stringify((child as any).phases) : null
+  const linkedGmpRecordId = (child as any).linked_gmp_record_id || null
   await pool.query(
     `UPDATE project_children 
-     SET project_id = ?, title = ?, owner = ?, status = ?, progress = ?, start = ?, due = ?, description = ?
+     SET project_id = ?, title = ?, owner = ?, status = ?, progress = ?, start = ?, due = ?, description = ?, phases = ?, linked_gmp_record_id = ?
      WHERE id = ?`,
-    [projectId, child.title, child.owner, finalStatus, child.progress || 0, child.start || null, child.due || null, child.description || null, child.id]
+    [projectId, child.title, child.owner, finalStatus, child.progress || 0, child.start || null, child.due || null, child.description || null, phasesJson, linkedGmpRecordId, child.id]
   )
   
   // 프로젝트가 변경되었거나 업데이트된 경우 마감일 자동 업데이트
@@ -574,7 +610,9 @@ export async function deleteChild(
       await updateProjectDueDate(actualProjectId)
     }
   } catch (error) {
-    console.error('Error in deleteChild:', error)
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Error in deleteChild:', error)
+    }
     throw error
   }
 }
@@ -638,6 +676,14 @@ export async function getAllGmpRecords(): Promise<Array<ProjectChild & { project
     const kind = record.kind || 'CC'
     const number = record.number || 0
     const kindNumber = `${kind}-${String(number).padStart(5, '0')}`
+    let phases = null
+    if (record.phases) {
+      try {
+        phases = typeof record.phases === 'string' ? JSON.parse(record.phases) : record.phases
+      } catch (e) {
+        phases = null
+      }
+    }
     
     return {
       id: record.id,
@@ -653,6 +699,8 @@ export async function getAllGmpRecords(): Promise<Array<ProjectChild & { project
       kind_number: record.kind_number || kindNumber,
       projectId: record.project_id || null,
       projectName: record.project_name || 'N/A',
+      phases: phases,
+      linked_task_id: record.linked_task_id || null,
     }
   })
 }
@@ -673,6 +721,14 @@ export async function getOrphanGmpRecords(): Promise<Array<ProjectChild & { proj
     const kind = record.kind || 'CC'
     const number = record.number || 0
     const kindNumber = `${kind}-${String(number).padStart(5, '0')}`
+    let phases = null
+    if (record.phases) {
+      try {
+        phases = typeof record.phases === 'string' ? JSON.parse(record.phases) : record.phases
+      } catch (e) {
+        phases = null
+      }
+    }
     
     return {
       id: record.id,
@@ -688,6 +744,8 @@ export async function getOrphanGmpRecords(): Promise<Array<ProjectChild & { proj
       kind_number: record.kind_number || kindNumber,
       projectId: record.project_id || null,
       projectName: record.project_name || 'N/A',
+      phases: phases,
+      linked_task_id: record.linked_task_id || null,
     }
   })
 }
@@ -696,16 +754,19 @@ export async function getOrphanGmpRecords(): Promise<Array<ProjectChild & { proj
 export async function addGmpRecord(
   projectId: string | null,
   record: ProjectChild
-): Promise<void> {
+): Promise<string | null> {
   const pool = getPool()
   const recordAny = record as any
   const kind = recordAny.kind || 'CC'
   const number = recordAny.number || 0
   const kindNumber = `${kind}-${String(number).padStart(5, '0')}`
   
+  const phasesJson = (record as any).phases ? JSON.stringify((record as any).phases) : null
+  const linkedTaskId = recordAny.linked_task_id || null
+  
   await pool.query(
-    `INSERT INTO gmp_records (id, project_id, title, kind, number, kind_number, owner, status, progress, start, due, description)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO gmp_records (id, project_id, title, kind, number, kind_number, owner, status, progress, start, due, description, phases, linked_task_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       record.id, 
       projectId, 
@@ -718,14 +779,105 @@ export async function addGmpRecord(
       record.progress || 0, 
       record.start || null, 
       record.due || null, 
-      record.description || null
+      record.description || null,
+      phasesJson,
+      linkedTaskId
     ]
   )
+  
+  // CPA 종류인 경우 일감 자동 생성
+  let createdTaskId: string | null = null
+  if (kind === 'CPA') {
+    try {
+      const taskId = await getNextTaskId()
+      const phases = (record as any).phases || {}
+      
+      // PIM 매니저와 개발 매니저 확인/생성
+      const users = await getUsers()
+      let pimManager = users.find(u => u.name === 'PIM 매니저')
+      let devManager = users.find(u => u.name === '개발 매니저')
+      
+      if (!pimManager) {
+        const userId = await getNextUserId()
+        await createUser({
+          id: userId,
+          name: 'PIM 매니저',
+          email: undefined,
+        })
+        pimManager = { id: userId, name: 'PIM 매니저' }
+      }
+      
+      if (!devManager) {
+        const userId = await getNextUserId()
+        await createUser({
+          id: userId,
+          name: '개발 매니저',
+          email: undefined,
+        })
+        devManager = { id: userId, name: '개발 매니저' }
+      }
+      
+      // 일감 phases 설정 (PI, PM은 PIM 매니저, 개발은 개발 매니저)
+      const taskPhases = {
+        pi: {
+          owner: pimManager!.name,
+          status: phases.pi?.status || 'Planning',
+          progress: phases.pi?.progress || 0,
+          start: phases.pi?.start || phases.start || new Date().toISOString().slice(0, 10),
+          due: phases.pi?.due || phases.due || '',
+        },
+        pm: {
+          owner: pimManager!.name,
+          status: phases.pm?.status || 'Planning',
+          progress: phases.pm?.progress || 0,
+          start: phases.pm?.start || phases.start || new Date().toISOString().slice(0, 10),
+          due: phases.pm?.due || phases.due || '',
+        },
+        development: {
+          owner: devManager!.name,
+          status: phases.development?.status || 'Planning',
+          progress: phases.development?.progress || 0,
+          start: phases.development?.start || phases.start || new Date().toISOString().slice(0, 10),
+          due: phases.development?.due || phases.due || '',
+        },
+      }
+      
+      // 일감 생성
+      const linkedTask: ProjectChild = {
+        id: taskId,
+        title: record.title,
+        owner: pimManager!.name, // PI 단계 담당자가 대표 담당자
+        status: record.status,
+        progress: record.progress || 0,
+        start: record.start,
+        due: record.due,
+        description: record.description,
+        phases: taskPhases,
+        linked_gmp_record_id: record.id,
+      } as any
+      
+      await addChildToProject(projectId, linkedTask)
+      createdTaskId = taskId
+      
+      // GMP Record에 linked_task_id 업데이트
+      await pool.query(
+        'UPDATE gmp_records SET linked_task_id = ? WHERE id = ?',
+        [taskId, record.id]
+      )
+    } catch (error) {
+      if (process.env.NODE_ENV === 'development') {
+        console.error('CPA 일감 자동 생성 실패:', error)
+      }
+      // 일감 생성 실패해도 GMP Record 저장은 성공한 것으로 처리
+    }
+  }
   
   // 프로젝트가 있는 경우 마감일 자동 업데이트
   if (projectId) {
     await updateProjectDueDate(projectId)
   }
+  
+  return createdTaskId
 }
 
 // GMP Record 업데이트 (projectId가 null일 수 있음)
@@ -735,17 +887,110 @@ export async function updateGmpRecord(
 ): Promise<void> {
   const pool = getPool()
   
-  // 기존 프로젝트 ID 조회 (프로젝트가 변경될 수 있으므로)
+  // 기존 프로젝트 ID 및 linked_task_id 조회
   const [existingRows] = await pool.query<any[]>(
-    'SELECT project_id FROM gmp_records WHERE id = ?',
+    'SELECT project_id, linked_task_id, kind FROM gmp_records WHERE id = ?',
     [record.id]
   )
   const oldProjectId = existingRows.length > 0 ? existingRows[0].project_id : null
+  const existingLinkedTaskId = existingRows.length > 0 ? existingRows[0].linked_task_id : null
+  const existingKind = existingRows.length > 0 ? existingRows[0].kind : 'CC'
   
   const recordAny = record as any
   const kind = recordAny.kind || 'CC'
   const number = recordAny.number || 0
   const kindNumber = `${kind}-${String(number).padStart(5, '0')}`
+  
+  // CPA 종류이고 linked_task_id가 없으면 일감 생성
+  let linkedTaskId = recordAny.linked_task_id || existingLinkedTaskId
+  if (kind === 'CPA' && !linkedTaskId) {
+    try {
+      const taskId = await getNextTaskId()
+      const phases = (record as any).phases || {}
+      
+      // PIM 매니저와 개발 매니저 확인/생성
+      const users = await getUsers()
+      let pimManager = users.find(u => u.name === 'PIM 매니저')
+      let devManager = users.find(u => u.name === '개발 매니저')
+      
+      if (!pimManager) {
+        const userId = await getNextUserId()
+        await createUser({
+          id: userId,
+          name: 'PIM 매니저',
+          email: undefined,
+        })
+        pimManager = { id: userId, name: 'PIM 매니저' }
+      }
+      
+      if (!devManager) {
+        const userId = await getNextUserId()
+        await createUser({
+          id: userId,
+          name: '개발 매니저',
+          email: undefined,
+        })
+        devManager = { id: userId, name: '개발 매니저' }
+      }
+      
+      // 일감 phases 설정
+      const taskPhases = {
+        pi: {
+          owner: pimManager!.name,
+          status: phases.pi?.status || 'Planning',
+          progress: phases.pi?.progress || 0,
+          start: phases.pi?.start || phases.start || new Date().toISOString().slice(0, 10),
+          due: phases.pi?.due || phases.due || '',
+        },
+        pm: {
+          owner: pimManager!.name,
+          status: phases.pm?.status || 'Planning',
+          progress: phases.pm?.progress || 0,
+          start: phases.pm?.start || phases.start || new Date().toISOString().slice(0, 10),
+          due: phases.pm?.due || phases.due || '',
+        },
+        development: {
+          owner: devManager!.name,
+          status: phases.development?.status || 'Planning',
+          progress: phases.development?.progress || 0,
+          start: phases.development?.start || phases.start || new Date().toISOString().slice(0, 10),
+          due: phases.development?.due || phases.due || '',
+        },
+      }
+      
+      // 일감 생성
+      const linkedTask: ProjectChild = {
+        id: taskId,
+        title: record.title,
+        owner: pimManager!.name,
+        status: record.status,
+        progress: record.progress || 0,
+        start: record.start,
+        due: record.due,
+        description: record.description,
+        phases: taskPhases,
+        linked_gmp_record_id: record.id,
+      } as any
+      
+      await addChildToProject(projectId, linkedTask)
+      linkedTaskId = taskId
+    } catch (error) {
+      if (process.env.NODE_ENV === 'development') {
+        console.error('CPA 일감 자동 생성 실패:', error)
+      }
+    }
+  }
+  
+  // CPA 종류인 경우 Link된 일감이 Completed되지 않았으면 Completed 상태로 전환 불가
+  if (kind === 'CPA' && linkedTaskId) {
+    const [linkedTask] = await pool.query<any[]>(
+      'SELECT status FROM project_children WHERE id = ?',
+      [linkedTaskId]
+    )
+    if (linkedTask.length > 0 && linkedTask[0].status !== 'Completed' && record.status === 'Completed') {
+      throw new Error('Link된 일감이 Completed 상태가 아니면 GMP Record를 Completed로 변경할 수 없습니다.')
+    }
+  }
   
   // 상태 자동 관리: 실적 진척도가 100%이면 "Completed", 그 외 Risk 체크, 0%보다 크면 "In Progress"
   let finalStatus = record.status
@@ -757,9 +1002,21 @@ export async function updateGmpRecord(
     finalStatus = 'In Progress'
   }
   
+  // CPA 종류이고 Link된 일감이 Completed되지 않았으면 Completed 상태로 전환 불가
+  if (kind === 'CPA' && linkedTaskId && finalStatus === 'Completed') {
+    const [linkedTask] = await pool.query<any[]>(
+      'SELECT status FROM project_children WHERE id = ?',
+      [linkedTaskId]
+    )
+    if (linkedTask.length > 0 && linkedTask[0].status !== 'Completed') {
+      finalStatus = record.status // 원래 상태 유지
+    }
+  }
+  
+  const phasesJson = (record as any).phases ? JSON.stringify((record as any).phases) : null
   await pool.query(
     `UPDATE gmp_records 
-     SET project_id = ?, title = ?, kind = ?, number = ?, kind_number = ?, owner = ?, status = ?, progress = ?, start = ?, due = ?, description = ?
+     SET project_id = ?, title = ?, kind = ?, number = ?, kind_number = ?, owner = ?, status = ?, progress = ?, start = ?, due = ?, description = ?, phases = ?, linked_task_id = ?
      WHERE id = ?`,
     [
       projectId, 
@@ -772,7 +1029,9 @@ export async function updateGmpRecord(
       record.progress || 0, 
       record.start || null, 
       record.due || null, 
-      record.description || null, 
+      record.description || null,
+      phasesJson,
+      linkedTaskId,
       record.id
     ]
   )
@@ -827,7 +1086,9 @@ export async function deleteGmpRecord(
       await updateProjectDueDate(actualProjectId)
     }
   } catch (error) {
-    console.error('Error in deleteGmpRecord:', error)
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Error in deleteGmpRecord:', error)
+    }
     throw error
   }
 }
@@ -1117,7 +1378,9 @@ export async function searchAll(keyword: string): Promise<SearchResult> {
       gmpRecords: gmpRecordsWithType,
     }
   } catch (error) {
-    console.error('Error in searchAll:', error)
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Error in searchAll:', error)
+    }
     throw new Error(`검색 실패: ${error instanceof Error ? error.message : 'Unknown error'}`)
   }
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useEffect } from 'react'
+import { useMemo, useState, useEffect, useCallback } from 'react'
 import type { MouseEvent } from 'react'
 import type { Project, ProjectChild } from '@/types/project'
 import { TABS, type TabKey } from '@/utils/constants'
@@ -90,7 +90,9 @@ export default function Home() {
         }
       }
     } catch (error) {
-      console.error('Session check error:', error)
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Session check error:', error)
+      }
       if (window.location.pathname !== '/login') {
       window.location.href = '/login'
       }
@@ -110,9 +112,107 @@ export default function Home() {
       })
       window.location.href = '/login'
     } catch (error) {
-      console.error('Logout error:', error)
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Logout error:', error)
+      }
     }
   }
+
+  const fetchProjects = useCallback(async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      
+      const response = await fetch('/api/projects', {
+        cache: 'no-store',
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || `HTTP ${response.status}: Failed to fetch projects`)
+      }
+      const data = (await response.json()) as Project[]
+      setProjects(
+        data.map((project) => ({
+          ...project,
+          children: project.children ?? [],
+        }))
+      )
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+      setError(errorMessage)
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error fetching projects:', err)
+      }
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  // GMP Record 관련 함수들
+  const fetchGmpRecords = useCallback(async () => {
+    try {
+      setGmpRecordsLoading(true)
+      setGmpRecordsError(null)
+      
+      const response = await fetch('/api/gmp-records', {
+        cache: 'no-store',
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || `HTTP ${response.status}: Failed to fetch GMP records`)
+      }
+      const data = (await response.json()) as any[]
+      // GMP Record 데이터를 ProjectChild 형식으로 변환 (프로젝트 정보 포함)
+      const formattedRecords = data.map((record: any) => ({
+        ...record,
+        projectId: record.projectId || null,
+        projectName: record.projectName || 'N/A',
+        kind_number: record.kind_number || (record.kind && record.number !== undefined 
+          ? `${record.kind}-${String(record.number || 0).padStart(5, '0')}` 
+          : 'CC-00000'),
+      }))
+      setGmpRecords(formattedRecords)
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+      setGmpRecordsError(errorMessage)
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error fetching GMP records:', err)
+      }
+    } finally {
+      setGmpRecordsLoading(false)
+    }
+  }, [])
+
+  // 이슈 관리 관련 함수들
+  const fetchIssues = useCallback(async () => {
+    try {
+      setIssuesLoading(true)
+      setIssuesError(null)
+      const response = await fetch('/api/issues', { cache: 'no-store' })
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || `HTTP ${response.status}: Failed to fetch issues`)
+      }
+      const data = (await response.json()) as Issue[]
+      setIssues(data)
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+      setIssuesError(errorMessage)
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error fetching issues:', err)
+      }
+    } finally {
+      setIssuesLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    checkSession()
+    fetchProjects()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetchProjects])
 
   useEffect(() => {
     // GMP Record 탭이 활성화될 때 데이터 로드
@@ -123,8 +223,7 @@ export default function Home() {
     if (activeTab === 'issues') {
       fetchIssues()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab])
+  }, [activeTab, fetchGmpRecords, fetchIssues])
 
   useEffect(() => {
     const closeMenu = () => setContextMenu(null)
@@ -135,40 +234,6 @@ export default function Home() {
       window.removeEventListener('resize', closeMenu)
     }
   }, [])
-
-  const fetchProjects = async () => {
-    try {
-      setLoading(true)
-      setError(null)
-      console.log('Fetching projects...')
-      
-      const response = await fetch('/api/projects', {
-        cache: 'no-store',
-      })
-      
-      console.log('Response status:', response.status)
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || `HTTP ${response.status}: Failed to fetch projects`)
-      }
-      const data = (await response.json()) as Project[]
-      console.log('Projects loaded:', data.length)
-      setProjects(
-        data.map((project) => ({
-          ...project,
-          children: project.children ?? [],
-        }))
-      )
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
-      setError(errorMessage)
-      console.error('Error fetching projects:', err)
-    } finally {
-      setLoading(false)
-      console.log('Loading finished')
-    }
-  }
 
   const handleProjectSave = async (project: Project, mode: 'create' | 'edit') => {
     try {
@@ -200,7 +265,9 @@ export default function Home() {
       setSelectedProject(null)
       setEditMode('edit')
     } catch (err) {
-      console.error('Error saving project:', err)
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error saving project:', err)
+      }
       const errorMessage = err instanceof Error ? err.message : '프로젝트 저장에 실패했습니다.'
       alert(errorMessage)
     }
@@ -228,7 +295,9 @@ export default function Home() {
       setChildTarget(null)
       setIsChildModalOpen(false)
     } catch (err) {
-      console.error('Error adding child:', err)
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error adding child:', err)
+      }
       alert('하위 아이템 추가에 실패했습니다.')
     }
   }
@@ -253,7 +322,9 @@ export default function Home() {
 
       await fetchProjects()
     } catch (err) {
-      console.error('Error adding task:', err)
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error adding task:', err)
+      }
       alert('일감 추가에 실패했습니다.')
       throw err
     }
@@ -292,7 +363,9 @@ export default function Home() {
       setIsDeleteMode(false)
       alert('프로젝트가 삭제되었습니다.')
     } catch (err) {
-      console.error('Error deleting projects:', err)
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error deleting projects:', err)
+      }
       alert('프로젝트 삭제에 실패했습니다.')
     }
   }
@@ -338,7 +411,9 @@ export default function Home() {
           })
         }
       } catch (error) {
-        console.error('Error fetching orphan tasks:', error)
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Error fetching orphan tasks:', error)
+        }
       }
 
       // 각 프로젝트별로 일감 삭제
@@ -360,11 +435,15 @@ export default function Home() {
             if (!response.ok) {
               const errorData = await response.json().catch(() => ({}))
               const errorMessage = errorData.error || `HTTP ${response.status}`
-              console.error(`Failed to delete task ${taskId} from project ${projectId}:`, errorMessage)
+              if (process.env.NODE_ENV === 'development') {
+                console.error(`Failed to delete task ${taskId} from project ${projectId}:`, errorMessage)
+              }
               throw new Error(`일감 ${taskId} 삭제 실패: ${errorMessage}`)
             }
           } catch (err) {
-            console.error(`Error deleting task ${taskId}:`, err)
+            if (process.env.NODE_ENV === 'development') {
+              console.error(`Error deleting task ${taskId}:`, err)
+            }
             throw err
           }
         }
@@ -375,48 +454,11 @@ export default function Home() {
       setIsDeleteMode(false)
       alert('일감이 삭제되었습니다.')
     } catch (err) {
-      console.error('Error deleting tasks:', err)
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error deleting tasks:', err)
+      }
       const errorMessage = err instanceof Error ? err.message : '알 수 없는 오류'
       alert(`일감 삭제에 실패했습니다: ${errorMessage}`)
-    }
-  }
-
-  // GMP Record 관련 함수들
-  const fetchGmpRecords = async () => {
-    try {
-      setGmpRecordsLoading(true)
-      setGmpRecordsError(null)
-      console.log('Fetching GMP records...')
-      
-      const response = await fetch('/api/gmp-records', {
-        cache: 'no-store',
-      })
-      
-      console.log('Response status:', response.status)
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || `HTTP ${response.status}: Failed to fetch GMP records`)
-      }
-      const data = (await response.json()) as any[]
-      console.log('GMP Records loaded:', data.length)
-      // GMP Record 데이터를 ProjectChild 형식으로 변환 (프로젝트 정보 포함)
-      const formattedRecords = data.map((record: any) => ({
-        ...record,
-        projectId: record.projectId || null,
-        projectName: record.projectName || 'N/A',
-        kind_number: record.kind_number || (record.kind && record.number !== undefined 
-          ? `${record.kind}-${String(record.number || 0).padStart(5, '0')}` 
-          : 'CC-00000'),
-      }))
-      setGmpRecords(formattedRecords)
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
-      setGmpRecordsError(errorMessage)
-      console.error('Error fetching GMP records:', err)
-    } finally {
-      setGmpRecordsLoading(false)
-      console.log('GMP Records loading finished')
     }
   }
 
@@ -440,7 +482,9 @@ export default function Home() {
 
       await fetchGmpRecords()
     } catch (err) {
-      console.error('Error adding GMP record:', err)
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error adding GMP record:', err)
+      }
       alert('GMP Record 추가에 실패했습니다.')
       throw err
     }
@@ -484,7 +528,9 @@ export default function Home() {
       setIsDeleteMode(false)
       alert('GMP Record가 삭제되었습니다.')
     } catch (err) {
-      console.error('Error deleting GMP records:', err)
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error deleting GMP records:', err)
+      }
       alert('GMP Record 삭제에 실패했습니다.')
     }
   }
@@ -572,7 +618,9 @@ export default function Home() {
       setSelectedChildIds(new Set())
       alert('하위 아이템이 삭제되었습니다.')
     } catch (err) {
-      console.error('Error deleting children:', err)
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error deleting children:', err)
+      }
       const errorMessage = err instanceof Error ? err.message : '알 수 없는 오류'
       alert(`하위 아이템 삭제에 실패했습니다: ${errorMessage}`)
     }
@@ -594,26 +642,6 @@ export default function Home() {
     })
   }
 
-  // 이슈 관리 관련 함수들
-  const fetchIssues = async () => {
-    try {
-      setIssuesLoading(true)
-      setIssuesError(null)
-      const response = await fetch('/api/issues', { cache: 'no-store' })
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || `HTTP ${response.status}: Failed to fetch issues`)
-      }
-      const data = (await response.json()) as Issue[]
-      setIssues(data)
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
-      setIssuesError(errorMessage)
-      console.error('Error fetching issues:', err)
-    } finally {
-      setIssuesLoading(false)
-    }
-  }
 
   const handleAddIssue = async (issue: Issue) => {
     try {
@@ -634,7 +662,9 @@ export default function Home() {
 
       await fetchIssues()
     } catch (err) {
-      console.error('Error adding issue:', err)
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error adding issue:', err)
+      }
       alert('이슈 추가에 실패했습니다.')
       throw err
     }
@@ -659,7 +689,9 @@ export default function Home() {
 
       await fetchIssues()
     } catch (err) {
-      console.error('Error updating issue:', err)
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error updating issue:', err)
+      }
       alert('이슈 수정에 실패했습니다.')
       throw err
     }
@@ -698,7 +730,9 @@ export default function Home() {
       setIsDeleteMode(false)
       alert('이슈가 삭제되었습니다.')
     } catch (err) {
-      console.error('Error deleting issues:', err)
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error deleting issues:', err)
+      }
       alert('이슈 삭제에 실패했습니다.')
     }
   }
@@ -1260,7 +1294,9 @@ export default function Home() {
                 setSelectedTask(null)
                 setTaskEditMode('edit')
               } catch (err) {
-                console.error('Error saving task:', err)
+                if (process.env.NODE_ENV === 'development') {
+                  console.error('Error saving task:', err)
+                }
                 alert(activeTab === 'gmp-record' ? 'GMP Record 저장에 실패했습니다.' : '일감 저장에 실패했습니다.')
               }
             }}
@@ -1289,7 +1325,9 @@ export default function Home() {
                 setSelectedIssue(null)
                 setIssueEditMode('edit')
               } catch (err) {
-                console.error('Error saving issue:', err)
+                if (process.env.NODE_ENV === 'development') {
+                  console.error('Error saving issue:', err)
+                }
                 alert('이슈 저장에 실패했습니다.')
               }
             }}
@@ -1358,7 +1396,9 @@ export default function Home() {
                 setSelectedTask(null)
                 setTaskEditMode('edit')
               } catch (err) {
-                console.error('Error saving task:', err)
+                if (process.env.NODE_ENV === 'development') {
+                  console.error('Error saving task:', err)
+                }
                 alert('일감 저장에 실패했습니다.')
               }
             }}

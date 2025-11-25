@@ -1,3 +1,11 @@
+export interface TaskPhase {
+  owner: string
+  status: string
+  progress: number
+  start: string
+  due: string
+}
+
 export interface ProjectChild {
   id: string
   title: string
@@ -7,6 +15,11 @@ export interface ProjectChild {
   start?: string
   due: string
   description?: string
+  phases?: {
+    pi?: TaskPhase
+    pm?: TaskPhase
+    development?: TaskPhase
+  }
 }
 
 export interface Project {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getUsers, deleteUser } from '@/lib/users'
 import { createAccount, updateAccount } from '@/lib/accounts'
+import { validatePasswordStrength } from '@/lib/auth'
 
 export async function GET() {
   try {
@@ -26,6 +27,15 @@ export async function POST(request: NextRequest) {
       if (!username || !name || !email || !password) {
         return NextResponse.json(
           { error: 'ID, 이름, 이메일, 비밀번호를 모두 입력해주세요.' },
+          { status: 400 }
+        )
+      }
+
+      // 비밀번호 강도 검증
+      const passwordValidation = validatePasswordStrength(password)
+      if (!passwordValidation.valid) {
+        return NextResponse.json(
+          { error: passwordValidation.message || '비밀번호가 요구사항을 만족하지 않습니다.' },
           { status: 400 }
         )
       }

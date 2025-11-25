@@ -1,6 +1,8 @@
 'use client'
 
-export function StatusBadge({ status }: { status: string }) {
+import { memo } from 'react'
+
+export const StatusBadge = memo(function StatusBadge({ status }: { status: string }) {
   // 상태를 정규화 (대소문자 구분 없이 처리)
   const normalizedStatus = status?.trim() || ''
   
@@ -21,5 +23,5 @@ export function StatusBadge({ status }: { status: string }) {
   }
 
   return <span className={`badge ${tone}`}>{status}</span>
-}
+})
 

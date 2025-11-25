@@ -1,8 +1,8 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, memo } from 'react'
 
-export function Progress({ value, start, due }: { value: number; start?: string; due?: string }) {
+export const Progress = memo(function Progress({ value, start, due }: { value: number; start?: string; due?: string }) {
   // 계획 진행률 계산
   const calculatePlannedProgress = (): number => {
     if (!start || !due) return 0
@@ -43,5 +43,5 @@ export function Progress({ value, start, due }: { value: number; start?: string;
       )}
     </div>
   )
-}
+})
 

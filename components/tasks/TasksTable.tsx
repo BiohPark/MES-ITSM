@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import type { Project, ProjectChild } from '@/types/project'
 import { StatusBadge } from '../common/StatusBadge'
 import { Progress } from '../common/Progress'
@@ -42,7 +42,7 @@ export function TasksTable({
   const [filterKind, setFilterKind] = useState<string>('')
   const isGmpRecords = !!records
 
-  const fetchOrphanTasks = async () => {
+  const fetchOrphanTasks = useCallback(async () => {
     try {
       setOrphanLoading(true)
       const apiEndpoint = isGmpRecords 
@@ -54,18 +54,20 @@ export function TasksTable({
         setOrphanTasks(tasks || [])
       }
     } catch (error) {
-      console.error('Error fetching orphan tasks:', error)
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error fetching orphan tasks:', error)
+      }
       setOrphanTasks([])
     } finally {
       setOrphanLoading(false)
     }
-  }
+  }, [isGmpRecords])
 
   useEffect(() => {
     if (!loading) {
       fetchOrphanTasks()
     }
-  }, [loading, projects, records, isGmpRecords])
+  }, [loading, fetchOrphanTasks])
 
   const allTasks = useMemo(() => {
     const tasks: Array<{
@@ -372,10 +374,20 @@ export function TasksTable({
               <td>
                 <p className="project-name">{task.title}</p>
                 <span className="project-id">{task.id}</span>
+                {(task as any).linked_gmp_record_id && (
+                  <span style={{ fontSize: '0.75rem', color: '#3b82f6', marginLeft: '0.5rem' }}>
+                    🔗 Link: {(task as any).linked_gmp_record_id}
+                  </span>
+                )}
               </td>
               {isGmpRecords && (
                 <td>
                   <span className="project-id">{(task as any).kind_number || 'CC-00000'}</span>
+                  {(task as any).linked_task_id && (
+                    <span style={{ fontSize: '0.75rem', color: '#3b82f6', marginLeft: '0.5rem', display: 'block' }}>
+                      🔗 Link: {(task as any).linked_task_id}
+                    </span>
+                  )}
                 </td>
               )}
               <td>
