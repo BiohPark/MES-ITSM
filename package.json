@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "setup-db": "npm run init-db && npm run add-users-table && npm run add-auth-columns && npm run add-task-phases-column && npm run add-task-link-columns && npm run add-srb-ver-column && npm run add-comments-table && npm run create-admin",
+    "postinstall": "npm run setup-db",
     "init-db": "tsx scripts/init-db.ts",
     "migrate": "tsx scripts/migrate-csv-to-db.ts",
     "migrate-ids": "tsx scripts/migrate-ids.ts",
@@ -33,7 +35,14 @@
     "add-task-link-columns": "tsx scripts/add-task-link-columns.ts",
     "add-performance-indexes": "tsx scripts/add-performance-indexes.ts",
     "performance-test": "tsx scripts/performance-test.ts",
-    "memory-leak-check": "node --expose-gc scripts/memory-leak-check.ts"
+    "memory-leak-check": "node --expose-gc scripts/memory-leak-check.ts",
+    "add-srb-ver-column": "tsx scripts/add-srb-ver-column.ts",
+    "list-users": "tsx scripts/list-users.ts",
+    "check-admin-password": "tsx scripts/check-admin-password.ts",
+    "reset-admin-password": "tsx scripts/reset-admin-password.ts",
+    "verify-admin-password": "tsx scripts/verify-admin-password.ts",
+    "check-remaining-test-data": "tsx scripts/check-remaining-test-data.ts",
+    "check-specific-record": "tsx scripts/check-specific-record.ts"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",

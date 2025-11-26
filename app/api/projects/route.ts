@@ -130,7 +130,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, projects })
     } else if (body.action === 'addChild') {
       // 하위 아이템 추가
-      const taskId = body.child?.id || await getNextTaskId()
+      // 클라이언트에서 넘어온 ID가 있어도 무시하고, 항상 서버에서 다음 ID를 생성해 중복을 방지한다.
+      const taskId = await getNextTaskId()
       const newChild: ProjectChild = {
         id: taskId,
         title: body.child?.title,
