@@ -52,8 +52,9 @@ export async function POST(request: NextRequest) {
       await addIssue(issue)
       
       // Deviation이 체크된 경우 GMP Record 자동 생성
-      console.log('이슈 생성 - is_deviation:', issue.is_deviation, typeof issue.is_deviation)
-      if (issue.is_deviation === true || issue.is_deviation === 1 || issue.is_deviation === 'true') {
+      const isDeviation = issue.is_deviation === true
+      console.log('이슈 생성 - is_deviation:', issue.is_deviation, typeof issue.is_deviation, '=>', isDeviation)
+      if (isDeviation) {
         try {
           console.log('Deviation 체크됨, GMP Record 생성 시작')
           // 기존 GMP Record 확인 (title과 kind로 매칭)
@@ -79,7 +80,7 @@ export async function POST(request: NextRequest) {
                 email: undefined,
               })
                 console.log('Dev매니저 사용자 생성 완료')
-                devManager = { name: 'Dev매니저' }
+                devManager = { id: userId, name: 'Dev매니저' }
             } catch (error) {
               console.error('Dev매니저 사용자 생성 실패:', error)
               // 사용자 생성 실패해도 계속 진행
@@ -164,7 +165,7 @@ export async function POST(request: NextRequest) {
                   name: 'Dev매니저',
                   email: undefined,
                 })
-                devManager = { name: 'Dev매니저' }
+                devManager = { id: userId, name: 'Dev매니저' }
               } catch (error) {
                 console.error('Dev매니저 사용자 생성 실패:', error)
               }

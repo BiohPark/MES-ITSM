@@ -1,4 +1,4 @@
-import { SignJWT, jwtVerify } from 'jose'
+import { SignJWT, jwtVerify, type JWTPayload } from 'jose'
 import { cookies } from 'next/headers'
 
 const secretKey = process.env.JWT_SECRET || 'default-secret-key-change-in-production'
@@ -17,7 +17,9 @@ export interface SessionPayload {
 
 // JWT 생성
 export async function createSession(payload: SessionPayload): Promise<string> {
-  const token = await new SignJWT(payload)
+  // jose의 타입 요구사항을 만족하도록 JWTPayload로 캐스팅
+  const jwtPayload: JWTPayload = { ...payload }
+  const token = await new SignJWT(jwtPayload)
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime('7d') // 7일 후 만료
@@ -32,7 +34,7 @@ export async function verifySession(token: string): Promise<SessionPayload | nul
     const { payload } = await jwtVerify(token, encodedKey, {
       algorithms: ['HS256'],
     })
-    return payload as SessionPayload
+    return payload as unknown as SessionPayload
   } catch (error) {
     console.error('JWT 검증 실패:', error)
     return null

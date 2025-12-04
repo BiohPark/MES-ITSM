@@ -20,6 +20,13 @@ export interface ProjectChild {
     pm?: TaskPhase
     development?: TaskPhase
   }
+  // GMP Record 전용 필드들 (일반 일감에는 사용되지 않을 수 있음)
+  kind?: string
+  number?: number
+  kind_number?: string
+  isGmpRecord?: boolean
+  linked_task_id?: string | null
+  linked_gmp_record_id?: string | null
 }
 
 export interface Project {
