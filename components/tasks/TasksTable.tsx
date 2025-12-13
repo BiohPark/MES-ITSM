@@ -384,6 +384,23 @@ export function TasksTable({
                         🔗 Link: {(task as any).linked_gmp_record_id}
                       </span>
                     )}
+                    {(task as any).linked_val_packages && (task as any).linked_val_packages.length > 0 && (
+                      <div style={{ marginTop: '0.25rem' }}>
+                        {(task as any).linked_val_packages.map((vp: any, idx: number) => (
+                          <span
+                            key={vp.id}
+                            style={{
+                              fontSize: '0.75rem',
+                              color: '#10b981',
+                              marginLeft: idx > 0 ? '0.5rem' : '0',
+                              display: 'inline-block',
+                            }}
+                          >
+                            📦 VAL: {vp.name} ({vp.id})
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </td>
                   {isGmpRecords && (
                     <td>

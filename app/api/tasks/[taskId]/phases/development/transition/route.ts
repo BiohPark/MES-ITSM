@@ -41,7 +41,11 @@ export async function POST(
     
     // 개발 단계 상태 추출
     let currentStatus = 'Planning'
-    let phases = {}
+    let phases: {
+      pi?: { owner?: string; status?: string; progress?: number; start?: string; due?: string }
+      pm?: { owner?: string; status?: string; progress?: number; start?: string; due?: string }
+      development?: { owner?: string; status?: string; progress?: number; start?: string; due?: string }
+    } = {}
     if (task.phases) {
       try {
         phases = typeof task.phases === 'string' ? JSON.parse(task.phases) : task.phases

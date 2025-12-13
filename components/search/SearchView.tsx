@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import type { Project, ProjectChild } from '@/types/project'
 import { StatusBadge } from '../common/StatusBadge'
 import { Progress } from '../common/Progress'
@@ -27,7 +27,7 @@ export function SearchView({ onProjectClick, onTaskClick }: SearchViewProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const handleSearch = async () => {
+  const handleSearch = useCallback(async () => {
     if (!keyword.trim()) {
       setResults({ projects: [], tasks: [], gmpRecords: [] })
       return
@@ -49,7 +49,7 @@ export function SearchView({ onProjectClick, onTaskClick }: SearchViewProps) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [keyword])
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -61,7 +61,7 @@ export function SearchView({ onProjectClick, onTaskClick }: SearchViewProps) {
     }, 300) // 디바운스: 300ms 후 검색
 
     return () => clearTimeout(timer)
-  }, [keyword])
+  }, [keyword, handleSearch])
 
   const totalResults = results.projects.length + results.tasks.length + results.gmpRecords.length
 

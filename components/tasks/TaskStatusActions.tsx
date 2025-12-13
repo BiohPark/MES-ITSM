@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 
 interface Transition {
   id: number
@@ -37,12 +37,7 @@ export function TaskStatusActions({
   const [executing, setExecuting] = useState<number | null>(null)
   const [currentTaskStatus, setCurrentTaskStatus] = useState<string | null>(currentStatus || null)
 
-  // 사용 가능한 전환 목록 가져오기
-  useEffect(() => {
-    fetchTransitions()
-  }, [taskId, userRole, userId])
-
-  const fetchTransitions = async () => {
+  const fetchTransitions = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
@@ -77,7 +72,12 @@ export function TaskStatusActions({
     } finally {
       setLoading(false)
     }
-  }
+  }, [taskId, userRole, userId])
+
+  // 사용 가능한 전환 목록 가져오기
+  useEffect(() => {
+    fetchTransitions()
+  }, [fetchTransitions])
 
   // 전환 실행
   const handleTransition = async (transitionId: number, transitionName: string) => {

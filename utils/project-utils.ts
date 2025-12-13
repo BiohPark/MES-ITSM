@@ -78,3 +78,21 @@ export const buildNewIssue = async (): Promise<Issue> => {
   return issue
 }
 
+export const buildNewValPackage = async (): Promise<Project> => {
+  const response = await fetch('/api/val-packages?type=val-package')
+  const data = await response.json()
+  const valPackage: any = {
+    id: data.nextId || 'Val-00001',
+    name: '',
+    owner: '',
+    members: 1,
+    status: 'Planning',
+    progress: 0,
+    start: new Date().toISOString().slice(0, 10),
+    due: new Date().toISOString().slice(0, 10),
+    children: [],
+  }
+  valPackage.description = ''
+  return valPackage as Project
+}
+

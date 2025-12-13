@@ -110,6 +110,39 @@ export async function initializeDatabase(): Promise<void> {
         INDEX idx_project_id (project_id)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `)
+
+    // val_packages 테이블 생성 (프로젝트와 동일한 구조)
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS val_packages (
+        id VARCHAR(50) PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        owner VARCHAR(100) NOT NULL,
+        members INT NOT NULL DEFAULT 1,
+        status VARCHAR(50) NOT NULL DEFAULT 'Planning',
+        progress INT NOT NULL DEFAULT 0,
+        start DATE,
+        due DATE NOT NULL,
+        description TEXT,
+        srb_ver VARCHAR(50),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `)
+
+    // val_package_task_links 테이블 생성 (VAL Pkg와 일감 간 다대다 관계)
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS val_package_task_links (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        val_package_id VARCHAR(50) NOT NULL,
+        task_id VARCHAR(50) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY unique_link (val_package_id, task_id),
+        FOREIGN KEY (val_package_id) REFERENCES val_packages(id) ON DELETE CASCADE,
+        FOREIGN KEY (task_id) REFERENCES project_children(id) ON DELETE CASCADE,
+        INDEX idx_val_package_id (val_package_id),
+        INDEX idx_task_id (task_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `)
   } finally {
     await connection.end()
   }
@@ -141,6 +174,29 @@ export async function getProjects(): Promise<Project[]> {
       `SELECT * FROM gmp_records WHERE project_id IN (${placeholders}) ORDER BY project_id, created_at ASC`,
       projectIds
     )
+
+    // 모든 일감의 VAL Pkg 링크 조회
+    const allChildIds = allChildren.map(c => c.id)
+    let valPackageLinks = new Map<string, any[]>()
+    if (allChildIds.length > 0) {
+      const childPlaceholders = allChildIds.map(() => '?').join(',')
+      const [links] = await pool.query<any[]>(
+        `SELECT vptl.task_id, vp.id as val_package_id, vp.name as val_package_name
+         FROM val_package_task_links vptl
+         INNER JOIN val_packages vp ON vptl.val_package_id = vp.id
+         WHERE vptl.task_id IN (${childPlaceholders})`,
+        allChildIds
+      )
+      links.forEach((link) => {
+        if (!valPackageLinks.has(link.task_id)) {
+          valPackageLinks.set(link.task_id, [])
+        }
+        valPackageLinks.get(link.task_id)!.push({
+          id: link.val_package_id,
+          name: link.val_package_name,
+        })
+      })
+    }
 
     // 프로젝트별로 일감과 GMP Record를 그룹화
     const childrenByProject = new Map<string, any[]>()
@@ -189,6 +245,7 @@ export async function getProjects(): Promise<Project[]> {
             description: child.description || '',
             phases: phases,
             linked_gmp_record_id: child.linked_gmp_record_id || null,
+            linked_val_packages: valPackageLinks.get(child.id) || [],
           }
         })
 
@@ -267,6 +324,29 @@ export async function getOrphanTasks(): Promise<ProjectChild[]> {
     "SELECT * FROM project_children WHERE project_id IS NULL ORDER BY created_at ASC"
   )
 
+  // VAL Pkg 링크 조회
+  const taskIds = tasks.map(t => t.id)
+  let valPackageLinks = new Map<string, any[]>()
+  if (taskIds.length > 0) {
+    const placeholders = taskIds.map(() => '?').join(',')
+    const [links] = await pool.query<any[]>(
+      `SELECT vptl.task_id, vp.id as val_package_id, vp.name as val_package_name
+       FROM val_package_task_links vptl
+       INNER JOIN val_packages vp ON vptl.val_package_id = vp.id
+       WHERE vptl.task_id IN (${placeholders})`,
+      taskIds
+    )
+    links.forEach((link) => {
+      if (!valPackageLinks.has(link.task_id)) {
+        valPackageLinks.set(link.task_id, [])
+      }
+      valPackageLinks.get(link.task_id)!.push({
+        id: link.val_package_id,
+        name: link.val_package_name,
+      })
+    })
+  }
+
   const today = new Date().toISOString().slice(0, 10)
   return tasks.map((task) => {
     let phases = null
@@ -288,6 +368,7 @@ export async function getOrphanTasks(): Promise<ProjectChild[]> {
       description: task.description || '',
       phases: phases,
       linked_gmp_record_id: task.linked_gmp_record_id || null,
+      linked_val_packages: valPackageLinks.get(task.id) || [],
     }
   })
 }
@@ -1463,5 +1544,315 @@ export async function getNextCommentId(): Promise<string> {
   }
 
   return 'CMT-00001'
+}
+
+// VAL Pkg 관련 함수들
+
+// 모든 VAL Pkg 조회 (링크된 일감 포함)
+export async function getValPackages(): Promise<Project[]> {
+  try {
+    const pool = getPool()
+    const [packages] = await pool.query<any[]>(
+      'SELECT * FROM val_packages ORDER BY created_at DESC'
+    )
+
+    if (packages.length === 0) {
+      return []
+    }
+
+    const packageIds = packages.map(p => p.id)
+    const placeholders = packageIds.map(() => '?').join(',')
+
+    // 모든 링크된 일감을 한 번에 조회
+    const [linkedTasks] = await pool.query<any[]>(
+      `SELECT pc.*, vptl.val_package_id
+       FROM project_children pc
+       INNER JOIN val_package_task_links vptl ON pc.id = vptl.task_id
+       WHERE vptl.val_package_id IN (${placeholders})
+       ORDER BY vptl.val_package_id, pc.created_at ASC`,
+      packageIds
+    )
+
+    // VAL Pkg별로 일감 그룹화
+    const tasksByPackage = new Map<string, any[]>()
+    linkedTasks.forEach((task) => {
+      if (!tasksByPackage.has(task.val_package_id)) {
+        tasksByPackage.set(task.val_package_id, [])
+      }
+      tasksByPackage.get(task.val_package_id)!.push(task)
+    })
+
+    const today = new Date().toISOString().slice(0, 10)
+    return packages.map((pkg) => {
+      const linkedTasksList = tasksByPackage.get(pkg.id) || []
+      const childrenList = linkedTasksList.map((task) => {
+        let phases = null
+        if (task.phases) {
+          try {
+            phases = typeof task.phases === 'string' ? JSON.parse(task.phases) : task.phases
+          } catch (e) {
+            phases = null
+          }
+        }
+        return {
+          id: task.id,
+          title: task.title,
+          owner: task.owner,
+          status: task.status,
+          progress: task.progress || 0,
+          start: task.start ? (typeof task.start === 'string' ? task.start : new Date(task.start).toISOString().slice(0, 10)) : today,
+          due: task.due ? (typeof task.due === 'string' ? task.due : new Date(task.due).toISOString().slice(0, 10)) : '',
+          description: task.description || '',
+          phases: phases,
+          linked_gmp_record_id: task.linked_gmp_record_id || null,
+        }
+      })
+
+      return {
+        id: pkg.id,
+        name: pkg.name,
+        owner: pkg.owner,
+        members: pkg.members,
+        status: pkg.status,
+        progress: pkg.progress,
+        start: pkg.start ? (typeof pkg.start === 'string' ? pkg.start : new Date(pkg.start).toISOString().slice(0, 10)) : today,
+        due: pkg.due ? (typeof pkg.due === 'string' ? pkg.due : new Date(pkg.due).toISOString().slice(0, 10)) : '',
+        description: pkg.description || '',
+        srb_ver: pkg.srb_ver || '',
+        children: childrenList, // 링크된 일감
+      }
+    })
+  } catch (error) {
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Error in getValPackages:', error)
+    }
+    throw new Error(`데이터베이스 조회 실패: ${error instanceof Error ? error.message : 'Unknown error'}`)
+  }
+}
+
+// VAL Pkg 추가
+export async function createValPackage(valPackage: Project): Promise<void> {
+  const pool = getPool()
+  await pool.query(
+    `INSERT INTO val_packages (id, name, owner, members, status, progress, start, due, description, srb_ver)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      valPackage.id,
+      valPackage.name,
+      valPackage.owner,
+      valPackage.members,
+      valPackage.status,
+      valPackage.progress,
+      valPackage.start || null,
+      valPackage.due,
+      valPackage.description || null,
+      (valPackage as any).srb_ver || null,
+    ]
+  )
+}
+
+// VAL Pkg 업데이트
+export async function updateValPackage(valPackage: Project): Promise<void> {
+  const pool = getPool()
+
+  // 상태 자동 관리: 실적 진척도가 100%이면 "Completed", 그 외 Risk 체크, 0%보다 크면 "In Progress"
+  let finalStatus = valPackage.status
+  if (valPackage.progress >= 100) {
+    finalStatus = 'Completed'
+  } else if (checkRiskStatus(valPackage.start, valPackage.due, valPackage.progress || 0)) {
+    finalStatus = 'Issued'
+  } else if (valPackage.progress > 0) {
+    finalStatus = 'In Progress'
+  }
+
+  await pool.query(
+    `UPDATE val_packages 
+     SET name = ?, owner = ?, members = ?, status = ?, progress = ?, start = ?, due = ?, description = ?, srb_ver = ?
+     WHERE id = ?`,
+    [
+      valPackage.name,
+      valPackage.owner,
+      valPackage.members,
+      finalStatus,
+      valPackage.progress,
+      valPackage.start || null,
+      valPackage.due,
+      valPackage.description || null,
+      (valPackage as any).srb_ver || null,
+      valPackage.id,
+    ]
+  )
+}
+
+// VAL Pkg 삭제
+export async function deleteValPackage(valPackageId: string): Promise<void> {
+  const pool = getPool()
+  await pool.query('DELETE FROM val_packages WHERE id = ?', [valPackageId])
+}
+
+// 다음 VAL Pkg ID 생성 (5자리 숫자)
+export async function getNextValPackageId(): Promise<string> {
+  const pool = getPool()
+  const [rows] = await pool.query<any[]>(
+    `SELECT id FROM val_packages WHERE id LIKE 'Val-%' ORDER BY id DESC LIMIT 1`
+  )
+
+  if (rows.length === 0) {
+    return 'Val-00001'
+  }
+
+  const lastId = rows[0].id
+  const match = lastId.match(/Val-(\d+)/)
+  if (match) {
+    const nextNum = parseInt(match[1], 10) + 1
+    return `Val-${String(nextNum).padStart(5, '0')}`
+  }
+
+  return 'Val-00001'
+}
+
+// VAL Pkg와 일감 링크 관련 함수들
+
+// VAL Pkg에 링크된 일감 조회
+export async function getValPackageTasks(valPackageId: string): Promise<ProjectChild[]> {
+  const pool = getPool()
+  const [tasks] = await pool.query<any[]>(
+    `SELECT pc.* 
+     FROM project_children pc
+     INNER JOIN val_package_task_links vptl ON pc.id = vptl.task_id
+     WHERE vptl.val_package_id = ?
+     ORDER BY pc.created_at ASC`,
+    [valPackageId]
+  )
+
+  const today = new Date().toISOString().slice(0, 10)
+  return tasks.map((task) => {
+    let phases = null
+    if (task.phases) {
+      try {
+        phases = typeof task.phases === 'string' ? JSON.parse(task.phases) : task.phases
+      } catch (e) {
+        phases = null
+      }
+    }
+    return {
+      id: task.id,
+      title: task.title,
+      owner: task.owner,
+      status: task.status,
+      progress: task.progress || 0,
+      start: task.start ? (typeof task.start === 'string' ? task.start : new Date(task.start).toISOString().slice(0, 10)) : today,
+      due: task.due ? (typeof task.due === 'string' ? task.due : new Date(task.due).toISOString().slice(0, 10)) : '',
+      description: task.description || '',
+      phases: phases,
+      linked_gmp_record_id: task.linked_gmp_record_id || null,
+    }
+  })
+}
+
+// 일감에 링크된 VAL Pkg 조회
+export async function getValPackagesForTask(taskId: string): Promise<Project[]> {
+  const pool = getPool()
+  const [valPackages] = await pool.query<any[]>(
+    `SELECT vp.* 
+     FROM val_packages vp
+     INNER JOIN val_package_task_links vptl ON vp.id = vptl.val_package_id
+     WHERE vptl.task_id = ?
+     ORDER BY vp.created_at ASC`,
+    [taskId]
+  )
+
+  const today = new Date().toISOString().slice(0, 10)
+  return valPackages.map((vp) => ({
+    id: vp.id,
+    name: vp.name,
+    owner: vp.owner,
+    members: vp.members,
+    status: vp.status,
+    progress: vp.progress,
+    start: vp.start ? (typeof vp.start === 'string' ? vp.start : new Date(vp.start).toISOString().slice(0, 10)) : today,
+    due: vp.due ? (typeof vp.due === 'string' ? vp.due : new Date(vp.due).toISOString().slice(0, 10)) : '',
+    description: vp.description || '',
+    srb_ver: vp.srb_ver || '',
+    children: [],
+  }))
+}
+
+// 링크 가능한 일감 조회 (Completed, Dropped 제외)
+export async function getAvailableTasksForValPackage(): Promise<ProjectChild[]> {
+  const pool = getPool()
+  const [tasks] = await pool.query<any[]>(
+    `SELECT * FROM project_children 
+     WHERE status NOT IN ('Completed', 'Dropped')
+     ORDER BY created_at ASC`
+  )
+
+  const today = new Date().toISOString().slice(0, 10)
+  return tasks.map((task) => {
+    let phases = null
+    if (task.phases) {
+      try {
+        phases = typeof task.phases === 'string' ? JSON.parse(task.phases) : task.phases
+      } catch (e) {
+        phases = null
+      }
+    }
+    return {
+      id: task.id,
+      title: task.title,
+      owner: task.owner,
+      status: task.status,
+      progress: task.progress || 0,
+      start: task.start ? (typeof task.start === 'string' ? task.start : new Date(task.start).toISOString().slice(0, 10)) : today,
+      due: task.due ? (typeof task.due === 'string' ? task.due : new Date(task.due).toISOString().slice(0, 10)) : '',
+      description: task.description || '',
+      phases: phases,
+      linked_gmp_record_id: task.linked_gmp_record_id || null,
+    }
+  })
+}
+
+// 일감들을 VAL Pkg에 링크
+export async function linkTasksToValPackage(valPackageId: string, taskIds: string[]): Promise<void> {
+  const pool = getPool()
+  const connection = await pool.getConnection()
+
+  try {
+    await connection.beginTransaction()
+
+    for (const taskId of taskIds) {
+      // 중복 체크 후 삽입
+      await connection.query(
+        `INSERT IGNORE INTO val_package_task_links (val_package_id, task_id)
+         VALUES (?, ?)`,
+        [valPackageId, taskId]
+      )
+    }
+
+    await connection.commit()
+  } catch (error) {
+    await connection.rollback()
+    throw error
+  } finally {
+    connection.release()
+  }
+}
+
+// 일감 링크 해제
+export async function unlinkTaskFromValPackage(valPackageId: string, taskId: string): Promise<void> {
+  const pool = getPool()
+  await pool.query(
+    'DELETE FROM val_package_task_links WHERE val_package_id = ? AND task_id = ?',
+    [valPackageId, taskId]
+  )
+}
+
+// VAL Pkg의 모든 링크 삭제
+export async function unlinkAllTasksFromValPackage(valPackageId: string): Promise<void> {
+  const pool = getPool()
+  await pool.query(
+    'DELETE FROM val_package_task_links WHERE val_package_id = ?',
+    [valPackageId]
+  )
 }
 

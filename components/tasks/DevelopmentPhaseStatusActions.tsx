@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 
 interface Transition {
   id: number
@@ -40,12 +40,7 @@ export function DevelopmentPhaseStatusActions({
   const [executing, setExecuting] = useState<number | null>(null)
   const [currentPhaseStatus, setCurrentPhaseStatus] = useState<string | null>(currentStatus || null)
 
-  // 사용 가능한 전환 목록 가져오기
-  useEffect(() => {
-    fetchTransitions()
-  }, [taskId, userRole, userId, currentStatus])
-
-  const fetchTransitions = async () => {
+  const fetchTransitions = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
@@ -80,7 +75,12 @@ export function DevelopmentPhaseStatusActions({
     } finally {
       setLoading(false)
     }
-  }
+  }, [taskId, userRole, userId])
+
+  // 사용 가능한 전환 목록 가져오기
+  useEffect(() => {
+    fetchTransitions()
+  }, [fetchTransitions])
 
   // 전환 실행
   const handleTransition = async (transitionId: number, transitionName: string) => {

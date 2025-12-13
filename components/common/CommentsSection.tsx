@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import type { Comment, CommentEntityType } from '@/types/comment'
 
 interface CommentsSectionProps {
@@ -17,11 +17,7 @@ export function CommentsSection({ entityType, entityId, currentUser }: CommentsS
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null)
   const [editingContent, setEditingContent] = useState('')
 
-  useEffect(() => {
-    fetchComments()
-  }, [entityType, entityId])
-
-  const fetchComments = async () => {
+  const fetchComments = useCallback(async () => {
     try {
       setLoading(true)
       const response = await fetch(`/api/comments?entity_type=${entityType}&entity_id=${entityId}`, {
@@ -36,7 +32,11 @@ export function CommentsSection({ entityType, entityId, currentUser }: CommentsS
     } finally {
       setLoading(false)
     }
-  }
+  }, [entityType, entityId])
+
+  useEffect(() => {
+    fetchComments()
+  }, [fetchComments])
 
   const handleSubmit = async (e?: React.FormEvent | React.MouseEvent) => {
     if (e) {

@@ -4,13 +4,15 @@ import { useMemo, useState, useEffect, useCallback } from 'react'
 import type { MouseEvent } from 'react'
 import type { Project, ProjectChild } from '@/types/project'
 import { TABS, type TabKey } from '@/utils/constants'
-import { buildNewProject, buildNewChild, buildNewGmpRecord, buildNewIssue } from '@/utils/project-utils'
+import { buildNewProject, buildNewChild, buildNewGmpRecord, buildNewIssue, buildNewValPackage } from '@/utils/project-utils'
 import type { Issue } from '@/types/issue'
 import { IssuesTable } from '@/components/issues/IssuesTable'
 import { IssueEditModal } from '@/components/issues/IssueEditModal'
 import { DashboardView } from '@/components/dashboard/DashboardView'
 import { ProjectsTable } from '@/components/projects/ProjectsTable'
 import { ProjectEditModal } from '@/components/projects/ProjectEditModal'
+import { ValPackagesTable } from '@/components/val-packages/ValPackagesTable'
+import { ValPackageEditModal } from '@/components/val-packages/ValPackageEditModal'
 import { TasksTable } from '@/components/tasks/TasksTable'
 import { TaskEditModal } from '@/components/tasks/TaskEditModal'
 import { ChildItemModal } from '@/components/tasks/ChildItemModal'
@@ -28,6 +30,14 @@ export default function Home() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
+  // VAL Pkg 관련 상태
+  const [valPackages, setValPackages] = useState<Project[]>([])
+  const [valPackagesLoading, setValPackagesLoading] = useState(false)
+  const [valPackagesError, setValPackagesError] = useState<string | null>(null)
+  const [selectedValPackage, setSelectedValPackage] = useState<Project | null>(null)
+  const [isValPackageEditing, setIsValPackageEditing] = useState(false)
+  const [valPackageEditMode, setValPackageEditMode] = useState<'create' | 'edit'>('edit')
+  const [selectedValPackageIds, setSelectedValPackageIds] = useState<Set<string>>(new Set())
   const [editMode, setEditMode] = useState<'create' | 'edit'>('edit')
   const [isEditing, setIsEditing] = useState(false)
   const [childTarget, setChildTarget] = useState<Project | null>(null)
@@ -73,6 +83,8 @@ export default function Home() {
   useEffect(() => {
     checkSession()
     fetchProjects()
+    fetchOrphanTasks()
+    fetchIssues()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -207,6 +219,33 @@ export default function Home() {
     }
   }, [])
 
+  // VAL Pkg 관련 함수들
+  const fetchValPackages = useCallback(async () => {
+    try {
+      setValPackagesLoading(true)
+      setValPackagesError(null)
+      
+      const response = await fetch('/api/val-packages', {
+        cache: 'no-store',
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || `HTTP ${response.status}: Failed to fetch VAL Pkg`)
+      }
+      const data = (await response.json()) as Project[]
+      setValPackages(data)
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+      setValPackagesError(errorMessage)
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error fetching VAL Pkg:', err)
+      }
+    } finally {
+      setValPackagesLoading(false)
+    }
+  }, [])
+
   // 이슈 관리 관련 함수들
   const fetchIssues = useCallback(async () => {
     try {
@@ -245,7 +284,11 @@ export default function Home() {
     if (activeTab === 'issues') {
       fetchIssues()
     }
-  }, [activeTab, fetchGmpRecords, fetchIssues])
+    // VAL Pkg 탭이 활성화될 때 데이터 로드
+    if (activeTab === 'val-pkg') {
+      fetchValPackages()
+    }
+  }, [activeTab, fetchGmpRecords, fetchIssues, fetchValPackages])
 
   useEffect(() => {
     const closeMenu = () => setContextMenu(null)
@@ -655,6 +698,91 @@ export default function Home() {
     setIsEditing(true)
   }
 
+  const handleNewValPackage = async () => {
+    const newValPackage = await buildNewValPackage()
+    setSelectedValPackage(newValPackage)
+    setValPackageEditMode('create')
+    setIsValPackageEditing(true)
+  }
+
+  const handleValPackageSave = async (valPackage: Project, mode: 'create' | 'edit') => {
+    try {
+      const sanitizedValPackage: Project = {
+        ...valPackage,
+        children: [],
+      }
+
+      const payload =
+        mode === 'create'
+          ? { action: 'add', ...sanitizedValPackage }
+          : { action: 'update', id: valPackage.id, data: sanitizedValPackage }
+
+      const response = await fetch('/api/val-packages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Failed to save VAL Pkg')
+      }
+
+      await fetchValPackages()
+      setIsValPackageEditing(false)
+      setSelectedValPackage(null)
+      setValPackageEditMode('edit')
+    } catch (err) {
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error saving VAL Pkg:', err)
+      }
+      const errorMessage = err instanceof Error ? err.message : 'VAL Pkg 저장에 실패했습니다.'
+      alert(errorMessage)
+    }
+  }
+
+  const handleBatchDeleteValPackages = async () => {
+    if (selectedValPackageIds.size === 0) {
+      alert('삭제할 VAL Pkg를 선택해주세요.')
+      return
+    }
+
+    if (!confirm(`선택한 ${selectedValPackageIds.size}개의 VAL Pkg를 삭제하시겠습니까?`)) {
+      return
+    }
+
+    try {
+      for (const valPackageId of Array.from(selectedValPackageIds)) {
+        const response = await fetch('/api/val-packages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            action: 'delete',
+            id: valPackageId,
+          }),
+        })
+
+        if (!response.ok) {
+          throw new Error(`Failed to delete VAL Pkg ${valPackageId}`)
+        }
+      }
+
+      await fetchValPackages()
+      setSelectedValPackageIds(new Set())
+      setIsDeleteMode(false)
+      alert('VAL Pkg가 삭제되었습니다.')
+    } catch (err) {
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error deleting VAL Pkg:', err)
+      }
+      alert('VAL Pkg 삭제에 실패했습니다.')
+    }
+  }
+
   const handleProjectContextMenu = (event: MouseEvent, project: Project) => {
     event.preventDefault()
     setContextMenu({
@@ -908,9 +1036,15 @@ export default function Home() {
         {activeTab === 'dashboard' ? (
           <DashboardView
             projects={projects}
+            issues={issues}
+            orphanTasks={orphanTasks}
             loading={loading}
             error={error}
-            onRefresh={fetchProjects}
+            onRefresh={async () => {
+              await fetchProjects()
+              await fetchIssues()
+              await fetchOrphanTasks()
+            }}
           />
         ) : activeTab === 'list' ? (
           <>
@@ -1072,6 +1206,54 @@ export default function Home() {
               }}
               onBatchDelete={handleBatchDeleteGmpRecords}
             />
+          </>
+        ) : activeTab === 'val-pkg' ? (
+          <>
+            <ValPackagesTable
+              valPackages={valPackages}
+              loading={valPackagesLoading}
+              error={valPackagesError}
+              onRefresh={fetchValPackages}
+              onValPackageClick={(valPackage: Project) => {
+                if (!isDeleteMode) {
+                  setSelectedValPackage(valPackage)
+                  setValPackageEditMode('edit')
+                  setIsValPackageEditing(true)
+                }
+              }}
+              onNewValPackage={handleNewValPackage}
+              isDeleteMode={isDeleteMode}
+              selectedValPackageIds={selectedValPackageIds}
+              onToggleValPackageSelection={(valPackageId: string) => {
+                const newSet = new Set(selectedValPackageIds)
+                if (newSet.has(valPackageId)) {
+                  newSet.delete(valPackageId)
+                } else {
+                  newSet.add(valPackageId)
+                }
+                setSelectedValPackageIds(newSet)
+              }}
+              onDeleteModeChange={(enabled: boolean) => {
+                setIsDeleteMode(enabled)
+                if (!enabled) {
+                  setSelectedValPackageIds(new Set())
+                }
+              }}
+              onBatchDelete={handleBatchDeleteValPackages}
+            />
+            {isValPackageEditing && selectedValPackage && (
+              <ValPackageEditModal
+                valPackage={selectedValPackage}
+                mode={valPackageEditMode}
+                onClose={() => {
+                  setIsValPackageEditing(false)
+                  setSelectedValPackage(null)
+                  setValPackageEditMode('edit')
+                }}
+                onSave={(updatedValPackage: Project) => handleValPackageSave(updatedValPackage, valPackageEditMode)}
+                currentUser={user ? { name: user.name, username: user.username } : undefined}
+              />
+            )}
           </>
         ) : activeTab === 'tasks' ? (
           <>
@@ -1274,42 +1456,20 @@ export default function Home() {
                   if (taskEditMode === 'create') {
                     await handleAddTask(newProjectId, updatedTask)
                   } else {
-                    const targetProjectId = newProjectId
-                    const oldProjectId = selectedTask.projectId
-                    
-                    if (targetProjectId !== oldProjectId) {
-                      if (oldProjectId) {
-                        const response = await fetch('/api/projects', {
-                          method: 'POST',
-                          headers: {
-                            'Content-Type': 'application/json',
-                          },
-                          body: JSON.stringify({
-                            action: 'deleteChild',
-                            projectId: oldProjectId,
-                            childId: updatedTask.id,
-                          }),
-                        })
-                        if (!response.ok) {
-                          throw new Error('Failed to remove task from old project')
-                        }
-                      }
-                      await handleAddTask(targetProjectId, updatedTask)
-                    } else {
-                      const response = await fetch('/api/projects', {
-                        method: 'POST',
-                        headers: {
-                          'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                          action: 'updateChild',
-                          projectId: targetProjectId,
-                          child: updatedTask,
-                        }),
-                      })
-                      if (!response.ok) {
-                        throw new Error('Failed to update task')
-                      }
+                    // 수정 모드에서는 항상 updateChild를 사용 (프로젝트 변경도 자동 처리)
+                    const response = await fetch('/api/projects', {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify({
+                        action: 'updateChild',
+                        projectId: newProjectId,
+                        child: updatedTask,
+                      }),
+                    })
+                    if (!response.ok) {
+                      throw new Error('Failed to update task')
                     }
                   }
                   await fetchProjects()
@@ -1377,42 +1537,20 @@ export default function Home() {
                 if (taskEditMode === 'create') {
                   await handleAddTask(newProjectId, updatedTask)
                 } else {
-                  const targetProjectId = newProjectId
-                  const oldProjectId = selectedTask.projectId
-                  
-                  if (targetProjectId !== oldProjectId) {
-                    if (oldProjectId) {
-                      const response = await fetch('/api/projects', {
-                        method: 'POST',
-                        headers: {
-                          'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                          action: 'deleteChild',
-                          projectId: oldProjectId,
-                          childId: updatedTask.id,
-                        }),
-                      })
-                      if (!response.ok) {
-                        throw new Error('Failed to remove task from old project')
-                      }
-                    }
-                    await handleAddTask(targetProjectId, updatedTask)
-                  } else {
-                    const response = await fetch('/api/projects', {
-                      method: 'POST',
-                      headers: {
-                        'Content-Type': 'application/json',
-                      },
-                      body: JSON.stringify({
-                        action: 'updateChild',
-                        projectId: targetProjectId,
-                        child: updatedTask,
-                      }),
-                    })
-                    if (!response.ok) {
-                      throw new Error('Failed to update task')
-                    }
+                  // 수정 모드에서는 항상 updateChild를 사용 (프로젝트 변경도 자동 처리)
+                  const response = await fetch('/api/projects', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                      action: 'updateChild',
+                      projectId: newProjectId,
+                      child: updatedTask,
+                    }),
+                  })
+                  if (!response.ok) {
+                    throw new Error('Failed to update task')
                   }
                 }
                 await fetchProjects()
