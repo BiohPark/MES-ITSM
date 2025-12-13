@@ -8,6 +8,7 @@ import { Progress } from '../common/Progress'
 export function PersonalTasksView({
   projects,
   gmpRecords = [],
+  orphanTasks = [],
   loading,
   error,
   searchOwner,
@@ -19,6 +20,7 @@ export function PersonalTasksView({
 }: {
   projects: Project[]
   gmpRecords?: Array<ProjectChild & { projectId?: string | null; projectName?: string; kind?: string; kind_number?: string }>
+  orphanTasks?: ProjectChild[]
   loading: boolean
   error: string | null
   searchOwner: string
@@ -41,6 +43,13 @@ export function PersonalTasksView({
         if ((child as any).phases?.development?.owner) owners.add((child as any).phases.development.owner)
       })
     })
+    // Orphan tasks의 담당자들도 추가
+    orphanTasks.forEach((task) => {
+      if (task.owner) owners.add(task.owner)
+      if ((task as any).phases?.pi?.owner) owners.add((task as any).phases.pi.owner)
+      if ((task as any).phases?.pm?.owner) owners.add((task as any).phases.pm.owner)
+      if ((task as any).phases?.development?.owner) owners.add((task as any).phases.development.owner)
+    })
     // GMP Record 중 Deviation인 것들의 owner도 추가
     gmpRecords.forEach((record) => {
       if (record.kind === 'Deviation' && record.owner) {
@@ -48,7 +57,7 @@ export function PersonalTasksView({
       }
     })
     return Array.from(owners).sort()
-  }, [projects, gmpRecords])
+  }, [projects, gmpRecords, orphanTasks])
 
   const filteredOwners = useMemo(() => {
     if (!searchOwner.trim()) return allOwners
@@ -69,6 +78,11 @@ export function PersonalTasksView({
           ownerProjects.push(project)
         }
         project.children?.forEach((child: ProjectChild) => {
+          // Dropped 일감은 제외
+          if (child.status === 'Dropped') {
+            return
+          }
+          
           // 대표 담당자(PI) 또는 단계별 담당자 중 하나라도 일치하면 포함
           const isOwner = child.owner === owner
           const isPiOwner = (child as any).phases?.pi?.owner === owner
@@ -83,6 +97,27 @@ export function PersonalTasksView({
             })
           }
         })
+      })
+
+      // Orphan tasks도 확인
+      orphanTasks.forEach((task: ProjectChild) => {
+        // Dropped 일감은 제외
+        if (task.status === 'Dropped') {
+          return
+        }
+        
+        const isOwner = task.owner === owner
+        const isPiOwner = (task as any).phases?.pi?.owner === owner
+        const isPmOwner = (task as any).phases?.pm?.owner === owner
+        const isDevOwner = (task as any).phases?.development?.owner === owner
+        
+        if (isOwner || isPiOwner || isPmOwner || isDevOwner) {
+          ownerTasks.push({
+            task,
+            projectId: null,
+            projectName: 'N/A',
+          })
+        }
       })
 
       // GMP Record 중 Deviation인 것들을 추가
@@ -102,7 +137,7 @@ export function PersonalTasksView({
     })
 
     return data
-  }, [filteredOwners, projects, gmpRecords])
+  }, [filteredOwners, projects, gmpRecords, orphanTasks])
 
   // 로그인한 사용자의 일감 데이터
   const myTasksData = useMemo(() => {
@@ -116,6 +151,11 @@ export function PersonalTasksView({
         myProjects.push(project)
       }
       project.children?.forEach((child: ProjectChild) => {
+        // Dropped 일감은 제외
+        if (child.status === 'Dropped') {
+          return
+        }
+        
         // 대표 담당자(PI) 또는 단계별 담당자 중 하나라도 일치하면 포함
         const isOwner = child.owner === currentUser.name
         const isPiOwner = (child as any).phases?.pi?.owner === currentUser.name
@@ -130,6 +170,27 @@ export function PersonalTasksView({
           })
         }
       })
+    })
+
+    // Orphan tasks도 확인
+    orphanTasks.forEach((task: ProjectChild) => {
+      // Dropped 일감은 제외
+      if (task.status === 'Dropped') {
+        return
+      }
+      
+      const isOwner = task.owner === currentUser.name
+      const isPiOwner = (task as any).phases?.pi?.owner === currentUser.name
+      const isPmOwner = (task as any).phases?.pm?.owner === currentUser.name
+      const isDevOwner = (task as any).phases?.development?.owner === currentUser.name
+      
+      if (isOwner || isPiOwner || isPmOwner || isDevOwner) {
+        myTasks.push({
+          task,
+          projectId: null,
+          projectName: 'N/A',
+        })
+      }
     })
 
     // GMP Record 중 Deviation인 것들도 추가
@@ -147,8 +208,8 @@ export function PersonalTasksView({
     const statusCounts = {
       Planning: 0,
       'In Progress': 0,
-      Issued: 0,
       Completed: 0,
+      Dropped: 0,
     }
 
     myTasks.forEach(({ task }) => {
@@ -157,8 +218,8 @@ export function PersonalTasksView({
       else if (status?.toLowerCase() === 'in progress' || status === 'In Progress') {
         statusCounts['In Progress']++
       }
-      else if (status === 'Issued') statusCounts.Issued++
       else if (status === 'Completed') statusCounts.Completed++
+      else if (status === 'Dropped') statusCounts.Dropped++
     })
 
     myProjects.forEach((project) => {
@@ -167,8 +228,8 @@ export function PersonalTasksView({
       else if (status?.toLowerCase() === 'in progress' || status === 'In Progress') {
         statusCounts['In Progress']++
       }
-      else if (status === 'Issued') statusCounts.Issued++
       else if (status === 'Completed') statusCounts.Completed++
+      else if (status === 'Dropped') statusCounts.Dropped++
     })
 
     return {
@@ -176,7 +237,7 @@ export function PersonalTasksView({
       tasks: myTasks,
       statusCounts,
     }
-  }, [currentUser, projects, gmpRecords])
+  }, [currentUser, projects, gmpRecords, orphanTasks])
 
   if (loading) {
     return (
@@ -216,7 +277,11 @@ export function PersonalTasksView({
         </div>
       </div>
 
-      {filteredOwners.length === 0 ? (
+      {filteredOwners.length === 0 && allOwners.length === 0 ? (
+        <div className="placeholder">
+          <p>담당자가 할당된 일감이 없습니다.</p>
+        </div>
+      ) : filteredOwners.length === 0 ? (
         <div className="placeholder">
           <p>검색 결과가 없습니다.</p>
         </div>
@@ -241,14 +306,14 @@ export function PersonalTasksView({
                       In Progress: {myTasksData.statusCounts['In Progress']}
                     </span>
                   )}
-                  {myTasksData.statusCounts.Issued > 0 && (
-                    <span style={{ color: '#b91c1c' }}>
-                      Issued: {myTasksData.statusCounts.Issued}
-                    </span>
-                  )}
                   {myTasksData.statusCounts.Completed > 0 && (
                     <span style={{ color: '#92400e' }}>
                       Completed: {myTasksData.statusCounts.Completed}
+                    </span>
+                  )}
+                  {myTasksData.statusCounts.Dropped > 0 && (
+                    <span style={{ color: '#6b7280' }}>
+                      Dropped: {myTasksData.statusCounts.Dropped}
                     </span>
                   )}
                 </div>

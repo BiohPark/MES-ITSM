@@ -140,8 +140,8 @@ export function ChildItemModal({
               >
                 <option value="Planning">Planning</option>
                 <option value="In Progress">In Progress</option>
-                <option value="Issued">Issued</option>
                 <option value="Completed">Completed</option>
+                <option value="Dropped">Dropped</option>
               </select>
             </div>
 

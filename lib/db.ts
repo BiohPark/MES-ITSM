@@ -168,29 +168,29 @@ export async function getProjects(): Promise<Project[]> {
       const children = childrenByProject.get(project.id) || []
       const gmpRecords = gmpRecordsByProject.get(project.id) || []
 
-      // 일반 일감 매핑
+      // 일반 일감 매핑 (Dropped 일감도 포함 - 프로젝트 하위 표시는 UI에서 필터링)
       const childrenList: any[] = children.map((child) => {
-        let phases = null
-        if (child.phases) {
-          try {
-            phases = typeof child.phases === 'string' ? JSON.parse(child.phases) : child.phases
-          } catch (e) {
-            phases = null
+          let phases = null
+          if (child.phases) {
+            try {
+              phases = typeof child.phases === 'string' ? JSON.parse(child.phases) : child.phases
+            } catch (e) {
+              phases = null
+            }
           }
-        }
-        return {
-          id: child.id,
-          title: child.title,
-          owner: child.owner,
-          status: child.status,
-          progress: child.progress || 0,
-          start: child.start ? (typeof child.start === 'string' ? child.start : new Date(child.start).toISOString().slice(0, 10)) : today,
-          due: child.due ? (typeof child.due === 'string' ? child.due : new Date(child.due).toISOString().slice(0, 10)) : '',
-          description: child.description || '',
-          phases: phases,
-          linked_gmp_record_id: child.linked_gmp_record_id || null,
-        }
-      })
+          return {
+            id: child.id,
+            title: child.title,
+            owner: child.owner,
+            status: child.status,
+            progress: child.progress || 0,
+            start: child.start ? (typeof child.start === 'string' ? child.start : new Date(child.start).toISOString().slice(0, 10)) : today,
+            due: child.due ? (typeof child.due === 'string' ? child.due : new Date(child.due).toISOString().slice(0, 10)) : '',
+            description: child.description || '',
+            phases: phases,
+            linked_gmp_record_id: child.linked_gmp_record_id || null,
+          }
+        })
 
       // GMP Record 매핑 (kind_number 포함)
       const gmpRecordsList: any[] = gmpRecords.map((record) => {
@@ -260,11 +260,11 @@ export async function getProjects(): Promise<Project[]> {
   }
 }
 
-// 프로젝트가 없는 일감 조회 (N/A 일감)
+// 프로젝트가 없는 일감 조회 (N/A 일감, Dropped 포함 - 일감 목록에서 표시하기 위해)
 export async function getOrphanTasks(): Promise<ProjectChild[]> {
   const pool = getPool()
   const [tasks] = await pool.query<any[]>(
-    'SELECT * FROM project_children WHERE project_id IS NULL ORDER BY created_at ASC'
+    "SELECT * FROM project_children WHERE project_id IS NULL ORDER BY created_at ASC"
   )
 
   const today = new Date().toISOString().slice(0, 10)
@@ -541,15 +541,18 @@ export async function updateChild(
   )
   const oldProjectId = existingRows.length > 0 ? existingRows[0].project_id : null
   
-  // 상태 자동 관리: 실적 진척도가 100%이면 "Completed", 그 외 Risk 체크, 0%보다 크면 "In Progress"
-  let finalStatus = child.status
-  if ((child.progress || 0) >= 100) {
-    finalStatus = 'Completed'
-  } else if (checkRiskStatus(child.start, child.due, child.progress || 0)) {
-    finalStatus = 'Issued'
-  } else if ((child.progress || 0) > 0) {
-    finalStatus = 'In Progress'
-  }
+    // 상태 자동 관리: Dropped 상태는 유지, 그 외 실적 진척도가 100%이면 "Completed", 그 외 Risk 체크, 0%보다 크면 "In Progress"
+    let finalStatus = child.status
+    // Dropped 상태는 진행률이 100%여도 Completed로 변경하지 않음
+    if (child.status === 'Dropped') {
+      finalStatus = 'Dropped'
+    } else if ((child.progress || 0) >= 100) {
+      finalStatus = 'Completed'
+    } else if (checkRiskStatus(child.start, child.due, child.progress || 0)) {
+      finalStatus = 'Issued'
+    } else if ((child.progress || 0) > 0) {
+      finalStatus = 'In Progress'
+    }
   
   const phasesJson = (child as any).phases ? JSON.stringify((child as any).phases) : null
   const linkedGmpRecordId = (child as any).linked_gmp_record_id || null

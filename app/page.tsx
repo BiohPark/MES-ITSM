@@ -56,6 +56,8 @@ export default function Home() {
   const [gmpRecords, setGmpRecords] = useState<Array<ProjectChild & { projectId?: string | null; projectName?: string; kind_number?: string }>>([])
   const [gmpRecordsLoading, setGmpRecordsLoading] = useState(false)
   const [gmpRecordsError, setGmpRecordsError] = useState<string | null>(null)
+  // Orphan tasks 관련 상태
+  const [orphanTasks, setOrphanTasks] = useState<ProjectChild[]>([])
   // 이슈 관리 관련 상태
   const [issues, setIssues] = useState<Issue[]>([])
   const [issuesLoading, setIssuesLoading] = useState(false)
@@ -146,6 +148,26 @@ export default function Home() {
       }
     } finally {
       setLoading(false)
+    }
+  }, [])
+
+  // Orphan tasks 가져오기
+  const fetchOrphanTasks = useCallback(async () => {
+    try {
+      const response = await fetch('/api/projects?type=orphan-tasks', {
+        cache: 'no-store',
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setOrphanTasks(data || [])
+      } else {
+        setOrphanTasks([])
+      }
+    } catch (error) {
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error fetching orphan tasks:', error)
+      }
+      setOrphanTasks([])
     }
   }, [])
 
@@ -1105,6 +1127,7 @@ export default function Home() {
           <PersonalTasksView
             projects={projects}
             gmpRecords={gmpRecords}
+            orphanTasks={orphanTasks}
             loading={loading}
             error={error}
             searchOwner={searchOwner}
@@ -1112,6 +1135,7 @@ export default function Home() {
             onRefresh={async () => {
               await fetchProjects()
               await fetchGmpRecords()
+              await fetchOrphanTasks()
             }}
             onTaskClick={(task: ProjectChild, projectId: string | null, projectName: string) => {
               setSelectedTask({

@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import type { Project, ProjectChild } from '@/types/project'
 import { CommentsSection } from '../common/CommentsSection'
+import { DevelopmentPhaseStatusActions } from './DevelopmentPhaseStatusActions'
 
 export function TaskEditModal({
   task,
@@ -30,6 +31,16 @@ export function TaskEditModal({
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(projectId || null)
   const [saving, setSaving] = useState(false)
   const [users, setUsers] = useState<Array<{ id: string; name: string }>>([])
+  const [userRole, setUserRole] = useState<string | null>(null)
+  const [userId, setUserId] = useState<string | null>(null)
+  
+  // PIM일감 여부 확인 (PI와 PM 진척율이 모두 100%가 아니면 PIM일감)
+  const isPimTask = useMemo(() => {
+    if (isGmpRecord) return false
+    const piProgress = Number(formData.phases?.pi?.progress) || 0
+    const pmProgress = Number(formData.phases?.pm?.progress) || 0
+    return piProgress < 100 || pmProgress < 100
+  }, [formData.phases, isGmpRecord])
 
   // 계획 진척도 계산 함수
   const calculatePlannedProgress = (start: string | null | undefined, due: string | null | undefined): number => {
@@ -58,26 +69,33 @@ export function TaskEditModal({
 
   // 단계별 상태에서 전체 상태 자동 계산
   const calculateStatusFromPhases = (phases: any): string => {
-    const piStatus = phases?.pi?.status || 'Planning'
-    const pmStatus = phases?.pm?.status || 'Planning'
-    const devStatus = phases?.development?.status || 'Planning'
+    const piStatus = phases?.pi?.status || '요구사항 접수'
+    const pmStatus = phases?.pm?.status || '담당자 지정'
+    const devStatus = phases?.development?.status || '설계 리뷰'
     
-    // 모두 Completed면 Completed
-    if (piStatus === 'Completed' && pmStatus === 'Completed' && devStatus === 'Completed') {
-      return 'Completed'
+    // PI 단계가 Dropped면 Dropped로 전환
+    if (piStatus === 'Dropped') {
+      return 'Dropped'
     }
     
-    // 하나라도 Issued면 Issued
-    if (piStatus === 'Issued' || pmStatus === 'Issued' || devStatus === 'Issued') {
-      return 'Issued'
-    }
-    
-    // 하나라도 In Progress면 In Progress
-    if (piStatus === 'In Progress' || pmStatus === 'In Progress' || devStatus === 'In Progress') {
+    // PI 단계가 "진행여부 확정"이면 In Progress로 전환
+    if (piStatus === '진행여부 확정') {
       return 'In Progress'
     }
     
-    // 모두 Planning이면 Planning
+    // 모두 Completed면 Completed (단계별 완료 상태 확인 필요)
+    // 개발 단계가 "Val서버 이관"이면 Completed로 간주
+    if (devStatus === 'Val서버 이관') {
+      return 'Completed'
+    }
+    
+    // 하나라도 In Progress면 In Progress
+    // PI/PM/개발 단계 중 하나라도 진행 중이면 In Progress
+    if (piStatus !== '요구사항 접수' || pmStatus !== '담당자 지정' || devStatus !== '설계 리뷰') {
+      return 'In Progress'
+    }
+    
+    // 기본값은 Planning
     return 'Planning'
   }
 
@@ -91,11 +109,19 @@ export function TaskEditModal({
     // 담당자: PI 단계 담당자
     const owner = pi.owner || ''
     
-    // 진행률: 평균
-    const piProgress = Number(pi.progress) || 0
-    const pmProgress = Number(pm.progress) || 0
-    const devProgress = Number(dev.progress) || 0
-    const progress = Math.round((piProgress + pmProgress + devProgress) / 3)
+    // Dropped 상태인 경우 진행률을 100%로 유지
+    const isDropped = prev.status === 'Dropped' || pi.status === 'Dropped'
+    
+    // 진행률: Dropped 상태면 100%, 아니면 평균
+    let progress: number
+    if (isDropped) {
+      progress = 100
+    } else {
+      const piProgress = Number(pi.progress) || 0
+      const pmProgress = Number(pm.progress) || 0
+      const devProgress = Number(dev.progress) || 0
+      progress = Math.round((piProgress + pmProgress + devProgress) / 3)
+    }
     
     // 시작일: 가장 빠른 날짜
     const startDates = [pi.start, pm.start, dev.start].filter(Boolean)
@@ -105,8 +131,13 @@ export function TaskEditModal({
     const dueDates = [pi.due, pm.due, dev.due].filter(Boolean)
     const due = dueDates.length > 0 ? dueDates.sort().reverse()[0] : (prev.due || '')
     
-    // 상태: 단계별 상태에서 계산
-    const status = calculateStatusFromPhases(phases)
+    // 상태: Dropped 상태면 유지, 아니면 단계별 상태에서 계산
+    let status: string
+    if (isDropped) {
+      status = 'Dropped'
+    } else {
+      status = calculateStatusFromPhases(phases)
+    }
     
     return {
       ...prev,
@@ -120,6 +151,7 @@ export function TaskEditModal({
 
   useEffect(() => {
     fetchUsers()
+    fetchUserSession()
     const taskWithFields = { ...task } as any
     if (!taskWithFields.description) taskWithFields.description = ''
     if (!taskWithFields.progress) taskWithFields.progress = 0
@@ -130,21 +162,21 @@ export function TaskEditModal({
       taskWithFields.phases = {
         pi: {
           owner: '',
-          status: 'Planning',
+          status: '요구사항 접수',
           progress: 0,
           start: new Date().toISOString().slice(0, 10),
           due: '',
         },
         pm: {
           owner: '',
-          status: 'Planning',
+          status: '담당자 지정',
           progress: 0,
           start: new Date().toISOString().slice(0, 10),
           due: '',
         },
         development: {
           owner: '',
-          status: 'Planning',
+          status: '설계 리뷰',
           progress: 0,
           start: new Date().toISOString().slice(0, 10),
           due: '',
@@ -154,13 +186,13 @@ export function TaskEditModal({
       // 기존 데이터가 있으면 각 단계별로 기본값 설정
       const today = new Date().toISOString().slice(0, 10)
       if (!taskWithFields.phases.pi) {
-        taskWithFields.phases.pi = { owner: '', status: 'Planning', progress: 0, start: today, due: '' }
+        taskWithFields.phases.pi = { owner: '', status: '요구사항 접수', progress: 0, start: today, due: '' }
       }
       if (!taskWithFields.phases.pm) {
-        taskWithFields.phases.pm = { owner: '', status: 'Planning', progress: 0, start: today, due: '' }
+        taskWithFields.phases.pm = { owner: '', status: '담당자 지정', progress: 0, start: today, due: '' }
       }
       if (!taskWithFields.phases.development) {
-        taskWithFields.phases.development = { owner: '', status: 'Planning', progress: 0, start: today, due: '' }
+        taskWithFields.phases.development = { owner: '', status: '설계 리뷰', progress: 0, start: today, due: '' }
       }
     }
     
@@ -188,6 +220,23 @@ export function TaskEditModal({
       }
     } catch (error) {
       console.error('Error fetching users:', error)
+    }
+  }
+
+  const fetchUserSession = async () => {
+    try {
+      const response = await fetch('/api/auth', {
+        credentials: 'include',
+      })
+      if (response.ok) {
+        const data = await response.json()
+        if (data.authenticated && data.user) {
+          setUserRole(data.user.role || null)
+          setUserId(data.user.id || data.user.userId || null)
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching user session:', error)
     }
   }
 
@@ -227,9 +276,34 @@ export function TaskEditModal({
       progress: (formData as any).progress === '' ? 0 : ((formData as any).progress || 0)
     }
     
+    // PI/PM 100% 완료 체크 (일감인 경우만)
+    if (!isGmpRecord && mode === 'edit') {
+      const piProgress = Number(submitData.phases?.pi?.progress) || 0
+      const pmProgress = Number(submitData.phases?.pm?.progress) || 0
+      const wasPimTask = isPimTask
+      const isNowComplete = piProgress >= 100 && pmProgress >= 100
+      
+      if (wasPimTask && isNowComplete) {
+        // PIM일감에서 개발일감으로 이동됨
+        // 저장 후 알림은 onSave에서 처리하도록 함
+      }
+    }
+    
     setSaving(true)
     try {
       await onSave(submitData, selectedProjectId)
+      
+      // PI/PM 100% 완료 시 알림
+      if (!isGmpRecord && mode === 'edit') {
+        const piProgress = Number(submitData.phases?.pi?.progress) || 0
+        const pmProgress = Number(submitData.phases?.pm?.progress) || 0
+        if (piProgress >= 100 && pmProgress >= 100 && isPimTask) {
+          // 저장 성공 후 알림 (다음 렌더링에서 개발일감 목록으로 이동됨)
+          setTimeout(() => {
+            alert('PI와 PM 단계가 모두 100% 완료되어 개발일감 목록으로 이동되었습니다.')
+          }, 100)
+        }
+      }
     } catch (error: any) {
       if (error.message && error.message.includes('Link된 일감')) {
         alert(error.message)
@@ -269,18 +343,31 @@ export function TaskEditModal({
         },
       }
       
-      // 진행률이나 날짜가 변경되면 계획 진척도와 실적 진척도를 비교하여 상태 자동 설정
-      if (field === 'progress' || field === 'start' || field === 'due') {
-        const phaseData = updated.phases[phase]
-        const plannedProgress = calculatePlannedProgress(phaseData.start, phaseData.due)
-        const actualProgress = Number(phaseData.progress) || 0
-        const difference = plannedProgress - actualProgress
-        
-        // 계획과 실적의 차이가 10 이상이면 Issued로 자동 설정
-        if (difference >= 10 && phaseData.status !== 'Completed') {
-          updated.phases[phase].status = 'Issued'
+      // PI 단계 상태가 "진행여부 확정"으로 변경되면 전체 상태를 In Progress로 설정
+      if (phase === 'pi' && field === 'status' && value === '진행여부 확정') {
+        updated.status = 'In Progress'
+      }
+      
+      // PI 단계 상태가 Dropped로 변경되면 전체 상태를 Dropped로 설정하고 진행률을 100%로 설정
+      if (phase === 'pi' && field === 'status' && value === 'Dropped') {
+        updated.status = 'Dropped'
+        updated.progress = 100
+        // PI, PM, 개발 단계의 진행률도 모두 100%로 설정
+        if (updated.phases) {
+          if (updated.phases.pi) {
+            updated.phases.pi.progress = 100
+          }
+          if (updated.phases.pm) {
+            updated.phases.pm.progress = 100
+          }
+          if (updated.phases.development) {
+            updated.phases.development.progress = 100
+          }
         }
       }
+      
+      // 진행률이나 날짜가 변경되면 계획 진척도와 실적 진척도를 비교하여 상태 자동 설정
+      // (Issued 상태는 제거되었으므로 이 로직은 제거)
       
       // 단계 변경 후 자동 계산된 필드 업데이트
       return updateCalculatedFields(updated)
@@ -491,8 +578,8 @@ export function TaskEditModal({
               >
                 <option value="Planning">Planning</option>
                 <option value="In Progress">In Progress</option>
-                <option value="Issued">Issued</option>
                 <option value="Completed">Completed</option>
+                <option value="Dropped">Dropped</option>
               </select>
               <small style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.25rem', display: 'block' }}>
                 {isGmpRecord && (formData as any).kind === 'CPA' && (formData as any).linked_task_id
@@ -594,15 +681,16 @@ export function TaskEditModal({
                 <div className="form-group" style={{ flex: 1 }}>
                   <label style={{ fontSize: '0.75rem', color: '#6b7280' }}>상태</label>
                   <select
-                    value={(formData.phases?.pi?.status || 'Planning')}
+                    value={(formData.phases?.pi?.status || '요구사항 접수')}
                     onChange={(e) => handlePhaseChange('pi', 'status', e.target.value)}
                     className="form-input"
                     style={{ fontSize: '0.8rem', padding: '0.5rem' }}
                   >
-                    <option value="Planning">Planning</option>
-                    <option value="In Progress">In Progress</option>
-                    <option value="Issued">Issued</option>
-                    <option value="Completed">Completed</option>
+                    <option value="요구사항 접수">요구사항 접수</option>
+                    <option value="진행여부 확정">진행여부 확정</option>
+                    <option value="URS 분석">URS 분석</option>
+                    <option value="설계 확정">설계 확정</option>
+                    <option value="Dropped">Dropped</option>
                   </select>
                 </div>
                 <div className="form-group" style={{ flex: 1 }}>
@@ -672,15 +760,13 @@ export function TaskEditModal({
                 <div className="form-group" style={{ flex: 1 }}>
                   <label style={{ fontSize: '0.75rem', color: '#6b7280' }}>상태</label>
                   <select
-                    value={(formData.phases?.pm?.status || 'Planning')}
+                    value={(formData.phases?.pm?.status || '담당자 지정')}
                     onChange={(e) => handlePhaseChange('pm', 'status', e.target.value)}
                     className="form-input"
                     style={{ fontSize: '0.8rem', padding: '0.5rem' }}
                   >
-                    <option value="Planning">Planning</option>
-                    <option value="In Progress">In Progress</option>
-                    <option value="Issued">Issued</option>
-                    <option value="Completed">Completed</option>
+                    <option value="담당자 지정">담당자 지정</option>
+                    <option value="CC 및 Val 확정">CC 및 Val 확정</option>
                   </select>
                 </div>
                 <div className="form-group" style={{ flex: 1 }}>
@@ -740,6 +826,7 @@ export function TaskEditModal({
                     onChange={(e) => handlePhaseChange('development', 'owner', e.target.value)}
                     className="form-input"
                     style={{ fontSize: '0.8rem', padding: '0.5rem' }}
+                    disabled={isPimTask}
                   >
                     <option value="">선택</option>
                     {users.map((user) => (
@@ -749,17 +836,23 @@ export function TaskEditModal({
                 </div>
                 <div className="form-group" style={{ flex: 1 }}>
                   <label style={{ fontSize: '0.75rem', color: '#6b7280' }}>상태</label>
-                  <select
-                    value={(formData.phases?.development?.status || 'Planning')}
-                    onChange={(e) => handlePhaseChange('development', 'status', e.target.value)}
+                  <input
+                    type="text"
+                    value={(formData.phases?.development?.status || '설계 리뷰')}
                     className="form-input"
-                    style={{ fontSize: '0.8rem', padding: '0.5rem' }}
-                  >
-                    <option value="Planning">Planning</option>
-                    <option value="In Progress">In Progress</option>
-                    <option value="Issued">Issued</option>
-                    <option value="Completed">Completed</option>
-                  </select>
+                    style={{ 
+                      fontSize: '0.8rem', 
+                      padding: '0.5rem',
+                      backgroundColor: '#f3f4f6',
+                      cursor: 'not-allowed',
+                      color: '#6b7280'
+                    }}
+                    disabled={true}
+                    readOnly
+                  />
+                  <small style={{ fontSize: '0.7rem', color: '#9ca3af', marginTop: '0.25rem', display: 'block' }}>
+                    워크플로우 전환을 통해서만 변경 가능
+                  </small>
                 </div>
                 <div className="form-group" style={{ flex: 1 }}>
                   <label style={{ fontSize: '0.75rem', color: '#6b7280' }}>진행률 (계획/실적)</label>
@@ -772,6 +865,7 @@ export function TaskEditModal({
                       max="100"
                       className="form-input"
                       style={{ fontSize: '0.8rem', padding: '0.5rem', flex: 1 }}
+                      disabled={isPimTask}
                     />
                     <span style={{ fontSize: '0.75rem', color: '#6b7280', whiteSpace: 'nowrap' }}>
                       {(() => {
@@ -792,6 +886,7 @@ export function TaskEditModal({
                     onChange={(e) => handlePhaseChange('development', 'start', e.target.value)}
                     className="form-input"
                     style={{ fontSize: '0.8rem', padding: '0.5rem' }}
+                    disabled={isPimTask}
                   />
                 </div>
                 <div className="form-group" style={{ flex: 1 }}>
@@ -802,9 +897,41 @@ export function TaskEditModal({
                     onChange={(e) => handlePhaseChange('development', 'due', e.target.value)}
                     className="form-input"
                     style={{ fontSize: '0.8rem', padding: '0.5rem' }}
+                    disabled={isPimTask}
                   />
                 </div>
               </div>
+              {/* 개발 단계 워크플로우 전환 버튼 */}
+              {!isGmpRecord && !isPimTask && (
+                <div style={{ marginTop: '0.5rem', padding: '0.5rem', background: '#f0f9ff', borderRadius: '0.375rem', border: '1px solid #bae6fd' }}>
+                  <label style={{ fontSize: '0.75rem', color: '#0369a1', fontWeight: 500, marginBottom: '0.375rem', display: 'block' }}>
+                    워크플로우 전환 (상태 변경)
+                  </label>
+                  {mode === 'edit' ? (
+                    <DevelopmentPhaseStatusActions
+                      taskId={task.id}
+                      currentStatus={formData.phases?.development?.status}
+                      onStatusChange={(newStatus) => {
+                        handlePhaseChange('development', 'status', newStatus)
+                      }}
+                      userRole={userRole || undefined}
+                      userId={userId || undefined}
+                      style={{ fontSize: '0.75rem' }}
+                    />
+                  ) : (
+                    <p style={{ fontSize: '0.75rem', color: '#6b7280', margin: 0 }}>
+                      일감 저장 후 워크플로우 전환을 사용할 수 있습니다.
+                    </p>
+                  )}
+                </div>
+              )}
+              {isPimTask && (
+                <div style={{ marginTop: '0.5rem', padding: '0.5rem', background: '#fef3c7', borderRadius: '0.375rem', border: '1px solid #fcd34d' }}>
+                  <p style={{ fontSize: '0.75rem', color: '#92400e', margin: 0 }}>
+                    ℹ️ PIM일감입니다. PI와 PM 단계가 모두 100% 완료되면 개발일감으로 이동되어 개발 단계를 입력할 수 있습니다.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
           )}

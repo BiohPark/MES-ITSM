@@ -67,28 +67,28 @@ export async function POST(request: NextRequest) {
           if (!existingRecord) {
             console.log('기존 GMP Record 없음, 새로 생성')
             // Deviation 매니저(또는 총괄 매니저) 확인/생성
-            const users = await getUsers()
+          const users = await getUsers()
             let deviationManager = users.find(
               u => u.role === 'Deviation 매니저' || u.role === '총괄 매니저'
             )
           
             // Deviation 매니저가 없으면 생성
             if (!deviationManager) {
-              try {
-                const userId = await getNextUserId()
-                await createUser({
-                  id: userId,
+            try {
+              const userId = await getNextUserId()
+              await createUser({
+                id: userId,
                   name: 'Deviation 매니저',
-                  email: undefined,
+                email: undefined,
                   role: 'Deviation 매니저',
-                })
+              })
                 console.log('Deviation 매니저 사용자 생성 완료')
                 deviationManager = { id: userId, name: 'Deviation 매니저', role: 'Deviation 매니저' }
-              } catch (error) {
+            } catch (error) {
                 console.error('Deviation 매니저 사용자 생성 실패:', error)
-                // 사용자 생성 실패해도 계속 진행
-              }
+              // 사용자 생성 실패해도 계속 진행
             }
+          }
             
             // GMP Record의 담당자는 항상 Deviation 매니저로 설정
             const ownerName = deviationManager?.name || 'Deviation 매니저'
@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
             owner: ownerName,
             status: 'Planning',
             progress: 0,
-            start: issue.occurred_date || new Date().toISOString().slice(0, 10),
+              start: issue.occurred_date || new Date().toISOString().slice(0, 10),
             due: issue.due_date || new Date().toISOString().slice(0, 10),
             description: issue.description || '',
             kind: 'Deviation',

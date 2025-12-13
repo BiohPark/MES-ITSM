@@ -1,0 +1,15 @@
+# Python 워크플로우 관리 시스템 의존성
+# 참고: 이 프로젝트는 주로 Next.js 기반이며, Python 파일은 참고용입니다.
+
+# Django (워크플로우 모델 및 뷰용)
+Django>=4.2.0,<5.0.0
+
+# 데이터베이스 연결 (MySQL/MariaDB)
+mysqlclient>=2.1.0
+
+# JSON 필드 지원 (Django 4.2+에서는 내장)
+# django-jsonfield-backport>=1.0.0  # Django 3.x 이하용
+
+# 추가 유틸리티
+python-dotenv>=1.0.0
+

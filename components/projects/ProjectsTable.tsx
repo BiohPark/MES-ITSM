@@ -314,7 +314,9 @@ export function ProjectsTable({
               <td>{project.due}</td>
             </tr>,
             ...(project.children && project.children.length > 0
-              ? project.children.map((child) => (
+              ? project.children
+                  .filter((child) => child.status !== 'Dropped') // Dropped 일감 제외
+                  .map((child) => (
                   <tr
                     key={`${project.id}-${child.id}`}
                     className="child-row"
