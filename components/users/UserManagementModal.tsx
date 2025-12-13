@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 
 interface UserManagementModalProps {
   onClose: () => void
-  currentUser?: { id: string; username: string; name: string; role: 'admin' | 'user'; email?: string } | null
+  currentUser?: { id: string; username: string; name: string; role: string; email?: string } | null
 }
 
 export function UserManagementModal({ onClose, currentUser }: UserManagementModalProps) {
@@ -14,13 +14,13 @@ export function UserManagementModal({ onClose, currentUser }: UserManagementModa
   const [newUserName, setNewUserName] = useState('')
   const [newUserEmail, setNewUserEmail] = useState('')
   const [newUserPassword, setNewUserPassword] = useState('')
-  const [newUserRole, setNewUserRole] = useState<'admin' | 'user'>('user')
+  const [newUserRole, setNewUserRole] = useState<string>('user')
   const [editingUser, setEditingUser] = useState<{ id: string; username: string; name: string; email: string; role: string } | null>(null)
   const [editUsername, setEditUsername] = useState('')
   const [editName, setEditName] = useState('')
   const [editEmail, setEditEmail] = useState('')
   const [editPassword, setEditPassword] = useState('')
-  const [editRole, setEditRole] = useState<'admin' | 'user'>('user')
+  const [editRole, setEditRole] = useState<string>('user')
   const [addingUser, setAddingUser] = useState(false)
   
   const isAdmin = currentUser?.role === 'admin'
@@ -133,7 +133,7 @@ export function UserManagementModal({ onClose, currentUser }: UserManagementModa
     setEditName(user.name)
     setEditEmail(user.email || '')
     setEditPassword('')
-    setEditRole((user.role as 'admin' | 'user') || 'user')
+    setEditRole(user.role || 'user')
   }
 
   const handleCancelEdit = () => {
@@ -300,12 +300,16 @@ export function UserManagementModal({ onClose, currentUser }: UserManagementModa
             <select
               id="new-user-role"
               value={newUserRole}
-              onChange={(e) => setNewUserRole(e.target.value as 'admin' | 'user')}
+              onChange={(e) => setNewUserRole(e.target.value)}
               className="form-input"
               required
             >
-              <option value="user">사용자</option>
+              <option value="user">일반 사용자</option>
               <option value="admin">관리자</option>
+              <option value="Deviation 매니저">Deviation 매니저</option>
+              <option value="개발 매니저">개발 매니저</option>
+              <option value="PIM 매니저">PIM 매니저</option>
+              <option value="총괄 매니저">총괄 매니저</option>
             </select>
           </div>
 
@@ -381,12 +385,16 @@ export function UserManagementModal({ onClose, currentUser }: UserManagementModa
                 <select
                   id="edit-user-role"
                   value={editRole}
-                  onChange={(e) => setEditRole(e.target.value as 'admin' | 'user')}
+                  onChange={(e) => setEditRole(e.target.value)}
                   className="form-input"
                   required
                 >
-                  <option value="user">사용자</option>
+                  <option value="user">일반 사용자</option>
                   <option value="admin">관리자</option>
+                  <option value="Deviation 매니저">Deviation 매니저</option>
+                  <option value="개발 매니저">개발 매니저</option>
+                  <option value="PIM 매니저">PIM 매니저</option>
+                  <option value="총괄 매니저">총괄 매니저</option>
                 </select>
               </div>
 

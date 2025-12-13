@@ -12,11 +12,12 @@ export default function RegisterPage() {
     email: '',
     password: '',
     confirmPassword: '',
+    role: 'user',
   })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value,
@@ -52,6 +53,7 @@ export default function RegisterPage() {
           name: formData.name,
           email: formData.email,
           password: formData.password,
+          role: formData.role,
         }),
       })
 
@@ -123,6 +125,38 @@ export default function RegisterPage() {
         )}
 
         <form onSubmit={handleSubmit}>
+          <div style={{ marginBottom: '1rem' }}>
+            <label htmlFor="role" style={{
+              display: 'block',
+              fontSize: '0.875rem',
+              fontWeight: 500,
+              color: '#374151',
+              marginBottom: '0.5rem',
+            }}>
+              권한 *
+            </label>
+            <select
+              id="role"
+              name="role"
+              value={formData.role}
+              onChange={handleChange}
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                border: '1px solid #d1d5db',
+                borderRadius: '0.5rem',
+                fontSize: '1rem',
+                boxSizing: 'border-box',
+              }}
+            >
+              <option value="user">일반 사용자</option>
+              <option value="Deviation 매니저">Deviation 매니저</option>
+              <option value="개발 매니저">개발 매니저</option>
+              <option value="PIM 매니저">PIM 매니저</option>
+              <option value="총괄 매니저">총괄 매니저</option>
+            </select>
+          </div>
+
           <div style={{ marginBottom: '1rem' }}>
             <label htmlFor="username" style={{
               display: 'block',

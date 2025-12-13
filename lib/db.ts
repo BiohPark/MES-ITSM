@@ -792,10 +792,13 @@ export async function addGmpRecord(
       const taskId = await getNextTaskId()
       const phases = (record as any).phases || {}
       
-      // PIM 매니저와 개발 매니저 확인/생성
+      // PIM 매니저와 개발 매니저 확인/생성 (역할 기반 + 총괄 매니저 허용)
       const users = await getUsers()
-      let pimManager = users.find(u => u.name === 'PIM 매니저')
-      let devManager = users.find(u => u.name === '개발 매니저')
+      const findManagerByRole = (role: string) =>
+        users.find(u => u.role === role || u.role === '총괄 매니저')
+
+      let pimManager = findManagerByRole('PIM 매니저')
+      let devManager = findManagerByRole('개발 매니저')
       
       if (!pimManager) {
         const userId = await getNextUserId()
@@ -803,8 +806,9 @@ export async function addGmpRecord(
           id: userId,
           name: 'PIM 매니저',
           email: undefined,
+          role: 'PIM 매니저',
         })
-        pimManager = { id: userId, name: 'PIM 매니저' }
+        pimManager = { id: userId, name: 'PIM 매니저', role: 'PIM 매니저' }
       }
       
       if (!devManager) {
@@ -813,8 +817,9 @@ export async function addGmpRecord(
           id: userId,
           name: '개발 매니저',
           email: undefined,
+          role: '개발 매니저',
         })
-        devManager = { id: userId, name: '개발 매니저' }
+        devManager = { id: userId, name: '개발 매니저', role: '개발 매니저' }
       }
       
       // 일감 phases 설정 (PI, PM은 PIM 매니저, 개발은 개발 매니저)
@@ -908,10 +913,13 @@ export async function updateGmpRecord(
       const taskId = await getNextTaskId()
       const phases = (record as any).phases || {}
       
-      // PIM 매니저와 개발 매니저 확인/생성
+      // PIM 매니저와 개발 매니저 확인/생성 (역할 기반 + 총괄 매니저 허용)
       const users = await getUsers()
-      let pimManager = users.find(u => u.name === 'PIM 매니저')
-      let devManager = users.find(u => u.name === '개발 매니저')
+      const findManagerByRole = (role: string) =>
+        users.find(u => u.role === role || u.role === '총괄 매니저')
+
+      let pimManager = findManagerByRole('PIM 매니저')
+      let devManager = findManagerByRole('개발 매니저')
       
       if (!pimManager) {
         const userId = await getNextUserId()
@@ -919,8 +927,9 @@ export async function updateGmpRecord(
           id: userId,
           name: 'PIM 매니저',
           email: undefined,
+          role: 'PIM 매니저',
         })
-        pimManager = { id: userId, name: 'PIM 매니저' }
+        pimManager = { id: userId, name: 'PIM 매니저', role: 'PIM 매니저' }
       }
       
       if (!devManager) {
@@ -929,8 +938,9 @@ export async function updateGmpRecord(
           id: userId,
           name: '개발 매니저',
           email: undefined,
+          role: '개발 매니저',
         })
-        devManager = { id: userId, name: '개발 매니저' }
+        devManager = { id: userId, name: '개발 매니저', role: '개발 매니저' }
       }
       
       // 일감 phases 설정

@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "setup-db": "npm run init-db && npm run add-users-table && npm run add-auth-columns && npm run add-task-phases-column && npm run add-task-link-columns && npm run add-srb-ver-column && npm run add-comments-table && npm run create-admin",
+    "setup-db": "npm run init-db && npm run add-users-table && npm run add-auth-columns && npm run add-task-phases-column && npm run add-task-link-columns && npm run add-srb-ver-column && npm run add-comments-table && npm run add-issues-table && npm run add-resolved-sw-version-column && npm run create-admin",
     "postinstall": "npm run setup-db",
     "init-db": "tsx scripts/init-db.ts",
     "migrate": "tsx scripts/migrate-csv-to-db.ts",
@@ -24,6 +24,7 @@
     "check-planned-progress": "tsx scripts/check-planned-progress.ts",
     "update-completed-status": "tsx scripts/update-completed-status.ts",
     "add-comments-table": "tsx scripts/add-comments-table.ts",
+    "add-issues-table": "tsx scripts/add-issues-table.ts",
     "apply-status-management": "tsx scripts/apply-status-management.ts",
     "generate-test-data": "tsx scripts/generate-performance-test-data.ts",
     "measure-performance": "tsx scripts/measure-performance.ts",
@@ -42,7 +43,8 @@
     "reset-admin-password": "tsx scripts/reset-admin-password.ts",
     "verify-admin-password": "tsx scripts/verify-admin-password.ts",
     "check-remaining-test-data": "tsx scripts/check-remaining-test-data.ts",
-    "check-specific-record": "tsx scripts/check-specific-record.ts"
+    "check-specific-record": "tsx scripts/check-specific-record.ts",
+    "add-resolved-sw-version-column": "tsx scripts/add-resolved-sw-version-column.ts"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",

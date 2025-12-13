@@ -1,4 +1,5 @@
 import { SignJWT, jwtVerify, type JWTPayload } from 'jose'
+import type { UserRole } from './accounts'
 import { cookies } from 'next/headers'
 
 const secretKey = process.env.JWT_SECRET || 'default-secret-key-change-in-production'
@@ -11,7 +12,7 @@ export interface SessionPayload {
   userId: string
   username: string
   name: string
-  role: 'admin' | 'user'
+  role: UserRole
   email?: string
 }
 

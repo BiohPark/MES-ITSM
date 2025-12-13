@@ -2,7 +2,13 @@ import mysql from 'mysql2/promise'
 import { getPool } from './db'
 import { hashPassword, verifyPassword } from './password'
 
-export type UserRole = 'admin' | 'user'
+export type UserRole =
+  | 'admin'
+  | 'user'
+  | 'Deviation 매니저'
+  | '개발 매니저'
+  | 'PIM 매니저'
+  | '총괄 매니저'
 
 export interface Account {
   id: string

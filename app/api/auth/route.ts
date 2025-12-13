@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'register') {
-      const { username, name, email, password } = body
+      const { username, name, email, password, role } = body
 
       if (!username || !name || !email || !password) {
         return NextResponse.json(
@@ -87,7 +87,14 @@ export async function POST(request: NextRequest) {
       }
 
       try {
-        const userId = await createAccount(username, name, email, password, 'user')
+        const allowedRoles = ['admin', 'user', 'Deviation 매니저', '개발 매니저', 'PIM 매니저', '총괄 매니저'] as const
+        const requestedRole: any = role
+        const finalRole =
+          allowedRoles.includes(requestedRole) && requestedRole !== 'admin'
+            ? requestedRole
+            : 'user'
+
+        const userId = await createAccount(username, name, email, password, finalRole)
         
         // 자동 로그인
         const account = await verifyLogin(username, password)

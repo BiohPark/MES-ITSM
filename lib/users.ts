@@ -16,7 +16,6 @@ export async function getUsers(): Promise<User[]> {
   const [rows] = await pool.query<any[]>(
     `SELECT id, username, name, email, role, created_at 
      FROM users 
-     WHERE username IS NOT NULL AND username != ''
      ORDER BY created_at DESC`
   )
   return rows.map((row) => ({
@@ -54,8 +53,8 @@ export async function getNextUserId(): Promise<string> {
 export async function createUser(user: User): Promise<void> {
   const pool = getPool()
   await pool.query(
-    'INSERT INTO users (id, name, email) VALUES (?, ?, ?)',
-    [user.id, user.name, user.email || null]
+    'INSERT INTO users (id, name, email, role) VALUES (?, ?, ?, ?)',
+    [user.id, user.name, user.email || null, user.role || null]
   )
 }
 
