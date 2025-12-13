@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "setup-db": "npm run init-db && npm run add-users-table && npm run add-auth-columns && npm run add-task-phases-column && npm run add-task-link-columns && npm run add-srb-ver-column && npm run add-comments-table && npm run add-issues-table && npm run add-resolved-sw-version-column && npm run create-admin",
+    "setup-db": "npm run init-db && npm run add-users-table && npm run add-auth-columns && npm run add-task-phases-column && npm run add-task-link-columns && npm run add-srb-ver-column && npm run add-comments-table && npm run add-issues-table && npm run add-resolved-sw-version-column && npm run add-workflow-tables && npm run add-development-workflow && npm run create-admin",
     "postinstall": "node scripts/install-python-deps.js && npm run setup-db",
     "install-python-deps": "node scripts/install-python-deps.js",
     "init-db": "tsx scripts/init-db.ts",
