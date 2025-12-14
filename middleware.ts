@@ -4,7 +4,7 @@ import { verifySession } from './lib/auth'
 
 // 인증이 필요하지 않은 경로
 const publicPaths = ['/login', '/register', '/reset-password', '/api/auth']
-// Admin 권한이 필요한 경로
+// Admin 권한이 필요한 경로 (POST, PUT, DELETE만 제한, GET은 모든 인증된 사용자 허용)
 const adminPaths = ['/api/users'] // 설정 관련 API는 나중에 확장 가능
 
 export async function middleware(request: NextRequest) {
@@ -62,13 +62,17 @@ export async function middleware(request: NextRequest) {
     
     console.log('[MIDDLEWARE] 세션 정보:', { userId: session.userId, role: session.role, username: session.username })
 
-    // Admin 권한이 필요한 경로 확인
+    // Admin 권한이 필요한 경로 확인 (GET 요청은 제외)
     const isAdminPath = adminPaths.some(path => pathname.startsWith(path))
     if (isAdminPath && session.role !== 'admin') {
-      return NextResponse.json(
-        { error: 'Admin 권한이 필요합니다.' },
-        { status: 403 }
-      )
+      // GET 요청은 모든 인증된 사용자에게 허용 (담당자 목록 조회용)
+      const method = request.method
+      if (method !== 'GET') {
+        return NextResponse.json(
+          { error: 'Admin 권한이 필요합니다.' },
+          { status: 403 }
+        )
+      }
     }
 
     // API 요청에 세션 정보 추가 (필요한 경우)
@@ -77,6 +81,8 @@ export async function middleware(request: NextRequest) {
     requestHeaders.set('x-user-id', session.userId)
     // 한글 역할명을 URL 인코딩하여 헤더에 설정
     requestHeaders.set('x-user-role', encodeURIComponent(session.role))
+    // 사용자 이름도 URL 인코딩하여 헤더에 설정
+    requestHeaders.set('x-user-name', encodeURIComponent(session.name))
 
     return NextResponse.next({
       request: {

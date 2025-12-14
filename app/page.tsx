@@ -81,6 +81,27 @@ export default function Home() {
   // 인증 관련 상태
   const [user, setUser] = useState<{ id: string; username: string; name: string; role: 'admin' | 'user'; email?: string } | null>(null)
   const [isLoadingSession, setIsLoadingSession] = useState(true)
+  const [appVersion, setAppVersion] = useState<string>('0.1.0')
+
+  const fetchVersion = useCallback(async (signal?: AbortSignal) => {
+    try {
+      const response = await fetch('/api/version', {
+        cache: 'no-store',
+        signal,
+      })
+      if (signal?.aborted) return
+      if (response.ok) {
+        const data = await response.json()
+        setAppVersion(data.version || '0.1.0')
+      }
+    } catch (error) {
+      if (signal?.aborted) return
+      // 버전 가져오기 실패 시 기본값 유지
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error fetching version:', error)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     let isMounted = true
@@ -95,6 +116,8 @@ export default function Home() {
       await fetchOrphanTasks()
       if (!isMounted) return
       await fetchIssues()
+      if (!isMounted) return
+      await fetchVersion(abortController.signal)
     }
 
     init()
@@ -104,7 +127,7 @@ export default function Home() {
       abortController.abort()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [fetchVersion])
 
   const checkSession = async (signal?: AbortSignal) => {
     try {
@@ -1640,6 +1663,18 @@ export default function Home() {
           />
         )}
       </section>
+      
+      {/* 버전 정보 */}
+      <footer style={{
+        marginTop: '3rem',
+        padding: '1.5rem',
+        textAlign: 'center',
+        borderTop: '1px solid #e5e7eb',
+        color: '#6b7280',
+        fontSize: '0.875rem'
+      }}>
+        <p>ITSM Application v{appVersion}</p>
+      </footer>
     </main>
   )
 }

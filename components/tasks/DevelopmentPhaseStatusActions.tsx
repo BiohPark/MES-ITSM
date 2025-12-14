@@ -40,7 +40,7 @@ export function DevelopmentPhaseStatusActions({
   const [executing, setExecuting] = useState<number | null>(null)
   const [currentPhaseStatus, setCurrentPhaseStatus] = useState<string | null>(currentStatus || null)
 
-  const fetchTransitions = useCallback(async () => {
+  const fetchTransitions = useCallback(async (signal?: AbortSignal) => {
     try {
       setLoading(true)
       setError(null)
@@ -58,28 +58,58 @@ export function DevelopmentPhaseStatusActions({
           'Content-Type': 'application/json',
         },
         credentials: 'include',
+        signal,
       })
+      
+      if (signal?.aborted) return
 
       if (!response.ok) {
+        if (signal?.aborted) return
         const errorData = await response.json().catch(() => ({ error: '전환 목록을 가져오는데 실패했습니다.' }))
         throw new Error(errorData.error || `HTTP ${response.status}`)
       }
 
+      if (signal?.aborted) return
       const data: DevelopmentPhaseTransitionsResponse = await response.json()
-      setTransitions(data.available_transitions || [])
+      if (signal?.aborted) return
+      
+      // 중복 제거: transition.id를 기준으로 중복 제거
+      const uniqueTransitions = (data.available_transitions || []).reduce((acc: Transition[], current: Transition) => {
+        if (!acc.find(t => t.id === current.id)) {
+          acc.push(current)
+        }
+        return acc
+      }, [])
+      setTransitions(uniqueTransitions)
       setCurrentPhaseStatus(data.current_status || null)
     } catch (err) {
+      if (signal?.aborted) return
       console.error('Error fetching development phase transitions:', err)
       setError(err instanceof Error ? err.message : '전환 목록을 불러오는데 실패했습니다.')
       setTransitions([])
     } finally {
-      setLoading(false)
+      if (!signal?.aborted) {
+        setLoading(false)
+      }
     }
   }, [taskId, userRole, userId])
 
   // 사용 가능한 전환 목록 가져오기
   useEffect(() => {
-    fetchTransitions()
+    let isMounted = true
+    const abortController = new AbortController()
+    
+    const loadTransitions = async () => {
+      if (!isMounted) return
+      await fetchTransitions(abortController.signal)
+    }
+    
+    loadTransitions()
+    
+    return () => {
+      isMounted = false
+      abortController.abort()
+    }
   }, [fetchTransitions])
 
   // 전환 실행

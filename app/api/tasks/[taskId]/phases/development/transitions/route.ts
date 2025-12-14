@@ -119,14 +119,31 @@ export async function GET(
       return true
     })
 
-    // 응답 형식 변환
-    const transitionsData = availableTransitions.map((t) => ({
-      id: t.id,
-      name: t.name,
-      to_status_id: t.to_status_id,
-      to_status_name: t.to_status_name,
-      description: t.description || null,
-    }))
+    // 응답 형식 변환 및 중복 제거
+    // 같은 이름과 같은 목적지 상태를 가진 transition은 하나만 유지
+    const transitionsMap = new Map<string, any>()
+    availableTransitions.forEach((t) => {
+      // 이름과 목적지 상태를 조합한 키 생성
+      const key = `${t.name}_${t.to_status_name}`
+      // 이미 존재하지 않거나, display_order가 더 작은 경우에만 추가
+      if (!transitionsMap.has(key) || (t.display_order !== null && transitionsMap.get(key).display_order > t.display_order)) {
+        transitionsMap.set(key, {
+          id: t.id,
+          name: t.name,
+          to_status_id: t.to_status_id,
+          to_status_name: t.to_status_name,
+          description: t.description || null,
+          display_order: t.display_order,
+        })
+      }
+    })
+    
+    // Map을 배열로 변환하고 display_order로 정렬
+    const transitionsData = Array.from(transitionsMap.values()).sort((a, b) => {
+      const orderA = a.display_order ?? 999
+      const orderB = b.display_order ?? 999
+      return orderA - orderB
+    })
 
     return NextResponse.json({
       task_id: taskId,

@@ -43,9 +43,11 @@ export function VocView({ currentUser }: VocViewProps) {
       if (filterStatus) {
         params.append('status', filterStatus)
       }
-      if (!isAdmin) {
-        params.append('userId', currentUser?.username || '')
-      }
+      // 모든 권한에서 모든 피드백을 볼 수 있도록 수정
+      // 특정 사용자의 피드백만 보려면 아래 주석을 해제하고 userId를 전달
+      // if (!isAdmin) {
+      //   params.append('userId', currentUser?.username || '')
+      // }
 
       const response = await fetch(`/api/voc?${params.toString()}`)
       if (!response.ok) {

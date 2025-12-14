@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { verifySession } from '@/lib/auth'
 import {
   createVocFeedback,
   getVocFeedbacks,
@@ -11,17 +10,19 @@ import {
 // VOC 피드백 목록 조회
 export async function GET(request: NextRequest) {
   try {
-    const session = await verifySession(request.cookies.get('session')?.value || '')
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    // middleware에서 이미 세션 확인 완료, 헤더에서 정보 가져오기
+    // 헤더 값이 URL 인코딩되어 있으므로 디코딩
+    const encodedRole = request.headers.get('x-user-role') || ''
+    const userRole = encodedRole ? decodeURIComponent(encodedRole) : ''
+    const userId = request.headers.get('x-user-id') || ''
 
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status') || undefined
-    const userId = searchParams.get('userId') || undefined
+    const filterUserId = searchParams.get('userId') || undefined
 
-    // Admin이 아니면 자신의 피드백만 조회
-    const targetUserId = session.role === 'admin' ? userId : session.userId
+    // 모든 권한에서 모든 피드백을 볼 수 있도록 수정
+    // 특정 사용자의 피드백만 조회하려면 userId 파라미터를 전달
+    const targetUserId = filterUserId || undefined
 
     const feedbacks = await getVocFeedbacks(status, targetUserId)
     return NextResponse.json(feedbacks)
@@ -52,10 +53,12 @@ export async function GET(request: NextRequest) {
 // VOC 피드백 생성
 export async function POST(request: NextRequest) {
   try {
-    const session = await verifySession(request.cookies.get('session')?.value || '')
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    // middleware에서 이미 세션 확인 완료, 헤더에서 정보 가져오기
+    // 헤더 값이 URL 인코딩되어 있으므로 디코딩
+    const encodedRole = request.headers.get('x-user-role') || ''
+    const userRole = encodedRole ? decodeURIComponent(encodedRole) : ''
+    const userId = request.headers.get('x-user-id') || ''
+    const userName = request.headers.get('x-user-name') || ''
 
     const body = await request.json()
     const { action } = body
@@ -71,8 +74,8 @@ export async function POST(request: NextRequest) {
       }
 
       const id = await createVocFeedback(
-        session.userId,
-        session.name,
+        userId,
+        userName,
         category,
         title,
         content,
@@ -83,7 +86,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'update') {
-      if (session.role !== 'admin') {
+      if (userRole !== 'admin') {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
       }
 
@@ -103,7 +106,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'delete') {
-      if (session.role !== 'admin') {
+      if (userRole !== 'admin') {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
       }
 
