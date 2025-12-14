@@ -1,0 +1,435 @@
+/* ServiceNow Style Layout */
+
+/* Layout Container */
+.servicenow-layout {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: #ffffff;
+}
+
+.servicenow-layout__body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.servicenow-layout__content {
+  flex: 1;
+  background: #FFFFFF;
+  padding: 1.5rem 2rem;
+  overflow-y: auto;
+  min-height: calc(100vh - 60px);
+}
+
+/* Header Styles */
+.servicenow-header {
+  background: #FFFFFF;
+  border-bottom: 1px solid #EBECEE;
+  height: 60px;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.servicenow-header__content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 100%;
+  padding: 0 1.5rem;
+  gap: 2rem;
+}
+
+.servicenow-header__logo {
+  display: flex;
+  align-items: center;
+  min-width: 200px;
+}
+
+.servicenow-header__app-name {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #333333;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.servicenow-header__search {
+  flex: 1;
+  max-width: 600px;
+  display: flex;
+  align-items: center;
+}
+
+.servicenow-search-input {
+  flex: 1;
+  padding: 0.5rem 1rem;
+  border: 1px solid #EBECEE;
+  border-radius: 2px;
+  font-size: 0.875rem;
+  font-family: inherit;
+  background: #FFFFFF;
+  color: #333333;
+  transition: border-color 0.2s ease;
+}
+
+.servicenow-search-input:focus {
+  outline: none;
+  border-color: #2A84D5;
+  box-shadow: 0 0 0 2px rgba(42, 132, 213, 0.1);
+}
+
+.servicenow-search-input::placeholder {
+  color: #666666;
+}
+
+.servicenow-search-button {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #EBECEE;
+  border-left: none;
+  border-radius: 0 2px 2px 0;
+  background: #F4F6F8;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s ease;
+}
+
+.servicenow-search-button:hover {
+  background: #EBECEE;
+}
+
+.servicenow-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  min-width: 200px;
+  justify-content: flex-end;
+}
+
+.servicenow-header__user-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.125rem;
+}
+
+.servicenow-header__user-name {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #333333;
+}
+
+.servicenow-header__user-role {
+  font-size: 0.75rem;
+  color: #666666;
+}
+
+.servicenow-header__icon-button {
+  padding: 0.5rem;
+  border: 1px solid #EBECEE;
+  border-radius: 2px;
+  background: #FFFFFF;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s ease;
+}
+
+.servicenow-header__icon-button:hover {
+  background: #F4F6F8;
+}
+
+.servicenow-header__logout-button {
+  padding: 0.5rem 1rem;
+  border: 1px solid #dc2626;
+  border-radius: 2px;
+  background: #ffffff;
+  color: #dc2626;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.servicenow-header__logout-button:hover {
+  background: #dc2626;
+  color: #ffffff;
+}
+
+/* Sidebar Styles */
+.servicenow-sidebar {
+  width: 240px;
+  background: #192D3E;
+  color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  transition: width 0.3s ease;
+  border-right: 1px solid #0F1F2E;
+  flex-shrink: 0;
+}
+
+.servicenow-sidebar--collapsed {
+  width: 60px;
+}
+
+.servicenow-sidebar__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem;
+  border-bottom: 1px solid #0F1F2E;
+  min-height: 60px;
+}
+
+.servicenow-sidebar__title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #E5E7EB;
+  margin: 0;
+}
+
+.servicenow-sidebar--collapsed .servicenow-sidebar__title {
+  display: none;
+}
+
+.servicenow-sidebar__toggle {
+  padding: 0.5rem;
+  border: none;
+  background: transparent;
+  color: #E5E7EB;
+  cursor: pointer;
+  font-size: 1rem;
+  border-radius: 2px;
+  transition: background-color 0.2s ease;
+  font-family: inherit;
+}
+
+.servicenow-sidebar__toggle:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.servicenow-sidebar__nav {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.5rem 0;
+}
+
+.servicenow-sidebar__menu {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.servicenow-sidebar__menu-item {
+  margin: 0;
+  padding: 0;
+}
+
+.servicenow-sidebar__menu-link {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border: none;
+  background: transparent;
+  color: #E5E7EB;
+  font-size: 0.875rem;
+  font-weight: 400;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+  border-radius: 0;
+  border-left: 3px solid transparent;
+}
+
+.servicenow-sidebar__menu-link:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+
+.servicenow-sidebar__menu-link--active {
+  background: rgba(42, 132, 213, 0.15);
+  color: #ffffff;
+  border-left-color: #2A84D5;
+  font-weight: 500;
+}
+
+.servicenow-sidebar--collapsed .servicenow-sidebar__menu-link {
+  justify-content: center;
+  padding: 0.75rem;
+}
+
+.servicenow-sidebar--collapsed .servicenow-sidebar__menu-text {
+  display: none;
+}
+
+.servicenow-sidebar__menu-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.servicenow-sidebar__menu-text {
+  flex: 1;
+  white-space: nowrap;
+}
+
+/* ServiceNow Style Form Elements */
+.servicenow-form-input,
+.servicenow-form-select,
+.servicenow-form-textarea {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #EBECEE;
+  border-radius: 2px;
+  font-size: 0.875rem;
+  font-family: inherit;
+  background: #FFFFFF;
+  color: #333333;
+  transition: border-color 0.2s ease;
+}
+
+.servicenow-form-input:focus,
+.servicenow-form-select:focus,
+.servicenow-form-textarea:focus {
+  outline: none;
+  border-color: #2A84D5;
+  box-shadow: 0 0 0 2px rgba(42, 132, 213, 0.1);
+}
+
+.servicenow-form-input:disabled,
+.servicenow-form-select:disabled,
+.servicenow-form-textarea:disabled {
+  background: #F4F6F8;
+  color: #666666;
+  cursor: not-allowed;
+}
+
+.servicenow-button {
+  padding: 0.5rem 1rem;
+  border: 1px solid #EBECEE;
+  border-radius: 2px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: #FFFFFF;
+  color: #333333;
+}
+
+.servicenow-button--primary {
+  background: #2A84D5;
+  color: #ffffff;
+  border-color: #2A84D5;
+}
+
+.servicenow-button--primary:hover {
+  background: #0073E6;
+  border-color: #0073E6;
+}
+
+.servicenow-button:hover:not(:disabled) {
+  background: #F4F6F8;
+}
+
+.servicenow-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ServiceNow Style Tables */
+.servicenow-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #FFFFFF;
+  font-size: 0.875rem;
+}
+
+.servicenow-table th {
+  background: #F4F6F8;
+  border-bottom: 2px solid #EBECEE;
+  padding: 0.75rem 1rem;
+  text-align: left;
+  font-weight: 600;
+  color: #333333;
+  text-transform: none;
+  font-size: 0.8125rem;
+  letter-spacing: 0;
+}
+
+.servicenow-table td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #EBECEE;
+  color: #333333;
+}
+
+.servicenow-table tbody tr:nth-child(even) {
+  background: #F4F6F8;
+}
+
+.servicenow-table tbody tr:hover {
+  background: #EBECEE;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .servicenow-sidebar {
+    position: fixed;
+    left: 0;
+    top: 60px;
+    height: calc(100vh - 60px);
+    z-index: 999;
+    transform: translateX(0);
+  }
+
+  .servicenow-sidebar--collapsed {
+    transform: translateX(-100%);
+  }
+
+  .servicenow-layout__content {
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .servicenow-header__content {
+    padding: 0 1rem;
+    gap: 1rem;
+  }
+
+  .servicenow-header__logo {
+    min-width: auto;
+  }
+
+  .servicenow-header__app-name {
+    font-size: 1rem;
+  }
+
+  .servicenow-header__search {
+    max-width: 200px;
+  }
+
+  .servicenow-header__user-info {
+    display: none;
+  }
+
+  .servicenow-layout__content {
+    padding: 1rem;
+  }
+}
+

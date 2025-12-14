@@ -25,6 +25,7 @@ import { UserManagementModal } from '@/components/users/UserManagementModal'
 import { ContextMenu } from '@/components/common/ContextMenu'
 import { Placeholder } from '@/components/common/Placeholder'
 import { SettingsIcon, SearchIcon } from '@/components/common/Icons'
+import { ServiceNowLayout } from '@/components/layout/ServiceNowLayout'
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<TabKey>('dashboard')
@@ -800,6 +801,16 @@ export default function Home() {
   }
 
   const handleNewProject = async () => {
+    // 다른 모달들 닫기
+    setIsTaskEditing(false)
+    setSelectedTask(null)
+    setIsIssueEditing(false)
+    setSelectedIssue(null)
+    setIsValPackageEditing(false)
+    setSelectedValPackage(null)
+    setIsChildModalOpen(false)
+    setChildTarget(null)
+    
     const newProject = await buildNewProject()
     setSelectedProject(newProject)
     setEditMode('create')
@@ -807,6 +818,16 @@ export default function Home() {
   }
 
   const handleNewValPackage = async () => {
+    // 다른 모달들 닫기
+    setIsEditing(false)
+    setSelectedProject(null)
+    setIsTaskEditing(false)
+    setSelectedTask(null)
+    setIsIssueEditing(false)
+    setSelectedIssue(null)
+    setIsChildModalOpen(false)
+    setChildTarget(null)
+    
     const newValPackage = await buildNewValPackage()
     setSelectedValPackage(newValPackage)
     setValPackageEditMode('create')
@@ -1017,108 +1038,22 @@ export default function Home() {
     )
   }
 
+  const handleGlobalSearch = (query: string) => {
+    setActiveTab('search')
+    // SearchView에서 검색을 수행하도록 처리
+    // 실제 검색 로직은 SearchView 컴포넌트 내부에서 처리됨
+  }
+
   return (
-    <main className="dashboard">
-      <header className="dashboard__header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flex: 1 }}>
-          <div>
-            <h1 style={{ fontSize: '1.5rem', fontWeight: 600, margin: 0, color: '#111827' }}>ITSM (IT Service Management)</h1>
-            <p style={{ fontSize: '0.75rem', color: '#6b7280', margin: '0.25rem 0 0 0' }}>MES 팀</p>
-          </div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          {user && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', background: '#f1f5f9', borderRadius: '0.5rem' }}>
-              <span style={{ fontSize: '0.875rem', color: '#475569' }}>{user.name}</span>
-              {user.role === 'admin' && (
-                <span style={{ fontSize: '0.75rem', color: '#667eea', fontWeight: 600, padding: '0.125rem 0.5rem', background: '#e0e7ff', borderRadius: '0.25rem' }}>Admin</span>
-              )}
-            </div>
-          )}
-          {user && user.role === 'admin' && (
-            <div style={{ position: 'relative' }}>
-              <button
-                onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontSize: '1.5rem',
-                  padding: '0.5rem',
-                  color: '#475569',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  borderRadius: '0.5rem',
-                  transition: 'background-color 0.2s ease',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = '#f1f5f9'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'transparent'
-                }}
-                title="설정"
-              >
-                <SettingsIcon size={24} color="#475569" />
-              </button>
-              {isSettingsOpen && (
-                <UserManagementModal
-                  onClose={() => setIsSettingsOpen(false)}
-                  currentUser={user}
-                />
-              )}
-            </div>
-          )}
-          <button
-            onClick={handleLogout}
-            style={{
-              background: '#ef4444',
-              color: 'white',
-              border: 'none',
-              padding: '0.5rem 1rem',
-              borderRadius: '0.5rem',
-              fontSize: '0.875rem',
-              fontWeight: 500,
-              cursor: 'pointer',
-              transition: 'background-color 0.2s ease',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#dc2626'
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = '#ef4444'
-            }}
-          >
-            로그아웃
-          </button>
-        </div>
-      </header>
-
-      <nav className="tabs">
-        {TABS.map((tab: { key: TabKey; label: string }) => {
-          // Admin만 백업 탭 보기
-          if (tab.key === 'backup' && (!user || user.role !== 'admin')) {
-            return null
-          }
-          return (
-            <button
-              key={tab.key}
-              className={`tab ${activeTab === tab.key ? 'tab--active' : ''}`}
-              onClick={() => setActiveTab(tab.key)}
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
-            >
-              {tab.key === 'search' ? (
-                <SearchIcon size={16} color="currentColor" />
-              ) : (
-                tab.label
-              )}
-            </button>
-          )
-        })}
-      </nav>
-
-      <section className="panel">
+    <ServiceNowLayout
+      activeTab={activeTab}
+      onTabChange={setActiveTab}
+      onSearch={handleGlobalSearch}
+      onSettingsClick={user?.role === 'admin' ? () => setIsSettingsOpen(true) : undefined}
+      onLogout={handleLogout}
+      user={user}
+    >
+      <div className="servicenow-content">
         {activeTab === 'dashboard' ? (
           <DashboardView
             projects={projects}
@@ -1141,6 +1076,16 @@ export default function Home() {
               onRefresh={fetchProjects}
               onProjectClick={(project: Project) => {
                 if (!isDeleteMode) {
+                  // 다른 모달들 닫기
+                  setIsTaskEditing(false)
+                  setSelectedTask(null)
+                  setIsIssueEditing(false)
+                  setSelectedIssue(null)
+                  setIsValPackageEditing(false)
+                  setSelectedValPackage(null)
+                  setIsChildModalOpen(false)
+                  setChildTarget(null)
+                  
                   setSelectedProject(project)
                   setEditMode('edit')
                   setIsEditing(true)
@@ -1179,6 +1124,16 @@ export default function Home() {
               }}
               onBatchDeleteChildren={handleBatchDeleteChildren}
               onChildClick={(child: ProjectChild, projectId: string, projectName: string) => {
+                // 다른 모달들 닫기
+                setIsEditing(false)
+                setSelectedProject(null)
+                setIsIssueEditing(false)
+                setSelectedIssue(null)
+                setIsValPackageEditing(false)
+                setSelectedValPackage(null)
+                setIsChildModalOpen(false)
+                setChildTarget(null)
+                
                 // GMP Record인지 확인 (kind_number 필드 존재 여부)
                 const isGmpRecord = !!(child as any).kind_number || !!(child as any).isGmpRecord
                 
@@ -1254,6 +1209,16 @@ export default function Home() {
               }}
               onTaskClick={(task: ProjectChild, projectId: string | null, projectName: string) => {
                 if (!isDeleteMode) {
+                  // 다른 모달들 닫기
+                  setIsEditing(false)
+                  setSelectedProject(null)
+                  setIsIssueEditing(false)
+                  setSelectedIssue(null)
+                  setIsValPackageEditing(false)
+                  setSelectedValPackage(null)
+                  setIsChildModalOpen(false)
+                  setChildTarget(null)
+                  
                   setSelectedTask({ 
                     task, 
                     projectId: (projectId === 'N/A' || !projectId) ? null : projectId, 
@@ -1264,6 +1229,16 @@ export default function Home() {
                 }
               }}
               onNewTask={async () => {
+                // 다른 모달들 닫기
+                setIsEditing(false)
+                setSelectedProject(null)
+                setIsIssueEditing(false)
+                setSelectedIssue(null)
+                setIsValPackageEditing(false)
+                setSelectedValPackage(null)
+                setIsChildModalOpen(false)
+                setChildTarget(null)
+                
                 const newRecord = await buildNewGmpRecord()
                 setSelectedTask({
                   task: newRecord,
@@ -1302,6 +1277,16 @@ export default function Home() {
               onRefresh={fetchValPackages}
               onValPackageClick={(valPackage: Project) => {
                 if (!isDeleteMode) {
+                  // 다른 모달들 닫기
+                  setIsEditing(false)
+                  setSelectedProject(null)
+                  setIsTaskEditing(false)
+                  setSelectedTask(null)
+                  setIsIssueEditing(false)
+                  setSelectedIssue(null)
+                  setIsChildModalOpen(false)
+                  setChildTarget(null)
+                  
                   setSelectedValPackage(valPackage)
                   setValPackageEditMode('edit')
                   setIsValPackageEditing(true)
@@ -1352,6 +1337,16 @@ export default function Home() {
               }}
               onTaskClick={(task: ProjectChild, projectId: string | null, projectName: string) => {
                 if (!isDeleteMode) {
+                  // 다른 모달들 닫기
+                  setIsEditing(false)
+                  setSelectedProject(null)
+                  setIsIssueEditing(false)
+                  setSelectedIssue(null)
+                  setIsValPackageEditing(false)
+                  setSelectedValPackage(null)
+                  setIsChildModalOpen(false)
+                  setChildTarget(null)
+                  
                   setSelectedTask({ 
                     task, 
                     projectId: (projectId === 'N/A' || !projectId) ? null : projectId, 
@@ -1362,6 +1357,16 @@ export default function Home() {
                 }
               }}
               onNewTask={async () => {
+                // 다른 모달들 닫기
+                setIsEditing(false)
+                setSelectedProject(null)
+                setIsIssueEditing(false)
+                setSelectedIssue(null)
+                setIsValPackageEditing(false)
+                setSelectedValPackage(null)
+                setIsChildModalOpen(false)
+                setChildTarget(null)
+                
                 const newTask = await buildNewChild()
                 setSelectedTask({
                   task: newTask,
@@ -1406,6 +1411,16 @@ export default function Home() {
               await fetchOrphanTasks()
             }}
             onTaskClick={(task: ProjectChild, projectId: string | null, projectName: string) => {
+              // 다른 모달들 닫기
+              setIsEditing(false)
+              setSelectedProject(null)
+              setIsIssueEditing(false)
+              setSelectedIssue(null)
+              setIsValPackageEditing(false)
+              setSelectedValPackage(null)
+              setIsChildModalOpen(false)
+              setChildTarget(null)
+              
               setSelectedTask({
                 task,
                 projectId: (projectId === 'N/A' || !projectId) ? null : projectId,
@@ -1415,6 +1430,16 @@ export default function Home() {
               setIsTaskEditing(true)
             }}
             onProjectClick={(project: Project) => {
+              // 다른 모달들 닫기
+              setIsTaskEditing(false)
+              setSelectedTask(null)
+              setIsIssueEditing(false)
+              setSelectedIssue(null)
+              setIsValPackageEditing(false)
+              setSelectedValPackage(null)
+              setIsChildModalOpen(false)
+              setChildTarget(null)
+              
               setSelectedProject(project)
               setEditMode('edit')
               setIsEditing(true)
@@ -1439,12 +1464,32 @@ export default function Home() {
               }}
               onIssueClick={(issue: Issue) => {
                 if (!isDeleteMode) {
+                  // 다른 모달들 닫기
+                  setIsEditing(false)
+                  setSelectedProject(null)
+                  setIsTaskEditing(false)
+                  setSelectedTask(null)
+                  setIsValPackageEditing(false)
+                  setSelectedValPackage(null)
+                  setIsChildModalOpen(false)
+                  setChildTarget(null)
+                  
                   setSelectedIssue(issue)
                   setIssueEditMode('edit')
                   setIsIssueEditing(true)
                 }
               }}
               onNewIssue={async () => {
+                // 다른 모달들 닫기
+                setIsEditing(false)
+                setSelectedProject(null)
+                setIsTaskEditing(false)
+                setSelectedTask(null)
+                setIsValPackageEditing(false)
+                setSelectedValPackage(null)
+                setIsChildModalOpen(false)
+                setChildTarget(null)
+                
                 const newIssue = await buildNewIssue()
                 setSelectedIssue(newIssue)
                 setIssueEditMode('create')
@@ -1473,11 +1518,31 @@ export default function Home() {
         ) : activeTab === 'search' ? (
           <SearchView
             onProjectClick={(project: Project) => {
+              // 다른 모달들 닫기
+              setIsTaskEditing(false)
+              setSelectedTask(null)
+              setIsIssueEditing(false)
+              setSelectedIssue(null)
+              setIsValPackageEditing(false)
+              setSelectedValPackage(null)
+              setIsChildModalOpen(false)
+              setChildTarget(null)
+              
               setSelectedProject(project)
               setEditMode('edit')
               setIsEditing(true)
             }}
             onTaskClick={(task: ProjectChild, projectId: string | null, projectName: string) => {
+              // 다른 모달들 닫기
+              setIsEditing(false)
+              setSelectedProject(null)
+              setIsIssueEditing(false)
+              setSelectedIssue(null)
+              setIsValPackageEditing(false)
+              setSelectedValPackage(null)
+              setIsChildModalOpen(false)
+              setChildTarget(null)
+              
               // GMP Record인지 확인
               const isGmpRecord = !!(task as any).kind_number || !!(task as any).isGmpRecord || (task as any).type === 'gmp-record'
               
@@ -1662,19 +1727,26 @@ export default function Home() {
             }}
           />
         )}
-      </section>
-      
-      {/* 버전 정보 */}
-      <footer style={{
-        marginTop: '3rem',
-        padding: '1.5rem',
-        textAlign: 'center',
-        borderTop: '1px solid #e5e7eb',
-        color: '#6b7280',
-        fontSize: '0.875rem'
-      }}>
-        <p>ITSM Application v{appVersion}</p>
-      </footer>
-    </main>
+        {/* 버전 정보 */}
+        <footer style={{
+          marginTop: '3rem',
+          padding: '1.5rem',
+          textAlign: 'center',
+          borderTop: '1px solid #e5e7eb',
+          color: '#6b7280',
+          fontSize: '0.875rem'
+        }}>
+          <p>ITSM Application v{appVersion}</p>
+        </footer>
+      </div>
+
+      {/* Settings Modal */}
+      {isSettingsOpen && user?.role === 'admin' && (
+        <UserManagementModal
+          onClose={() => setIsSettingsOpen(false)}
+          currentUser={user}
+        />
+      )}
+    </ServiceNowLayout>
   )
 }
