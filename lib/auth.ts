@@ -1,6 +1,5 @@
 import { SignJWT, jwtVerify, type JWTPayload } from 'jose'
 import type { UserRole } from './accounts'
-import { cookies } from 'next/headers'
 
 const secretKey = process.env.JWT_SECRET || 'default-secret-key-change-in-production'
 if (process.env.NODE_ENV === 'production' && secretKey === 'default-secret-key-change-in-production') {
@@ -39,27 +38,19 @@ export async function verifySession(token: string): Promise<SessionPayload | nul
     
     // 세션 정보 검증
     if (!session.userId || !session.role) {
-      console.error('JWT 검증 실패: 필수 필드 누락', { userId: session.userId, role: session.role })
       return null
-    }
-    
-    // 개발 모드에서만 로깅
-    if (process.env.NODE_ENV === 'development') {
-      console.log('JWT 검증 성공:', { userId: session.userId, role: session.role, username: session.username })
     }
     
     return session
   } catch (error) {
-    console.error('JWT 검증 실패:', error)
-    if (error instanceof Error) {
-      console.error('JWT 검증 에러 상세:', error.message, error.stack)
-    }
     return null
   }
 }
 
-// 쿠키에서 세션 가져오기
+// 쿠키에서 세션 가져오기 (서버 컴포넌트/API Route에서만 사용 가능)
 export async function getSession(): Promise<SessionPayload | null> {
+  // 동적 import를 사용하여 Edge Runtime에서 오류 방지
+  const { cookies } = await import('next/headers')
   const cookieStore = await cookies()
   const token = cookieStore.get('session')?.value
 
@@ -70,9 +61,11 @@ export async function getSession(): Promise<SessionPayload | null> {
   return await verifySession(token)
 }
 
-// 세션 쿠키 설정 (토큰 반환)
+// 세션 쿠키 설정 (토큰 반환) (서버 컴포넌트/API Route에서만 사용 가능)
 export async function setSession(payload: SessionPayload): Promise<string> {
   const token = await createSession(payload)
+  // 동적 import를 사용하여 Edge Runtime에서 오류 방지
+  const { cookies } = await import('next/headers')
   const cookieStore = await cookies()
   
   cookieStore.set('session', token, {
@@ -86,8 +79,10 @@ export async function setSession(payload: SessionPayload): Promise<string> {
   return token
 }
 
-// 세션 쿠키 삭제
+// 세션 쿠키 삭제 (서버 컴포넌트/API Route에서만 사용 가능)
 export async function deleteSession(): Promise<void> {
+  // 동적 import를 사용하여 Edge Runtime에서 오류 방지
+  const { cookies } = await import('next/headers')
   const cookieStore = await cookies()
   cookieStore.delete('session')
 }

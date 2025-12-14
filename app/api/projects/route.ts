@@ -24,21 +24,16 @@ const toNumber = (value: unknown, fallback: number) => {
 }
 
 export async function GET(request: NextRequest) {
-  console.log('[PROJECTS API] GET 요청 시작')
   try {
     // middleware에서 이미 세션 확인 완료, 헤더에서 정보 가져오기
     // 헤더 값이 URL 인코딩되어 있으므로 디코딩
     const encodedRole = request.headers.get('x-user-role') || ''
     const userRole = encodedRole ? decodeURIComponent(encodedRole) : ''
     const userId = request.headers.get('x-user-id') || ''
-    
-    console.log('[PROJECTS API] 요청 헤더:', { userRole, userId })
-    console.log('[PROJECTS API] 모든 헤더:', Object.fromEntries(request.headers.entries()))
 
     const { searchParams } = new URL(request.url)
     const type = searchParams.get('type')
     const taskId = searchParams.get('taskId')
-    console.log('[PROJECTS API] 쿼리 파라미터:', { type, taskId })
 
     if (type === 'project') {
       const nextId = await getNextProjectId()
@@ -63,9 +58,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 기본: 프로젝트 목록 조회
-    console.log('[PROJECTS API] getProjects 호출 시작')
     const projects = await getProjects()
-    console.log('[PROJECTS API] getProjects 완료, 프로젝트 수:', projects.length)
     const response = NextResponse.json(projects)
     // 개발 모드에서는 캐싱 비활성화, 프로덕션에서는 짧은 캐시 시간 설정
     if (process.env.NODE_ENV === 'production') {

@@ -15,7 +15,7 @@ export async function safeQuery<T = any>(
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const pool = getPool()
-      const result = await pool.query<T>(query, params)
+      const result = await pool.query(query, params)
       return result[0] as T
     } catch (error: any) {
       lastError = error

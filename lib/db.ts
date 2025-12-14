@@ -36,8 +36,8 @@ function recreatePool(): mysql.Pool {
   }
   pool = mysql.createPool(dbConfig)
   
-  // 연결 오류 핸들러
-  pool.on('error', (err: any) => {
+  // 연결 오류 핸들러 (타입 단언 사용)
+  ;(pool as any).on('error', (err: any) => {
     console.error('Database pool error:', err)
     if (err.code === 'PROTOCOL_CONNECTION_LOST' || err.code === 'ECONNRESET') {
       console.log('Attempting to recreate pool...')
@@ -1301,6 +1301,72 @@ export async function deleteGmpRecord(
     }
     throw error
   }
+}
+
+// 프로젝트 없는 GMP Record 조회
+export async function getOrphanGmpRecords(): Promise<Array<ProjectChild & { kind_number?: string }>> {
+  let retries = 2
+  while (retries > 0) {
+    try {
+      // 연결 테스트
+      const isConnected = await testConnection()
+      if (!isConnected) {
+        throw new Error('Database connection failed')
+      }
+      
+      const pool = getPool()
+      const [records] = await pool.query<any[]>(
+        "SELECT * FROM gmp_records WHERE project_id IS NULL ORDER BY created_at ASC"
+      )
+
+      const today = new Date().toISOString().slice(0, 10)
+      return records.map((record) => {
+        const kind = record.kind || 'CC'
+        const number = record.number || 0
+        const kindNumber = `${kind}-${String(number).padStart(5, '0')}`
+        let phases = null
+        if (record.phases) {
+          try {
+            phases = typeof record.phases === 'string' ? JSON.parse(record.phases) : record.phases
+          } catch (e) {
+            phases = null
+          }
+        }
+        
+        return {
+          id: record.id,
+          title: record.title,
+          owner: record.owner,
+          status: record.status,
+          progress: record.progress || 0,
+          start: record.start ? (typeof record.start === 'string' ? record.start : new Date(record.start).toISOString().slice(0, 10)) : today,
+          due: record.due ? (typeof record.due === 'string' ? record.due : new Date(record.due).toISOString().slice(0, 10)) : '',
+          description: record.description || '',
+          kind: kind,
+          number: number,
+          kind_number: record.kind_number || kindNumber,
+          phases: phases,
+          linked_task_id: record.linked_task_id || null,
+        }
+      })
+    } catch (error: any) {
+      retries--
+      if (retries === 0) {
+        pool = null
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Error in getOrphanGmpRecords (final attempt):', error)
+        }
+        throw new Error(`Orphan GMP Record 조회 실패: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      }
+      
+      await new Promise(resolve => setTimeout(resolve, 500))
+      if (process.env.NODE_ENV === 'development') {
+        console.warn(`Retrying getOrphanGmpRecords... (${retries} attempts remaining)`)
+      }
+    }
+  }
+  
+  throw new Error('Unexpected error in getOrphanGmpRecords')
 }
 
 // 다음 GMP Record ID 생성 (5자리 숫자)

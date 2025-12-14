@@ -23,10 +23,21 @@ export async function ensureBackupDir(): Promise<void> {
   }
 }
 
+// KST(한국 표준시) 타임스탬프 생성
+function getKSTTimestamp(): string {
+  const now = new Date()
+  // UTC+9 (KST)
+  const kstTime = new Date(now.getTime() + (9 * 60 * 60 * 1000))
+  // ISO 형식으로 변환하고 'Z' 제거 후 파일명에 사용할 수 있도록 포맷팅
+  const isoString = kstTime.toISOString()
+  // 'Z' 제거하고 ':' 와 '.' 를 '-' 로 변경
+  return isoString.replace('Z', '').replace(/[:.]/g, '-')
+}
+
 // 데이터베이스 전체를 JSON 형태로 백업
 export async function createBackup(backupType: 'auto' | 'manual' = 'auto', createdBy?: string): Promise<string> {
   const pool = getPool()
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+  const timestamp = getKSTTimestamp()
   const filename = `backup-${timestamp}.json`
   const filePath = path.join(BACKUP_DIR, filename)
 
@@ -50,6 +61,8 @@ export async function createBackup(backupType: 'auto' | 'manual' = 'auto', creat
     'users',
     'voc_feedbacks',
     'comments',
+    'attachments',
+    'backup_metadata',
   ]
 
   for (const table of tables) {
@@ -151,6 +164,8 @@ export async function restoreFromBackup(backupId: number): Promise<void> {
       'issues',
       'voc_feedbacks',
       'comments',
+      'attachments',
+      'backup_metadata',
     ]
 
     for (const table of restoreOrder) {

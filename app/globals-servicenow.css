@@ -433,3 +433,152 @@
   }
 }
 
+/* Attachment Section Styles */
+.servicenow-attachment-section {
+  margin-top: 2rem;
+  padding: 1.5rem;
+  background: #FFFFFF;
+  border: 1px solid #EBECEE;
+  border-radius: 2px;
+}
+
+.servicenow-attachment-section__title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #333333;
+  margin: 0 0 1rem 0;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #EBECEE;
+}
+
+.servicenow-attachment-upload {
+  border: 2px dashed #EBECEE;
+  border-radius: 2px;
+  padding: 2rem;
+  text-align: center;
+  background: #F4F6F8;
+  transition: all 0.2s ease;
+  margin-bottom: 1.5rem;
+}
+
+.servicenow-attachment-upload--active {
+  border-color: #2A84D5;
+  background: rgba(42, 132, 213, 0.05);
+}
+
+.servicenow-attachment-upload__content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.servicenow-attachment-upload__text {
+  font-size: 0.875rem;
+  color: #666666;
+  margin: 0;
+}
+
+.servicenow-attachment-upload__progress {
+  margin-top: 1rem;
+  width: 100%;
+}
+
+.servicenow-attachment-upload__progress p {
+  font-size: 0.875rem;
+  color: #333333;
+  margin: 0 0 0.5rem 0;
+  font-weight: 500;
+}
+
+.servicenow-attachment-upload__progress-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.servicenow-attachment-upload__progress-item span {
+  font-size: 0.8125rem;
+  color: #666666;
+}
+
+.servicenow-attachment-upload__progress-bar {
+  width: 100%;
+  height: 8px;
+  background: #EBECEE;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.servicenow-attachment-upload__progress-fill {
+  height: 100%;
+  background: #2A84D5;
+  transition: width 0.3s ease;
+}
+
+.servicenow-attachment-section__error {
+  padding: 0.75rem 1rem;
+  background: #FEE2E2;
+  border: 1px solid #FCA5A5;
+  border-radius: 2px;
+  color: #DC2626;
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+}
+
+.servicenow-attachment-section__loading {
+  padding: 1rem;
+  text-align: center;
+  color: #666666;
+  font-size: 0.875rem;
+}
+
+.servicenow-attachment-section__empty {
+  padding: 2rem;
+  text-align: center;
+  color: #666666;
+  font-size: 0.875rem;
+  background: #F4F6F8;
+  border-radius: 2px;
+}
+
+.servicenow-attachment-list {
+  margin-top: 1rem;
+}
+
+.servicenow-attachment-list__filename {
+  font-weight: 500;
+  color: #333333;
+}
+
+.servicenow-attachment-list__actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.servicenow-button--link {
+  background: transparent;
+  border: none;
+  color: #2A84D5;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.875rem;
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.servicenow-button--link:hover {
+  color: #0073E6;
+  text-decoration: underline;
+}
+
+.servicenow-button--danger {
+  color: #DC2626;
+}
+
+.servicenow-button--danger:hover {
+  color: #B91C1C;
+}
+

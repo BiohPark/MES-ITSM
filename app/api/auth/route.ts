@@ -20,16 +20,11 @@ export async function POST(request: NextRequest) {
 
       const account = await verifyLogin(username, password)
       if (!account) {
-        // 보안을 위해 구체적인 실패 이유를 노출하지 않음
-        // 로그에는 기록하지만 사용자에게는 일반적인 메시지만 반환
-        console.log('로그인 실패: ID 또는 비밀번호가 올바르지 않음')
         return NextResponse.json(
           { error: 'ID 또는 비밀번호가 올바르지 않습니다.' },
           { status: 401 }
         )
       }
-
-      console.log('로그인 성공:', account.username, 'Role:', account.role)
 
       // 세션 토큰 생성
       const token = await createSession({
@@ -39,8 +34,6 @@ export async function POST(request: NextRequest) {
         role: account.role,
         email: account.email,
       })
-
-      console.log('세션 토큰 생성 완료, Role:', account.role)
 
       // 응답 생성 및 쿠키 설정
       const response = NextResponse.json({
@@ -63,7 +56,6 @@ export async function POST(request: NextRequest) {
         path: '/',
       })
 
-      console.log('쿠키 설정 완료')
       return response
     }
 

@@ -18,24 +18,19 @@ export async function middleware(request: NextRequest) {
 
   // API 경로 처리
   if (pathname.startsWith('/api')) {
-    console.log('[MIDDLEWARE] API 요청:', pathname)
     const token = request.cookies.get('session')?.value
 
     if (!token) {
-      console.log('[MIDDLEWARE] 세션 토큰 없음')
       return NextResponse.json(
         { error: '인증이 필요합니다.' },
         { status: 401 }
       )
     }
 
-    console.log('[MIDDLEWARE] 세션 토큰 존재, 검증 시작')
     let session
     try {
       session = await verifySession(token)
-      console.log('[MIDDLEWARE] 세션 검증 완료:', session ? '성공' : '실패')
     } catch (error) {
-      console.error('[MIDDLEWARE] 세션 검증 에러:', error)
       const response = NextResponse.json(
         { error: '인증 처리 중 오류가 발생했습니다.' },
         { status: 500 }
@@ -44,7 +39,6 @@ export async function middleware(request: NextRequest) {
     }
     
     if (!session) {
-      console.log('[MIDDLEWARE] 세션이 null')
       const response = NextResponse.json(
         { error: '인증이 유효하지 않습니다.' },
         { status: 401 }
@@ -59,8 +53,6 @@ export async function middleware(request: NextRequest) {
       })
       return response
     }
-    
-    console.log('[MIDDLEWARE] 세션 정보:', { userId: session.userId, role: session.role, username: session.username })
 
     // Admin 권한이 필요한 경로 확인 (GET 요청은 제외)
     const isAdminPath = adminPaths.some(path => pathname.startsWith(path))

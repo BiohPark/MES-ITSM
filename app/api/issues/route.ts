@@ -37,10 +37,6 @@ export async function GET(request: NextRequest) {
     }
     return response
   } catch (error: any) {
-    console.error('Error processing GET request:', error)
-    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace')
-    console.error('Error code:', error.code)
-    console.error('Error message:', error.message)
     
     const isConnectionError = 
       error.code === 'ECONNREFUSED' ||
@@ -122,23 +118,18 @@ export async function POST(request: NextRequest) {
                 email: undefined,
                   role: 'Deviation 매니저',
               })
-                console.log('Deviation 매니저 사용자 생성 완료')
                 deviationManager = { id: userId, name: 'Deviation 매니저', role: 'Deviation 매니저' }
             } catch (error) {
-                console.error('Deviation 매니저 사용자 생성 실패:', error)
               // 사용자 생성 실패해도 계속 진행
             }
           }
             
             // GMP Record의 담당자는 항상 Deviation 매니저로 설정
             const ownerName = deviationManager?.name || 'Deviation 매니저'
-            console.log('Owner:', ownerName)
           
           // GMP Record 생성
           const gmpRecordId = await getNextGmpRecordId()
-            console.log('GMP Record ID:', gmpRecordId)
           const deviationNumber = await getNextGmpRecordNumberForKind('Deviation')
-            console.log('Deviation Number:', deviationNumber)
           
           const gmpRecord: ProjectChild = {
             id: gmpRecordId,
@@ -153,19 +144,11 @@ export async function POST(request: NextRequest) {
             number: deviationNumber,
           }
           
-            console.log('GMP Record 생성 시도:', gmpRecord)
           await addGmpRecord(null, gmpRecord) // 프로젝트는 N/A (null)
-            console.log('GMP Record 생성 완료')
-          } else {
-            console.log('기존 GMP Record 존재:', existingRecord.id)
           }
         } catch (error) {
-          console.error('GMP Record 자동 생성 실패:', error)
-          console.error('에러 상세:', error instanceof Error ? error.stack : error)
           // GMP Record 생성 실패해도 이슈 저장은 성공한 것으로 처리
         }
-      } else {
-        console.log('Deviation 체크되지 않음')
       }
       
       const issues = await getAllIssues()
@@ -213,7 +196,6 @@ export async function POST(request: NextRequest) {
                 })
                 deviationManager = { id: userId, name: 'Deviation 매니저', role: 'Deviation 매니저' }
               } catch (error) {
-                console.error('Deviation 매니저 사용자 생성 실패:', error)
               }
             }
             
@@ -239,7 +221,6 @@ export async function POST(request: NextRequest) {
             await addGmpRecord(null, gmpRecord)
           }
         } catch (error) {
-          console.error('GMP Record 동기화 실패:', error)
           // GMP Record 동기화 실패해도 이슈 업데이트는 성공한 것으로 처리
         }
       }
@@ -258,7 +239,6 @@ export async function POST(request: NextRequest) {
       { status: 400 }
     )
   } catch (error) {
-    console.error('Error processing POST request:', error)
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     return NextResponse.json(
       { error: `Failed to process request: ${errorMessage}` },

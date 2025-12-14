@@ -5,6 +5,7 @@ import type { ChangeEvent, FormEvent } from 'react'
 import type { Project, ProjectChild } from '@/types/project'
 import { CommentsSection } from '../common/CommentsSection'
 import { DevelopmentPhaseStatusActions } from './DevelopmentPhaseStatusActions'
+import { AttachmentSection } from '../attachments/AttachmentSection'
 
 export function TaskEditModal({
   task,
@@ -937,11 +938,29 @@ export function TaskEditModal({
           )}
 
           {mode === 'edit' && currentUser && (
-            <CommentsSection
-              entityType={isGmpRecord ? 'gmp_record' : 'task'}
-              entityId={task.id}
-              currentUser={currentUser}
-            />
+            <>
+              <AttachmentSection
+                recordId={task.id}
+                recordType={isGmpRecord ? 'gmp_record' : 'task'}
+                currentUser={
+                  userId && userRole
+                    ? {
+                        id: userId,
+                        name: currentUser.name,
+                        role: userRole,
+                      }
+                    : undefined
+                }
+                onUploadComplete={() => {
+                  // 업로드 완료 후 필요한 경우 추가 작업 수행
+                }}
+              />
+              <CommentsSection
+                entityType={isGmpRecord ? 'gmp_record' : 'task'}
+                entityId={task.id}
+                currentUser={currentUser}
+              />
+            </>
           )}
         </form>
       </div>

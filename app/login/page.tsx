@@ -39,8 +39,6 @@ function LoginForm() {
     setShowErrorPopup(false)
     setLoading(true)
 
-    console.log('로그인 시도:', { username, from })
-
     try {
       const response = await fetch('/api/auth', {
         method: 'POST',
@@ -55,14 +53,10 @@ function LoginForm() {
         }),
       })
 
-      console.log('로그인 응답 상태:', response.status, response.ok)
-
       const data = await response.json()
-      console.log('로그인 응답 데이터:', data)
 
       if (!response.ok) {
         const errorMessage = data.error || '로그인에 실패했습니다.'
-        console.error('로그인 실패:', errorMessage)
         setError(errorMessage)
         setShowErrorPopup(true)
         setLoading(false)
@@ -70,8 +64,6 @@ function LoginForm() {
       }
 
       // 로그인 성공
-      console.log('로그인 성공, 리다이렉트 예정:', from)
-      
       // 입력값 초기화
       setUsername('')
       setPassword('')
@@ -80,11 +72,9 @@ function LoginForm() {
       // 쿠키가 설정되도록 약간의 지연 후 전체 페이지 리로드
       // window.location.replace를 사용하여 히스토리에 남기지 않음
       setTimeout(() => {
-        console.log('리다이렉트 실행:', from || '/')
         window.location.replace(from || '/')
       }, 100)
     } catch (error) {
-      console.error('Login error:', error)
       const errorMessage = '로그인 중 오류가 발생했습니다.'
       setError(errorMessage)
       setShowErrorPopup(true)
