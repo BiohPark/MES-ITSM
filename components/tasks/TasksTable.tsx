@@ -48,30 +48,42 @@ export function TasksTable({
   const [isCompletedTasksOpen, setIsCompletedTasksOpen] = useState(true)
   const [isDroppedTasksOpen, setIsDroppedTasksOpen] = useState(true)
 
-  const fetchOrphanTasks = useCallback(async () => {
+  const fetchOrphanTasks = useCallback(async (signal?: AbortSignal) => {
     try {
       setOrphanLoading(true)
       const apiEndpoint = isGmpRecords 
         ? '/api/gmp-records?type=orphan-records'
         : '/api/projects?type=orphan-tasks'
-      const response = await fetch(apiEndpoint)
+      const response = await fetch(apiEndpoint, {
+        signal,
+      })
+      if (signal?.aborted) return
       if (response.ok) {
         const tasks = await response.json()
+        if (signal?.aborted) return
         setOrphanTasks(tasks || [])
       }
     } catch (error) {
+      if (signal?.aborted) return
       if (process.env.NODE_ENV === 'development') {
         console.error('Error fetching orphan tasks:', error)
       }
       setOrphanTasks([])
     } finally {
-      setOrphanLoading(false)
+      if (!signal?.aborted) {
+        setOrphanLoading(false)
+      }
     }
   }, [isGmpRecords])
 
   useEffect(() => {
-    if (!loading) {
-      fetchOrphanTasks()
+    if (loading) return
+    
+    const abortController = new AbortController()
+    fetchOrphanTasks(abortController.signal)
+
+    return () => {
+      abortController.abort()
     }
   }, [loading, fetchOrphanTasks])
 
@@ -553,7 +565,7 @@ export function TasksTable({
           <button
             onClick={async () => {
               await onRefresh()
-              await fetchOrphanTasks()
+              await fetchOrphanTasks(undefined)
             }}
             className="refresh-button"
           >

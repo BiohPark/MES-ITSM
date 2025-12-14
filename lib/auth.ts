@@ -35,9 +35,25 @@ export async function verifySession(token: string): Promise<SessionPayload | nul
     const { payload } = await jwtVerify(token, encodedKey, {
       algorithms: ['HS256'],
     })
-    return payload as unknown as SessionPayload
+    const session = payload as unknown as SessionPayload
+    
+    // 세션 정보 검증
+    if (!session.userId || !session.role) {
+      console.error('JWT 검증 실패: 필수 필드 누락', { userId: session.userId, role: session.role })
+      return null
+    }
+    
+    // 개발 모드에서만 로깅
+    if (process.env.NODE_ENV === 'development') {
+      console.log('JWT 검증 성공:', { userId: session.userId, role: session.role, username: session.username })
+    }
+    
+    return session
   } catch (error) {
     console.error('JWT 검증 실패:', error)
+    if (error instanceof Error) {
+      console.error('JWT 검증 에러 상세:', error.message, error.stack)
+    }
     return null
   }
 }

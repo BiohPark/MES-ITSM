@@ -66,6 +66,26 @@ export function IssueEditModal({
   const [users, setUsers] = useState<Array<{ id: string; name: string }>>([])
 
   useEffect(() => {
+    const abortController = new AbortController()
+    let isMounted = true
+
+    const fetchUsers = async () => {
+      try {
+        const response = await fetch('/api/users', {
+          signal: abortController.signal,
+        })
+        if (abortController.signal.aborted || !isMounted) return
+        if (response.ok) {
+          const data = await response.json()
+          if (abortController.signal.aborted || !isMounted) return
+          setUsers(data.users || [])
+        }
+      } catch (error) {
+        if (abortController.signal.aborted) return
+        console.error('Error fetching users:', error)
+      }
+    }
+
     fetchUsers()
     const issueWithFields = { ...issue } as any
     if (!issueWithFields.description) issueWithFields.description = ''
@@ -73,19 +93,12 @@ export function IssueEditModal({
     if (!issueWithFields.occurred_date) issueWithFields.occurred_date = new Date().toISOString().slice(0, 10)
     if (!issueWithFields.is_deviation) issueWithFields.is_deviation = false
     setFormData(issueWithFields as Issue)
-  }, [issue])
 
-  const fetchUsers = async () => {
-    try {
-      const response = await fetch('/api/users')
-      if (response.ok) {
-        const data = await response.json()
-        setUsers(data.users || [])
-      }
-    } catch (error) {
-      console.error('Error fetching users:', error)
+    return () => {
+      isMounted = false
+      abortController.abort()
     }
-  }
+  }, [issue])
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()

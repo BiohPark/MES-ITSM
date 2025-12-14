@@ -25,6 +25,12 @@ const toNumber = (value: unknown, fallback: number) => {
 
 export async function GET(request: NextRequest) {
   try {
+    // middleware에서 이미 세션 확인 완료, 헤더에서 정보 가져오기
+    // 헤더 값이 URL 인코딩되어 있으므로 디코딩
+    const encodedRole = request.headers.get('x-user-role') || ''
+    const userRole = encodedRole ? decodeURIComponent(encodedRole) : ''
+    const userId = request.headers.get('x-user-id') || ''
+
     const { searchParams } = new URL(request.url)
     const type = searchParams.get('type')
 
@@ -48,11 +54,30 @@ export async function GET(request: NextRequest) {
       response.headers.set('Cache-Control', 'no-store')
     }
     return response
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error processing GET request:', error)
+    
+    const isConnectionError = 
+      error.code === 'ECONNREFUSED' ||
+      error.code === 'ETIMEDOUT' ||
+      error.code === 'PROTOCOL_CONNECTION_LOST' ||
+      error.code === 'ER_ACCESS_DENIED_ERROR' ||
+      error.message?.includes('connection')
+    
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    
+    if (isConnectionError) {
+      return NextResponse.json(
+        { 
+          error: '데이터베이스 연결에 실패했습니다. 데이터베이스 서버가 실행 중인지 확인해주세요.',
+          code: 'DB_CONNECTION_ERROR'
+        },
+        { status: 503 }
+      )
+    }
+    
     return NextResponse.json(
-      { error: `Failed to fetch GMP records: ${errorMessage}` },
+      { error: `GMP Record 조회 실패: ${errorMessage}` },
       { status: 500 }
     )
   }
@@ -60,6 +85,12 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // middleware에서 이미 세션 확인 완료, 헤더에서 정보 가져오기
+    // 헤더 값이 URL 인코딩되어 있으므로 디코딩
+    const encodedRole = request.headers.get('x-user-role') || ''
+    const userRole = encodedRole ? decodeURIComponent(encodedRole) : ''
+    const userId = request.headers.get('x-user-id') || ''
+
     const body = await request.json()
 
     if (body.action === 'add') {

@@ -16,16 +16,88 @@ const dbConfig = {
   queueLimit: 0,
   enableKeepAlive: true,
   keepAliveInitialDelay: 0,
+  connectTimeout: 10000, // 10초 타임아웃
+  acquireTimeout: 10000, // 연결 획득 타임아웃
+  timeout: 10000, // 쿼리 타임아웃
+  reconnect: true,
 }
 
 // 연결 풀 생성
 let pool: mysql.Pool | null = null
 
+// 연결 풀 재생성 함수
+function recreatePool(): mysql.Pool {
+  if (pool) {
+    try {
+      pool.end()
+    } catch (error) {
+      console.warn('Error closing old pool:', error)
+    }
+  }
+  pool = mysql.createPool(dbConfig)
+  
+  // 연결 오류 핸들러
+  pool.on('error', (err: any) => {
+    console.error('Database pool error:', err)
+    if (err.code === 'PROTOCOL_CONNECTION_LOST' || err.code === 'ECONNRESET') {
+      console.log('Attempting to recreate pool...')
+      pool = null
+    }
+  })
+  
+  return pool
+}
+
 export function getPool(): mysql.Pool {
   if (!pool) {
-    pool = mysql.createPool(dbConfig)
+    pool = recreatePool()
   }
+  
+  // 연결 상태 확인 및 재연결
+  try {
+    // 풀 상태 확인 (비동기이므로 실제 연결은 쿼리 시 확인)
+    if (pool && (pool as any).config) {
+      return pool
+    }
+  } catch (error) {
+    console.warn('Pool check failed, recreating:', error)
+    pool = recreatePool()
+  }
+  
   return pool
+}
+
+// 연결 테스트 함수
+export async function testConnection(maxRetries: number = 1): Promise<boolean> {
+  console.log('[DB] testConnection 시작, maxRetries:', maxRetries)
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`[DB] 연결 테스트 시도 ${attempt + 1}/${maxRetries + 1}`)
+      const currentPool = pool || getPool()
+      console.log('[DB] 연결 풀 획득 완료')
+      const connection = await currentPool.getConnection()
+      console.log('[DB] 연결 획득 완료, ping 시작')
+      await connection.ping()
+      console.log('[DB] ping 성공')
+      connection.release()
+      console.log('[DB] 연결 해제 완료')
+      return true
+    } catch (error: any) {
+      console.error(`[DB] 연결 테스트 실패 (시도 ${attempt + 1}/${maxRetries + 1}):`, error)
+      console.error('[DB] 에러 코드:', error.code)
+      console.error('[DB] 에러 메시지:', error.message)
+      if (attempt < maxRetries) {
+        console.warn(`[DB] 재시도 중...`)
+        // 연결 풀 재생성 시도
+        pool = null
+        await new Promise(resolve => setTimeout(resolve, 500)) // 500ms 대기
+        continue
+      }
+      console.error('[DB] 연결 테스트 최종 실패')
+      return false
+    }
+  }
+  return false
 }
 
 // 데이터베이스 초기화 (테이블 생성)
@@ -150,11 +222,26 @@ export async function initializeDatabase(): Promise<void> {
 
 // 프로젝트 조회 (최적화: N+1 문제 해결)
 export async function getProjects(): Promise<Project[]> {
-  try {
-    const pool = getPool()
-    const [projects] = await pool.query<any[]>(
-      'SELECT * FROM projects ORDER BY created_at DESC'
-    )
+  console.log('[DB] getProjects 시작')
+  let retries = 2
+  while (retries > 0) {
+    try {
+      console.log(`[DB] getProjects 시도 ${3 - retries}/3`)
+      // 연결 테스트
+      console.log('[DB] 연결 테스트 시작')
+      const isConnected = await testConnection()
+      console.log('[DB] 연결 테스트 결과:', isConnected)
+      if (!isConnected) {
+        throw new Error('Database connection failed')
+      }
+      
+      console.log('[DB] 연결 풀 가져오기')
+      const pool = getPool()
+      console.log('[DB] 프로젝트 쿼리 실행')
+      const [projects] = await pool.query<any[]>(
+        'SELECT * FROM projects ORDER BY created_at DESC'
+      )
+      console.log('[DB] 프로젝트 쿼리 완료, 개수:', projects.length)
 
     if (projects.length === 0) {
       return []
@@ -308,47 +395,76 @@ export async function getProjects(): Promise<Project[]> {
       })
     }
 
-    return projectsWithChildren
-  } catch (error) {
-    if (process.env.NODE_ENV === 'development') {
-      console.error('Error in getProjects:', error)
+      console.log('[DB] getProjects 성공, 반환할 프로젝트 수:', projectsWithChildren.length)
+      return projectsWithChildren
+    } catch (error: any) {
+      retries--
+      console.error(`[DB] getProjects 에러 (시도 ${3 - retries}/3):`, error)
+      console.error('[DB] 에러 코드:', error.code)
+      console.error('[DB] 에러 메시지:', error.message)
+      console.error('[DB] 에러 스택:', error instanceof Error ? error.stack : 'No stack trace')
+      console.error('[DB] 에러 전체:', JSON.stringify(error, Object.getOwnPropertyNames(error)))
+      
+      if (retries === 0) {
+        // 마지막 시도 실패 시 연결 풀 재생성
+        pool = null
+        console.error('Error in getProjects (final attempt):', error)
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+        const errorCode = error.code || 'UNKNOWN_ERROR'
+        throw new Error(`데이터베이스 조회 실패 [${errorCode}]: ${errorMessage}`)
+      }
+      
+      // 재시도 전 잠시 대기
+      await new Promise(resolve => setTimeout(resolve, 500))
+      console.warn(`Retrying getProjects... (${retries} attempts remaining)`)
     }
-    throw new Error(`데이터베이스 조회 실패: ${error instanceof Error ? error.message : 'Unknown error'}`)
   }
+  
+  // 이 코드는 실행되지 않아야 하지만 타입 체크를 위해 필요
+  throw new Error('Unexpected error in getProjects')
 }
 
 // 프로젝트가 없는 일감 조회 (N/A 일감, Dropped 포함 - 일감 목록에서 표시하기 위해)
 export async function getOrphanTasks(): Promise<ProjectChild[]> {
-  const pool = getPool()
-  const [tasks] = await pool.query<any[]>(
-    "SELECT * FROM project_children WHERE project_id IS NULL ORDER BY created_at ASC"
-  )
-
-  // VAL Pkg 링크 조회
-  const taskIds = tasks.map(t => t.id)
-  let valPackageLinks = new Map<string, any[]>()
-  if (taskIds.length > 0) {
-    const placeholders = taskIds.map(() => '?').join(',')
-    const [links] = await pool.query<any[]>(
-      `SELECT vptl.task_id, vp.id as val_package_id, vp.name as val_package_name
-       FROM val_package_task_links vptl
-       INNER JOIN val_packages vp ON vptl.val_package_id = vp.id
-       WHERE vptl.task_id IN (${placeholders})`,
-      taskIds
-    )
-    links.forEach((link) => {
-      if (!valPackageLinks.has(link.task_id)) {
-        valPackageLinks.set(link.task_id, [])
+  let retries = 2
+  while (retries > 0) {
+    try {
+      // 연결 테스트
+      const isConnected = await testConnection()
+      if (!isConnected) {
+        throw new Error('Database connection failed')
       }
-      valPackageLinks.get(link.task_id)!.push({
-        id: link.val_package_id,
-        name: link.val_package_name,
-      })
-    })
-  }
+      
+      const pool = getPool()
+      const [tasks] = await pool.query<any[]>(
+        "SELECT * FROM project_children WHERE project_id IS NULL ORDER BY created_at ASC"
+      )
 
-  const today = new Date().toISOString().slice(0, 10)
-  return tasks.map((task) => {
+      // VAL Pkg 링크 조회
+      const taskIds = tasks.map(t => t.id)
+      let valPackageLinks = new Map<string, any[]>()
+      if (taskIds.length > 0) {
+        const placeholders = taskIds.map(() => '?').join(',')
+        const [links] = await pool.query<any[]>(
+          `SELECT vptl.task_id, vp.id as val_package_id, vp.name as val_package_name
+           FROM val_package_task_links vptl
+           INNER JOIN val_packages vp ON vptl.val_package_id = vp.id
+           WHERE vptl.task_id IN (${placeholders})`,
+          taskIds
+        )
+        links.forEach((link) => {
+          if (!valPackageLinks.has(link.task_id)) {
+            valPackageLinks.set(link.task_id, [])
+          }
+          valPackageLinks.get(link.task_id)!.push({
+            id: link.val_package_id,
+            name: link.val_package_name,
+          })
+        })
+      }
+
+      const today = new Date().toISOString().slice(0, 10)
+      return tasks.map((task) => {
     let phases = null
     if (task.phases) {
       try {
@@ -371,6 +487,24 @@ export async function getOrphanTasks(): Promise<ProjectChild[]> {
       linked_val_packages: valPackageLinks.get(task.id) || [],
     }
   })
+    } catch (error: any) {
+      retries--
+      if (retries === 0) {
+        pool = null
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Error in getOrphanTasks (final attempt):', error)
+        }
+        throw new Error(`Orphan Task 조회 실패: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      }
+      
+      await new Promise(resolve => setTimeout(resolve, 500))
+      if (process.env.NODE_ENV === 'development') {
+        console.warn(`Retrying getOrphanTasks... (${retries} attempts remaining)`)
+      }
+    }
+  }
+  
+  throw new Error('Unexpected error in getOrphanTasks')
 }
 
 // 프로젝트 추가
@@ -747,91 +881,73 @@ export async function getNextTaskId(): Promise<string> {
 
 // 모든 GMP Record 조회 (프로젝트 포함 및 프로젝트 없는 것 포함)
 export async function getAllGmpRecords(): Promise<Array<ProjectChild & { projectId?: string | null; projectName?: string; kind_number?: string }>> {
-  const pool = getPool()
-  const [records] = await pool.query<any[]>(
-    `SELECT g.*, p.name as project_name 
-     FROM gmp_records g 
-     LEFT JOIN projects p ON g.project_id = p.id 
-     ORDER BY g.created_at DESC`
-  )
+  let retries = 2
+  while (retries > 0) {
+    try {
+      // 연결 테스트
+      const isConnected = await testConnection()
+      if (!isConnected) {
+        throw new Error('Database connection failed')
+      }
+      
+      const pool = getPool()
+      const [records] = await pool.query<any[]>(
+        `SELECT g.*, p.name as project_name 
+         FROM gmp_records g 
+         LEFT JOIN projects p ON g.project_id = p.id 
+         ORDER BY g.created_at DESC`
+      )
 
-  const today = new Date().toISOString().slice(0, 10)
-  return records.map((record) => {
-    const kind = record.kind || 'CC'
-    const number = record.number || 0
-    const kindNumber = `${kind}-${String(number).padStart(5, '0')}`
-    let phases = null
-    if (record.phases) {
-      try {
-        phases = typeof record.phases === 'string' ? JSON.parse(record.phases) : record.phases
-      } catch (e) {
-        phases = null
+      const today = new Date().toISOString().slice(0, 10)
+      return records.map((record) => {
+        const kind = record.kind || 'CC'
+        const number = record.number || 0
+        const kindNumber = `${kind}-${String(number).padStart(5, '0')}`
+        let phases = null
+        if (record.phases) {
+          try {
+            phases = typeof record.phases === 'string' ? JSON.parse(record.phases) : record.phases
+          } catch (e) {
+            phases = null
+          }
+        }
+        
+        return {
+          id: record.id,
+          title: record.title,
+          owner: record.owner,
+          status: record.status,
+          progress: record.progress || 0,
+          start: record.start ? (typeof record.start === 'string' ? record.start : new Date(record.start).toISOString().slice(0, 10)) : today,
+          due: record.due ? (typeof record.due === 'string' ? record.due : new Date(record.due).toISOString().slice(0, 10)) : '',
+          description: record.description || '',
+          kind: kind,
+          number: number,
+          kind_number: record.kind_number || kindNumber,
+          projectId: record.project_id || null,
+          projectName: record.project_name || 'N/A',
+          phases: phases,
+          linked_task_id: record.linked_task_id || null,
+        }
+      })
+    } catch (error: any) {
+      retries--
+      if (retries === 0) {
+        pool = null
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Error in getAllGmpRecords (final attempt):', error)
+        }
+        throw new Error(`GMP Record 조회 실패: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      }
+      
+      await new Promise(resolve => setTimeout(resolve, 500))
+      if (process.env.NODE_ENV === 'development') {
+        console.warn(`Retrying getAllGmpRecords... (${retries} attempts remaining)`)
       }
     }
-    
-    return {
-      id: record.id,
-      title: record.title,
-      owner: record.owner,
-      status: record.status,
-      progress: record.progress || 0,
-      start: record.start ? (typeof record.start === 'string' ? record.start : new Date(record.start).toISOString().slice(0, 10)) : today,
-      due: record.due ? (typeof record.due === 'string' ? record.due : new Date(record.due).toISOString().slice(0, 10)) : '',
-      description: record.description || '',
-      kind: kind,
-      number: number,
-      kind_number: record.kind_number || kindNumber,
-      projectId: record.project_id || null,
-      projectName: record.project_name || 'N/A',
-      phases: phases,
-      linked_task_id: record.linked_task_id || null,
-    }
-  })
-}
-
-// 프로젝트가 없는 GMP Record 조회 (N/A GMP Record)
-export async function getOrphanGmpRecords(): Promise<Array<ProjectChild & { projectId?: string | null; projectName?: string; kind_number?: string }>> {
-  const pool = getPool()
-  const [records] = await pool.query<any[]>(
-    `SELECT g.*, p.name as project_name 
-     FROM gmp_records g 
-     LEFT JOIN projects p ON g.project_id = p.id 
-     WHERE g.project_id IS NULL 
-     ORDER BY g.created_at ASC`
-  )
-
-  const today = new Date().toISOString().slice(0, 10)
-  return records.map((record) => {
-    const kind = record.kind || 'CC'
-    const number = record.number || 0
-    const kindNumber = `${kind}-${String(number).padStart(5, '0')}`
-    let phases = null
-    if (record.phases) {
-      try {
-        phases = typeof record.phases === 'string' ? JSON.parse(record.phases) : record.phases
-      } catch (e) {
-        phases = null
-      }
-    }
-    
-    return {
-      id: record.id,
-      title: record.title,
-      owner: record.owner,
-      status: record.status,
-      progress: record.progress || 0,
-      start: record.start ? (typeof record.start === 'string' ? record.start : new Date(record.start).toISOString().slice(0, 10)) : today,
-      due: record.due ? (typeof record.due === 'string' ? record.due : new Date(record.due).toISOString().slice(0, 10)) : '',
-      description: record.description || '',
-      kind: kind,
-      number: number,
-      kind_number: record.kind_number || kindNumber,
-      projectId: record.project_id || null,
-      projectName: record.project_name || 'N/A',
-      phases: phases,
-      linked_task_id: record.linked_task_id || null,
-    }
-  })
+  }
+  
+  throw new Error('Unexpected error in getAllGmpRecords')
 }
 
 // GMP Record 추가 (projectId가 null일 수 있음)
@@ -1228,30 +1344,57 @@ export async function getNextGmpRecordNumberForKind(kind: string): Promise<numbe
 
 // 모든 이슈 조회
 export async function getAllIssues(): Promise<Issue[]> {
-  const pool = getPool()
-  const [issues] = await pool.query<any[]>(
-    'SELECT * FROM issues ORDER BY occurred_date DESC, created_at DESC'
-  )
+  let retries = 2
+  while (retries > 0) {
+    try {
+      // 연결 테스트
+      const isConnected = await testConnection()
+      if (!isConnected) {
+        throw new Error('Database connection failed')
+      }
+      
+      const pool = getPool()
+      const [issues] = await pool.query<any[]>(
+        'SELECT * FROM issues ORDER BY occurred_date DESC, created_at DESC'
+      )
 
-  return issues.map((issue) => ({
-    id: issue.id,
-    title: issue.title,
-    description: issue.description || '',
-    status: issue.status,
-    owner: issue.owner,
-    occurred_date: issue.occurred_date ? (typeof issue.occurred_date === 'string' ? issue.occurred_date : new Date(issue.occurred_date).toISOString().slice(0, 10)) : '',
-    due_date: issue.due_date ? (typeof issue.due_date === 'string' ? issue.due_date : new Date(issue.due_date).toISOString().slice(0, 10)) : '',
-    resolved_date: issue.resolved_date ? (typeof issue.resolved_date === 'string' ? issue.resolved_date : new Date(issue.resolved_date).toISOString().slice(0, 10)) : '',
-    sw_version: issue.sw_version || '',
-    resolved_sw_version: issue.resolved_sw_version || '',
-    cause: issue.cause || '',
-    cause_category: issue.cause_category || '',
-    module: issue.module || '',
-    is_deviation: issue.is_deviation ? true : false,
-    related_issue_id: issue.related_issue_id || '',
-    created_at: issue.created_at ? (typeof issue.created_at === 'string' ? issue.created_at : new Date(issue.created_at).toISOString()) : '',
-    updated_at: issue.updated_at ? (typeof issue.updated_at === 'string' ? issue.updated_at : new Date(issue.updated_at).toISOString()) : '',
-  }))
+      return issues.map((issue) => ({
+        id: issue.id,
+        title: issue.title,
+        description: issue.description || '',
+        status: issue.status,
+        owner: issue.owner,
+        occurred_date: issue.occurred_date ? (typeof issue.occurred_date === 'string' ? issue.occurred_date : new Date(issue.occurred_date).toISOString().slice(0, 10)) : '',
+        due_date: issue.due_date ? (typeof issue.due_date === 'string' ? issue.due_date : new Date(issue.due_date).toISOString().slice(0, 10)) : '',
+        resolved_date: issue.resolved_date ? (typeof issue.resolved_date === 'string' ? issue.resolved_date : new Date(issue.resolved_date).toISOString().slice(0, 10)) : '',
+        sw_version: issue.sw_version || '',
+        resolved_sw_version: issue.resolved_sw_version || '',
+        cause: issue.cause || '',
+        cause_category: issue.cause_category || '',
+        module: issue.module || '',
+        is_deviation: issue.is_deviation ? true : false,
+        related_issue_id: issue.related_issue_id || '',
+        created_at: issue.created_at ? (typeof issue.created_at === 'string' ? issue.created_at : new Date(issue.created_at).toISOString()) : '',
+        updated_at: issue.updated_at ? (typeof issue.updated_at === 'string' ? issue.updated_at : new Date(issue.updated_at).toISOString()) : '',
+      }))
+    } catch (error: any) {
+      retries--
+      if (retries === 0) {
+        pool = null
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Error in getAllIssues (final attempt):', error)
+        }
+        throw new Error(`이슈 조회 실패: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      }
+      
+      await new Promise(resolve => setTimeout(resolve, 500))
+      if (process.env.NODE_ENV === 'development') {
+        console.warn(`Retrying getAllIssues... (${retries} attempts remaining)`)
+      }
+    }
+  }
+  
+  throw new Error('Unexpected error in getAllIssues')
 }
 
 // 이슈 추가
@@ -1550,11 +1693,19 @@ export async function getNextCommentId(): Promise<string> {
 
 // 모든 VAL Pkg 조회 (링크된 일감 포함)
 export async function getValPackages(): Promise<Project[]> {
-  try {
-    const pool = getPool()
-    const [packages] = await pool.query<any[]>(
-      'SELECT * FROM val_packages ORDER BY created_at DESC'
-    )
+  let retries = 2
+  while (retries > 0) {
+    try {
+      // 연결 테스트
+      const isConnected = await testConnection()
+      if (!isConnected) {
+        throw new Error('Database connection failed')
+      }
+      
+      const pool = getPool()
+      const [packages] = await pool.query<any[]>(
+        'SELECT * FROM val_packages ORDER BY created_at DESC'
+      )
 
     if (packages.length === 0) {
       return []
@@ -1622,12 +1773,24 @@ export async function getValPackages(): Promise<Project[]> {
         children: childrenList, // 링크된 일감
       }
     })
-  } catch (error) {
-    if (process.env.NODE_ENV === 'development') {
-      console.error('Error in getValPackages:', error)
+    } catch (error: any) {
+      retries--
+      if (retries === 0) {
+        pool = null
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Error in getValPackages (final attempt):', error)
+        }
+        throw new Error(`VAL Pkg 조회 실패: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      }
+      
+      await new Promise(resolve => setTimeout(resolve, 500))
+      if (process.env.NODE_ENV === 'development') {
+        console.warn(`Retrying getValPackages... (${retries} attempts remaining)`)
+      }
     }
-    throw new Error(`데이터베이스 조회 실패: ${error instanceof Error ? error.message : 'Unknown error'}`)
   }
+  
+  throw new Error('Unexpected error in getValPackages')
 }
 
 // VAL Pkg 추가

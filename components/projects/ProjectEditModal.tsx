@@ -23,25 +23,38 @@ export function ProjectEditModal({
   const [users, setUsers] = useState<Array<{ id: string; name: string }>>([])
 
   useEffect(() => {
+    const abortController = new AbortController()
+    let isMounted = true
+
+    const fetchUsers = async () => {
+      try {
+        const response = await fetch('/api/users', {
+          signal: abortController.signal,
+        })
+        if (abortController.signal.aborted || !isMounted) return
+        if (response.ok) {
+          const data = await response.json()
+          if (abortController.signal.aborted || !isMounted) return
+          setUsers(data.users || [])
+        }
+      } catch (error) {
+        if (abortController.signal.aborted) return
+        console.error('Error fetching users:', error)
+      }
+    }
+
     fetchUsers()
     const projectWithFields = { ...project } as any
     if (!projectWithFields.description) projectWithFields.description = ''
     if (!projectWithFields.start) projectWithFields.start = new Date().toISOString().slice(0, 10)
     if (!projectWithFields.srb_ver) projectWithFields.srb_ver = ''
     setFormData(projectWithFields)
-  }, [project])
 
-  const fetchUsers = async () => {
-    try {
-      const response = await fetch('/api/users')
-      if (response.ok) {
-        const data = await response.json()
-        setUsers(data.users || [])
-      }
-    } catch (error) {
-      console.error('Error fetching users:', error)
+    return () => {
+      isMounted = false
+      abortController.abort()
     }
-  }
+  }, [project])
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()

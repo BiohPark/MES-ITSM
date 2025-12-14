@@ -19,6 +19,8 @@ import { ChildItemModal } from '@/components/tasks/ChildItemModal'
 import { PersonalTasksView } from '@/components/personal/PersonalTasksView'
 import { GanttChartView } from '@/components/gantt/GanttChartView'
 import { SearchView } from '@/components/search/SearchView'
+import { VocView } from '@/components/voc/VocView'
+import { BackupView } from '@/components/backup/BackupView'
 import { UserManagementModal } from '@/components/users/UserManagementModal'
 import { ContextMenu } from '@/components/common/ContextMenu'
 import { Placeholder } from '@/components/common/Placeholder'
@@ -81,18 +83,36 @@ export default function Home() {
   const [isLoadingSession, setIsLoadingSession] = useState(true)
 
   useEffect(() => {
-    checkSession()
-    fetchProjects()
-    fetchOrphanTasks()
-    fetchIssues()
+    let isMounted = true
+    const abortController = new AbortController()
+
+    const init = async () => {
+      if (!isMounted) return
+      await checkSession(abortController.signal)
+      if (!isMounted) return
+      await fetchProjects()
+      if (!isMounted) return
+      await fetchOrphanTasks()
+      if (!isMounted) return
+      await fetchIssues()
+    }
+
+    init()
+
+    return () => {
+      isMounted = false
+      abortController.abort()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const checkSession = async () => {
+  const checkSession = async (signal?: AbortSignal) => {
     try {
       const response = await fetch('/api/auth', {
         credentials: 'include',
+        signal,
       })
+      if (signal?.aborted) return
       const data = await response.json()
       if (data.authenticated && data.user) {
         setUser(data.user)
@@ -104,6 +124,7 @@ export default function Home() {
         }
       }
     } catch (error) {
+      if (signal?.aborted) return
       if (process.env.NODE_ENV === 'development') {
         console.error('Session check error:', error)
       }
@@ -111,7 +132,9 @@ export default function Home() {
       window.location.href = '/login'
       }
     } finally {
-      setIsLoadingSession(false)
+      if (!signal?.aborted) {
+        setIsLoadingSession(false)
+      }
     }
   }
 
@@ -132,50 +155,76 @@ export default function Home() {
     }
   }
 
-  const fetchProjects = useCallback(async () => {
+  const fetchProjects = useCallback(async (signal?: AbortSignal) => {
     try {
       setLoading(true)
       setError(null)
       
       const response = await fetch('/api/projects', {
         cache: 'no-store',
+        signal,
       })
+      
+      if (signal?.aborted) return
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || `HTTP ${response.status}: Failed to fetch projects`)
+        const errorMessage = errorData.error || `HTTP ${response.status}: Failed to fetch projects`
+        
+        // 데이터베이스 연결 오류인 경우 명확한 메시지
+        if (errorData.code === 'DB_CONNECTION_ERROR' || response.status === 503) {
+          throw new Error('데이터베이스 연결에 실패했습니다. 데이터베이스 서버가 실행 중인지 확인해주세요.')
+        }
+        
+        throw new Error(errorMessage)
       }
       const data = (await response.json()) as Project[]
+      if (signal?.aborted) return
+      
       setProjects(
         data.map((project) => ({
           ...project,
           children: project.children ?? [],
         }))
       )
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
-      setError(errorMessage)
+    } catch (err: any) {
+      if (signal?.aborted) return
+      
+      // 네트워크 오류 처리
+      if (err.name === 'TypeError' && err.message.includes('fetch')) {
+        setError('서버에 연결할 수 없습니다. 네트워크 연결을 확인해주세요.')
+      } else {
+        const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+        setError(errorMessage)
+      }
+      
       if (process.env.NODE_ENV === 'development') {
         console.error('Error fetching projects:', err)
       }
     } finally {
-      setLoading(false)
+      if (!signal?.aborted) {
+        setLoading(false)
+      }
     }
   }, [])
 
   // Orphan tasks 가져오기
-  const fetchOrphanTasks = useCallback(async () => {
+  const fetchOrphanTasks = useCallback(async (signal?: AbortSignal) => {
     try {
       const response = await fetch('/api/projects?type=orphan-tasks', {
         cache: 'no-store',
+        signal,
       })
+      if (signal?.aborted) return
       if (response.ok) {
         const data = await response.json()
+        if (signal?.aborted) return
         setOrphanTasks(data || [])
       } else {
         setOrphanTasks([])
       }
     } catch (error) {
+      if (signal?.aborted) return
       if (process.env.NODE_ENV === 'development') {
         console.error('Error fetching orphan tasks:', error)
       }
@@ -184,20 +233,32 @@ export default function Home() {
   }, [])
 
   // GMP Record 관련 함수들
-  const fetchGmpRecords = useCallback(async () => {
+  const fetchGmpRecords = useCallback(async (signal?: AbortSignal) => {
     try {
       setGmpRecordsLoading(true)
       setGmpRecordsError(null)
       
       const response = await fetch('/api/gmp-records', {
         cache: 'no-store',
+        signal,
       })
+      
+      if (signal?.aborted) return
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || `HTTP ${response.status}: Failed to fetch GMP records`)
+        const errorMessage = errorData.error || `HTTP ${response.status}: Failed to fetch GMP records`
+        
+        // 데이터베이스 연결 오류인 경우 명확한 메시지
+        if (errorData.code === 'DB_CONNECTION_ERROR' || response.status === 503) {
+          throw new Error('데이터베이스 연결에 실패했습니다. 데이터베이스 서버가 실행 중인지 확인해주세요.')
+        }
+        
+        throw new Error(errorMessage)
       }
       const data = (await response.json()) as any[]
+      if (signal?.aborted) return
+      
       // GMP Record 데이터를 ProjectChild 형식으로 변환 (프로젝트 정보 포함)
       const formattedRecords = data.map((record: any) => ({
         ...record,
@@ -209,84 +270,108 @@ export default function Home() {
       }))
       setGmpRecords(formattedRecords)
     } catch (err) {
+      if (signal?.aborted) return
       const errorMessage = err instanceof Error ? err.message : 'Unknown error'
       setGmpRecordsError(errorMessage)
       if (process.env.NODE_ENV === 'development') {
         console.error('Error fetching GMP records:', err)
       }
     } finally {
-      setGmpRecordsLoading(false)
+      if (!signal?.aborted) {
+        setGmpRecordsLoading(false)
+      }
     }
   }, [])
 
   // VAL Pkg 관련 함수들
-  const fetchValPackages = useCallback(async () => {
+  const fetchValPackages = useCallback(async (signal?: AbortSignal) => {
     try {
       setValPackagesLoading(true)
       setValPackagesError(null)
       
       const response = await fetch('/api/val-packages', {
         cache: 'no-store',
+        signal,
       })
+      
+      if (signal?.aborted) return
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
         throw new Error(errorData.error || `HTTP ${response.status}: Failed to fetch VAL Pkg`)
       }
       const data = (await response.json()) as Project[]
+      if (signal?.aborted) return
       setValPackages(data)
     } catch (err) {
+      if (signal?.aborted) return
       const errorMessage = err instanceof Error ? err.message : 'Unknown error'
       setValPackagesError(errorMessage)
       if (process.env.NODE_ENV === 'development') {
         console.error('Error fetching VAL Pkg:', err)
       }
     } finally {
-      setValPackagesLoading(false)
+      if (!signal?.aborted) {
+        setValPackagesLoading(false)
+      }
     }
   }, [])
 
   // 이슈 관리 관련 함수들
-  const fetchIssues = useCallback(async () => {
+  const fetchIssues = useCallback(async (signal?: AbortSignal) => {
     try {
       setIssuesLoading(true)
       setIssuesError(null)
-      const response = await fetch('/api/issues', { cache: 'no-store' })
+      const response = await fetch('/api/issues', { 
+        cache: 'no-store',
+        signal,
+      })
+      if (signal?.aborted) return
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
         throw new Error(errorData.error || `HTTP ${response.status}: Failed to fetch issues`)
       }
       const data = (await response.json()) as Issue[]
+      if (signal?.aborted) return
       setIssues(data)
     } catch (err) {
+      if (signal?.aborted) return
       const errorMessage = err instanceof Error ? err.message : 'Unknown error'
       setIssuesError(errorMessage)
       if (process.env.NODE_ENV === 'development') {
         console.error('Error fetching issues:', err)
       }
     } finally {
-      setIssuesLoading(false)
+      if (!signal?.aborted) {
+        setIssuesLoading(false)
+      }
     }
   }, [])
 
   useEffect(() => {
-    checkSession()
-    fetchProjects()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fetchProjects])
+    const abortController = new AbortController()
+    let isMounted = true
 
-  useEffect(() => {
-    // GMP Record 탭이 활성화될 때 데이터 로드
-    if (activeTab === 'gmp-record') {
-      fetchGmpRecords()
+    const loadTabData = async () => {
+      // GMP Record 탭이 활성화될 때 데이터 로드
+      if (activeTab === 'gmp-record') {
+        await fetchGmpRecords(abortController.signal)
+      }
+      // 이슈 관리 탭이 활성화될 때 데이터 로드
+      if (activeTab === 'issues' && isMounted) {
+        await fetchIssues(abortController.signal)
+      }
+      // VAL Pkg 탭이 활성화될 때 데이터 로드
+      if (activeTab === 'val-pkg' && isMounted) {
+        await fetchValPackages(abortController.signal)
+      }
     }
-    // 이슈 관리 탭이 활성화될 때 데이터 로드
-    if (activeTab === 'issues') {
-      fetchIssues()
-    }
-    // VAL Pkg 탭이 활성화될 때 데이터 로드
-    if (activeTab === 'val-pkg') {
-      fetchValPackages()
+
+    loadTabData()
+
+    return () => {
+      isMounted = false
+      abortController.abort()
     }
   }, [activeTab, fetchGmpRecords, fetchIssues, fetchValPackages])
 
@@ -887,16 +972,6 @@ export default function Home() {
     }
   }
 
-  const summary = useMemo(
-    () => ({
-      total: projects.length,
-      inProgress: projects.filter((p) => p.status?.toLowerCase() === 'in progress' || p.status === 'In Progress').length,
-      planning: projects.filter((p) => p.status === 'Planning').length,
-      blocked: projects.filter((p) => p.status === 'Issued').length,
-    }),
-    [projects]
-  )
-
   // 세션 로딩 중이면 표시하지 않음 (middleware에서 리다이렉트)
   if (isLoadingSession) {
     return (
@@ -924,26 +999,8 @@ export default function Home() {
       <header className="dashboard__header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flex: 1 }}>
           <div>
-            <h1 style={{ fontSize: '1.5rem', fontWeight: 600, margin: 0, color: '#111827' }}>ITSM</h1>
-            <p style={{ fontSize: '0.75rem', color: '#6b7280', margin: '0.25rem 0 0 0' }}>MES 그룹</p>
-          </div>
-          <div className="summary-cards">
-            <div className="summary-card">
-              <span>전체</span>
-              <strong>{summary.total}</strong>
-            </div>
-            <div className="summary-card">
-              <span>진행 중</span>
-              <strong>{summary.inProgress}</strong>
-            </div>
-            <div className="summary-card">
-              <span>계획</span>
-              <strong>{summary.planning}</strong>
-            </div>
-            <div className="summary-card">
-              <span>이슈</span>
-              <strong>{summary.blocked}</strong>
-            </div>
+            <h1 style={{ fontSize: '1.5rem', fontWeight: 600, margin: 0, color: '#111827' }}>ITSM (IT Service Management)</h1>
+            <p style={{ fontSize: '0.75rem', color: '#6b7280', margin: '0.25rem 0 0 0' }}>MES 팀</p>
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
@@ -1016,20 +1073,26 @@ export default function Home() {
       </header>
 
       <nav className="tabs">
-        {TABS.map((tab: { key: TabKey; label: string }) => (
-          <button
-            key={tab.key}
-            className={`tab ${activeTab === tab.key ? 'tab--active' : ''}`}
-            onClick={() => setActiveTab(tab.key)}
-            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
-          >
-            {tab.key === 'search' ? (
-              <SearchIcon size={16} color="currentColor" />
-            ) : (
-              tab.label
-            )}
-          </button>
-        ))}
+        {TABS.map((tab: { key: TabKey; label: string }) => {
+          // Admin만 백업 탭 보기
+          if (tab.key === 'backup' && (!user || user.role !== 'admin')) {
+            return null
+          }
+          return (
+            <button
+              key={tab.key}
+              className={`tab ${activeTab === tab.key ? 'tab--active' : ''}`}
+              onClick={() => setActiveTab(tab.key)}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+            >
+              {tab.key === 'search' ? (
+                <SearchIcon size={16} color="currentColor" />
+              ) : (
+                tab.label
+              )}
+            </button>
+          )
+        })}
       </nav>
 
       <section className="panel">
@@ -1404,6 +1467,16 @@ export default function Home() {
               setIsTaskEditing(true)
             }}
           />
+        ) : activeTab === 'voc' ? (
+          <VocView
+            currentUser={user ? { name: user.name, username: user.username, role: user.role } : undefined}
+          />
+        ) : activeTab === 'backup' ? (
+          user && user.role === 'admin' ? (
+            <BackupView />
+          ) : (
+            <Placeholder label="접근 권한이 없습니다." />
+          )
         ) : (
           <Placeholder label={TABS.find((t: { key: TabKey; label: string }) => t.key === activeTab)?.label ?? ''} />
         )}

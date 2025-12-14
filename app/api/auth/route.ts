@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      console.log('로그인 성공:', account.username)
+      console.log('로그인 성공:', account.username, 'Role:', account.role)
 
       // 세션 토큰 생성
       const token = await createSession({
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
         email: account.email,
       })
 
-      console.log('세션 토큰 생성 완료')
+      console.log('세션 토큰 생성 완료, Role:', account.role)
 
       // 응답 생성 및 쿠키 설정
       const response = NextResponse.json({

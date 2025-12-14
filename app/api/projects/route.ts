@@ -24,10 +24,21 @@ const toNumber = (value: unknown, fallback: number) => {
 }
 
 export async function GET(request: NextRequest) {
+  console.log('[PROJECTS API] GET 요청 시작')
   try {
+    // middleware에서 이미 세션 확인 완료, 헤더에서 정보 가져오기
+    // 헤더 값이 URL 인코딩되어 있으므로 디코딩
+    const encodedRole = request.headers.get('x-user-role') || ''
+    const userRole = encodedRole ? decodeURIComponent(encodedRole) : ''
+    const userId = request.headers.get('x-user-id') || ''
+    
+    console.log('[PROJECTS API] 요청 헤더:', { userRole, userId })
+    console.log('[PROJECTS API] 모든 헤더:', Object.fromEntries(request.headers.entries()))
+
     const { searchParams } = new URL(request.url)
     const type = searchParams.get('type')
     const taskId = searchParams.get('taskId')
+    console.log('[PROJECTS API] 쿼리 파라미터:', { type, taskId })
 
     if (type === 'project') {
       const nextId = await getNextProjectId()
@@ -52,7 +63,9 @@ export async function GET(request: NextRequest) {
     }
 
     // 기본: 프로젝트 목록 조회
+    console.log('[PROJECTS API] getProjects 호출 시작')
     const projects = await getProjects()
+    console.log('[PROJECTS API] getProjects 완료, 프로젝트 수:', projects.length)
     const response = NextResponse.json(projects)
     // 개발 모드에서는 캐싱 비활성화, 프로덕션에서는 짧은 캐시 시간 설정
     if (process.env.NODE_ENV === 'production') {
@@ -61,11 +74,44 @@ export async function GET(request: NextRequest) {
       response.headers.set('Cache-Control', 'no-store')
     }
     return response
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error processing GET request:', error)
+    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace')
+    console.error('Error code:', error.code)
+    console.error('Error message:', error.message)
+    
+    // 데이터베이스 연결 오류인지 확인
+    const isConnectionError = 
+      error.code === 'ECONNREFUSED' ||
+      error.code === 'ETIMEDOUT' ||
+      error.code === 'PROTOCOL_CONNECTION_LOST' ||
+      error.code === 'ER_ACCESS_DENIED_ERROR' ||
+      error.message?.includes('connection') ||
+      error.message?.includes('ECONNREFUSED') ||
+      error.message?.includes('ETIMEDOUT')
+    
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    const errorStack = error instanceof Error ? error.stack : undefined
+    
+    if (isConnectionError) {
+      return NextResponse.json(
+        { 
+          error: '데이터베이스 연결에 실패했습니다. 데이터베이스 서버가 실행 중인지 확인해주세요.',
+          code: 'DB_CONNECTION_ERROR',
+          details: process.env.NODE_ENV === 'development' ? errorMessage : undefined,
+          stack: process.env.NODE_ENV === 'development' ? errorStack : undefined
+        },
+        { status: 503 } // Service Unavailable
+      )
+    }
+    
     return NextResponse.json(
-      { error: `Failed to fetch projects: ${errorMessage}` },
+      { 
+        error: `프로젝트 조회 실패: ${errorMessage}`,
+        code: 'DB_QUERY_ERROR',
+        details: process.env.NODE_ENV === 'development' ? errorMessage : undefined,
+        stack: process.env.NODE_ENV === 'development' ? errorStack : undefined
+      },
       { status: 500 }
     )
   }
@@ -73,6 +119,12 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // middleware에서 이미 세션 확인 완료, 헤더에서 정보 가져오기
+    // 헤더 값이 URL 인코딩되어 있으므로 디코딩
+    const encodedRole = request.headers.get('x-user-role') || ''
+    const userRole = encodedRole ? decodeURIComponent(encodedRole) : ''
+    const userId = request.headers.get('x-user-id') || ''
+
     const body = await request.json()
 
     if (body.action === 'add') {
@@ -172,11 +224,38 @@ export async function POST(request: NextRequest) {
       { error: 'Invalid action' },
       { status: 400 }
     )
-  } catch (error) {
-    console.error('Error processing request:', error)
+  } catch (error: any) {
+    console.error('Error processing POST request:', error)
+    
+    // 데이터베이스 연결 오류인지 확인
+    const isConnectionError = 
+      error.code === 'ECONNREFUSED' ||
+      error.code === 'ETIMEDOUT' ||
+      error.code === 'PROTOCOL_CONNECTION_LOST' ||
+      error.code === 'ER_ACCESS_DENIED_ERROR' ||
+      error.message?.includes('connection') ||
+      error.message?.includes('ECONNREFUSED') ||
+      error.message?.includes('ETIMEDOUT')
+    
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    
+    if (isConnectionError) {
+      return NextResponse.json(
+        { 
+          error: '데이터베이스 연결에 실패했습니다. 데이터베이스 서버가 실행 중인지 확인해주세요.',
+          code: 'DB_CONNECTION_ERROR',
+          details: process.env.NODE_ENV === 'development' ? errorMessage : undefined
+        },
+        { status: 503 }
+      )
+    }
+    
     return NextResponse.json(
-      { error: `Failed to process request: ${errorMessage}` },
+      { 
+        error: `요청 처리 실패: ${errorMessage}`,
+        code: 'DB_QUERY_ERROR',
+        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      },
       { status: 500 }
     )
   }

@@ -18,17 +18,33 @@ export async function middleware(request: NextRequest) {
 
   // API 경로 처리
   if (pathname.startsWith('/api')) {
+    console.log('[MIDDLEWARE] API 요청:', pathname)
     const token = request.cookies.get('session')?.value
 
     if (!token) {
+      console.log('[MIDDLEWARE] 세션 토큰 없음')
       return NextResponse.json(
         { error: '인증이 필요합니다.' },
         { status: 401 }
       )
     }
 
-    const session = await verifySession(token)
+    console.log('[MIDDLEWARE] 세션 토큰 존재, 검증 시작')
+    let session
+    try {
+      session = await verifySession(token)
+      console.log('[MIDDLEWARE] 세션 검증 완료:', session ? '성공' : '실패')
+    } catch (error) {
+      console.error('[MIDDLEWARE] 세션 검증 에러:', error)
+      const response = NextResponse.json(
+        { error: '인증 처리 중 오류가 발생했습니다.' },
+        { status: 500 }
+      )
+      return response
+    }
+    
     if (!session) {
+      console.log('[MIDDLEWARE] 세션이 null')
       const response = NextResponse.json(
         { error: '인증이 유효하지 않습니다.' },
         { status: 401 }
@@ -43,6 +59,8 @@ export async function middleware(request: NextRequest) {
       })
       return response
     }
+    
+    console.log('[MIDDLEWARE] 세션 정보:', { userId: session.userId, role: session.role, username: session.username })
 
     // Admin 권한이 필요한 경로 확인
     const isAdminPath = adminPaths.some(path => pathname.startsWith(path))
@@ -54,9 +72,11 @@ export async function middleware(request: NextRequest) {
     }
 
     // API 요청에 세션 정보 추가 (필요한 경우)
+    // Edge Runtime에서는 헤더 값이 ByteString이어야 하므로 한글을 URL 인코딩
     const requestHeaders = new Headers(request.headers)
     requestHeaders.set('x-user-id', session.userId)
-    requestHeaders.set('x-user-role', session.role)
+    // 한글 역할명을 URL 인코딩하여 헤더에 설정
+    requestHeaders.set('x-user-role', encodeURIComponent(session.role))
 
     return NextResponse.next({
       request: {

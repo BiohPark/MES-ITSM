@@ -27,8 +27,8 @@ export function SearchView({ onProjectClick, onTaskClick }: SearchViewProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const handleSearch = useCallback(async () => {
-    if (!keyword.trim()) {
+  const handleSearch = useCallback(async (searchKeyword: string, signal?: AbortSignal) => {
+    if (!searchKeyword.trim()) {
       setResults({ projects: [], tasks: [], gmpRecords: [] })
       return
     }
@@ -37,30 +37,41 @@ export function SearchView({ onProjectClick, onTaskClick }: SearchViewProps) {
     setError(null)
 
     try {
-      const response = await fetch(`/api/search?keyword=${encodeURIComponent(keyword.trim())}`)
+      const response = await fetch(`/api/search?keyword=${encodeURIComponent(searchKeyword.trim())}`, {
+        signal,
+      })
+      if (signal?.aborted) return
       if (!response.ok) {
         throw new Error('검색에 실패했습니다.')
       }
       const data = await response.json()
+      if (signal?.aborted) return
       setResults(data)
     } catch (err) {
+      if (signal?.aborted) return
       console.error('Search error:', err)
       setError(err instanceof Error ? err.message : '검색 중 오류가 발생했습니다.')
     } finally {
-      setLoading(false)
+      if (!signal?.aborted) {
+        setLoading(false)
+      }
     }
-  }, [keyword])
+  }, [])
 
   useEffect(() => {
+    const abortController = new AbortController()
     const timer = setTimeout(() => {
       if (keyword.trim()) {
-        handleSearch()
+        handleSearch(keyword, abortController.signal)
       } else {
         setResults({ projects: [], tasks: [], gmpRecords: [] })
       }
     }, 300) // 디바운스: 300ms 후 검색
 
-    return () => clearTimeout(timer)
+    return () => {
+      clearTimeout(timer)
+      abortController.abort()
+    }
   }, [keyword, handleSearch])
 
   const totalResults = results.projects.length + results.tasks.length + results.gmpRecords.length
@@ -94,12 +105,12 @@ export function SearchView({ onProjectClick, onTaskClick }: SearchViewProps) {
               style={{ flex: 1, padding: '0.75rem', fontSize: '1rem' }}
               onKeyPress={(e) => {
                 if (e.key === 'Enter') {
-                  handleSearch()
+                  handleSearch(keyword)
                 }
               }}
             />
             <button
-              onClick={handleSearch}
+              onClick={() => handleSearch(keyword)}
               disabled={loading}
               className="primary-button"
               style={{ padding: '0.75rem 1.5rem' }}
