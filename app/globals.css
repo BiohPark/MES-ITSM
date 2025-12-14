@@ -259,13 +259,10 @@ td {
 .project-row {
   cursor: pointer;
   transition: background-color 0.2s ease;
+  background-color: #FFFFFF;
 }
 
 .project-row:hover {
-  background-color: #F4F6F8;
-}
-
-.project-row:nth-child(even) {
   background-color: #F4F6F8;
 }
 

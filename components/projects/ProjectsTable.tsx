@@ -43,6 +43,8 @@ export function ProjectsTable({
 }) {
   const [filterStatus, setFilterStatus] = useState<string>('')
   const [filterOwner, setFilterOwner] = useState<string>('')
+  // Accordion: 각 프로젝트의 하위 아이템 표시/숨김 상태 관리
+  const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set())
 
   // 고유한 상태 및 담당 리더 목록 추출
   const uniqueStatuses = useMemo(() => {
@@ -69,6 +71,26 @@ export function ProjectsTable({
       return true
     })
   }, [projects, filterStatus, filterOwner])
+
+  // Accordion 토글 함수
+  const toggleProjectExpansion = (projectId: string, e: MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation()
+    setExpandedProjects((prev) => {
+      const newSet = new Set(prev)
+      if (newSet.has(projectId)) {
+        newSet.delete(projectId)
+      } else {
+        newSet.add(projectId)
+      }
+      return newSet
+    })
+  }
+
+  // 하위 아이템 개수 계산 (Dropped 제외)
+  const getChildCount = (project: Project): number => {
+    if (!project.children) return 0
+    return project.children.filter((child) => child.status !== 'Dropped').length
+  }
 
   if (loading) {
     return (
@@ -256,6 +278,7 @@ export function ProjectsTable({
         <thead>
           <tr>
             {isDeleteMode && <th style={{ width: '40px' }}></th>}
+            <th style={{ width: '40px' }}></th>
             <th>프로젝트</th>
             <th>담당 리더</th>
             <th>인원</th>
@@ -267,7 +290,12 @@ export function ProjectsTable({
           </tr>
         </thead>
         <tbody>
-            {filteredProjects.flatMap((project) => [
+            {filteredProjects.flatMap((project) => {
+              const childCount = getChildCount(project)
+              const isExpanded = expandedProjects.has(project.id)
+              const hasChildren = childCount > 0
+              
+              return [
             <tr
               key={project.id}
               className="project-row"
@@ -284,6 +312,29 @@ export function ProjectsTable({
                   />
                 </td>
               )}
+              <td onClick={(e) => e.stopPropagation()}>
+                {hasChildren ? (
+                  <button
+                    onClick={(e) => toggleProjectExpansion(project.id, e)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      padding: '0.25rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#666666',
+                      fontSize: '0.875rem',
+                    }}
+                    title={isExpanded ? '하위 아이템 숨기기' : '하위 아이템 보기'}
+                  >
+                    {isExpanded ? '▼' : '▶'}
+                  </button>
+                ) : (
+                  <span style={{ display: 'inline-block', width: '20px' }}></span>
+                )}
+              </td>
               <td
                 onContextMenu={(event) => {
                   if (!isDeleteMode) {
@@ -292,9 +343,22 @@ export function ProjectsTable({
                   }
                 }}
               >
-                <p className="project-name" title="오른쪽 클릭으로 메뉴 열기">
-                  {project.name}
-                </p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <p className="project-name" title="오른쪽 클릭으로 메뉴 열기" style={{ margin: 0 }}>
+                    {project.name}
+                  </p>
+                  {hasChildren && !isExpanded && (
+                    <span style={{ 
+                      fontSize: '0.75rem', 
+                      color: '#666666',
+                      backgroundColor: '#F4F6F8',
+                      padding: '0.125rem 0.375rem',
+                      borderRadius: '0.25rem',
+                    }}>
+                      ({childCount})
+                    </span>
+                  )}
+                </div>
                 <span className="project-id">{project.id}</span>
               </td>
               <td>{project.owner}</td>
@@ -313,7 +377,7 @@ export function ProjectsTable({
               <td>{(project as any).start || '-'}</td>
               <td>{project.due}</td>
             </tr>,
-            ...(project.children && project.children.length > 0
+            ...(isExpanded && project.children && project.children.length > 0
               ? project.children
                   .filter((child) => child.status !== 'Dropped') // Dropped 일감 제외
                   .map((child) => (
@@ -338,6 +402,9 @@ export function ProjectsTable({
                         />
                       </td>
                     )}
+                    <td>
+                      {/* Accordion 버튼 컬럼 정렬을 위한 빈 셀 */}
+                    </td>
                     <td className="child-cell">
                       <span className="child-indicator">└─</span>
                       <div className="child-content">
@@ -368,7 +435,8 @@ export function ProjectsTable({
                   </tr>
                 ))
               : []),
-          ])}
+          ]
+          })}
         </tbody>
       </table>
       )}
