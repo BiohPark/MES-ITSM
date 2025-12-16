@@ -45,3 +45,4 @@ addAttachmentsTable()
     process.exit(1)
   })
 
+

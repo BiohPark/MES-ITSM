@@ -49,12 +49,12 @@ export function ChildItemModal({
     const initFormData = async () => {
       const newChild = await buildNewChild()
       if (!abortController.signal.aborted && isMounted) {
-        setFormData({
-          ...newChild,
-          title: '',
-          owner: '',
-          status: 'Planning',
-        })
+      setFormData({
+        ...newChild,
+        title: '',
+        owner: '',
+        status: 'Planning',
+      })
       }
     }
     initFormData()

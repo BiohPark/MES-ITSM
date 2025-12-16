@@ -71,7 +71,7 @@ export function TasksTable({
       setOrphanTasks([])
     } finally {
       if (!signal?.aborted) {
-        setOrphanLoading(false)
+      setOrphanLoading(false)
       }
     }
   }, [isGmpRecords])

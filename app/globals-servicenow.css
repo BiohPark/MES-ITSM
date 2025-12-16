@@ -320,6 +320,10 @@
 }
 
 .servicenow-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
   padding: 0.5rem 1rem;
   border: 1px solid #EBECEE;
   border-radius: 2px;
@@ -330,6 +334,16 @@
   transition: all 0.2s ease;
   background: #FFFFFF;
   color: #333333;
+}
+
+.servicenow-button--secondary {
+  background: #FFFFFF;
+  color: #333333;
+  border-color: #D1D5DB;
+}
+
+.servicenow-button--secondary:hover:not(:disabled) {
+  background: #F4F6F8;
 }
 
 .servicenow-button--primary {
@@ -350,6 +364,61 @@
 .servicenow-button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.servicenow-button--danger {
+  border-color: #DC2626;
+  color: #DC2626;
+  background: #FFFFFF;
+}
+
+.servicenow-button--danger:hover:not(:disabled) {
+  background: #FEE2E2;
+}
+
+.servicenow-button--sm {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+}
+
+.servicenow-toolbar {
+  display: flex;
+  gap: 1.25rem;
+  margin-bottom: 1rem;
+  align-items: flex-start;
+}
+
+.servicenow-toolbar__section {
+  background: #FFFFFF;
+  border: 1px solid #EBECEE;
+  border-radius: 2px;
+  padding: 0.75rem 1rem;
+}
+
+.servicenow-toolbar__section--narrow {
+  flex: 0 0 320px;
+}
+
+.servicenow-toolbar__section--wide {
+  flex: 1;
+}
+
+.servicenow-toolbar__title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #333333;
+  margin: 0 0 0.5rem 0;
+}
+
+.servicenow-toolbar__row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.servicenow-toolbar__row:last-child {
+  margin-bottom: 0;
 }
 
 /* ServiceNow Style Tables */

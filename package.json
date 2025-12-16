@@ -53,6 +53,8 @@
     "add-voc-table": "tsx scripts/add-voc-table.ts",
     "add-backup-table": "tsx scripts/add-backup-table.ts",
     "add-attachments-table": "tsx scripts/add-attachments-table.ts",
+    "add-predecessors-table": "tsx scripts/add-predecessors-table.ts",
+    "add-gantt-tables": "tsx scripts/add-gantt-tables.ts",
     "auto-backup": "tsx scripts/setup-auto-backup.ts",
     "analyze-logs": "tsx scripts/analyze-logs.ts"
   },

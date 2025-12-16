@@ -21,6 +21,7 @@ export function ProjectEditModal({
   const [formData, setFormData] = useState<any>({ ...project, description: (project as any).description || '', start: (project as any).start || new Date().toISOString().slice(0, 10), srb_ver: (project as any).srb_ver || '' })
   const [saving, setSaving] = useState(false)
   const [users, setUsers] = useState<Array<{ id: string; name: string }>>([])
+  const [activeTab, setActiveTab] = useState<'info' | 'comments'>('info')
 
   useEffect(() => {
     const abortController = new AbortController()
@@ -98,21 +99,42 @@ export function ProjectEditModal({
         <div className="modal-header">
           <h2>{mode === 'edit' ? '프로젝트 수정' : '새 프로젝트 추가'}</h2>
           <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-            <button
-              type="submit"
-              form="project-form"
-              disabled={saving}
-              className="btn btn-primary"
-              style={{ margin: 0 }}
-            >
-              {saving ? '저장 중...' : 'Save'}
-            </button>
+            {mode === 'edit' && (
+              <div style={{ display: 'flex', gap: '0.25rem', marginRight: '0.5rem' }}>
+                <button
+                  onClick={() => setActiveTab('info')}
+                  className={activeTab === 'info' ? 'btn btn-primary' : 'btn btn-secondary'}
+                  style={{ padding: '0.375rem 0.75rem', fontSize: '0.875rem' }}
+                >
+                  정보
+                </button>
+                <button
+                  onClick={() => setActiveTab('comments')}
+                  className={activeTab === 'comments' ? 'btn btn-primary' : 'btn btn-secondary'}
+                  style={{ padding: '0.375rem 0.75rem', fontSize: '0.875rem' }}
+                >
+                  댓글
+                </button>
+              </div>
+            )}
+            {activeTab === 'info' && (
+              <button
+                type="submit"
+                form="project-form"
+                disabled={saving}
+                className="btn btn-primary"
+                style={{ margin: 0 }}
+              >
+                {saving ? '저장 중...' : 'Save'}
+              </button>
+            )}
             <button className="modal-close" onClick={onClose}>
               ×
             </button>
           </div>
         </div>
 
+        {activeTab === 'info' && (
         <form id="project-form" onSubmit={handleSubmit} className="project-form">
           <div className="form-group">
             <label htmlFor="id">프로젝트 ID</label>
@@ -280,15 +302,18 @@ export function ProjectEditModal({
             </div>
           ) : null}
 
-          {mode === 'edit' && currentUser && (
+        </form>
+        )}
+
+        {activeTab === 'comments' && mode === 'edit' && currentUser && (
+          <div style={{ padding: '1rem', maxHeight: 'calc(100vh - 120px)', overflow: 'auto' }}>
             <CommentsSection
               entityType="project"
               entityId={project.id}
               currentUser={currentUser}
             />
-          )}
-
-        </form>
+          </div>
+        )}
       </div>
     </>
   )

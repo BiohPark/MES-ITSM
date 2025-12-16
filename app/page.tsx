@@ -17,7 +17,7 @@ import { TasksTable } from '@/components/tasks/TasksTable'
 import { TaskEditModal } from '@/components/tasks/TaskEditModal'
 import { ChildItemModal } from '@/components/tasks/ChildItemModal'
 import { PersonalTasksView } from '@/components/personal/PersonalTasksView'
-import { GanttChartView } from '@/components/gantt/GanttChartView'
+import { GanttWorkspace } from '@/components/gantt/GanttWorkspace'
 import { SearchView } from '@/components/search/SearchView'
 import { VocView } from '@/components/voc/VocView'
 import { BackupView } from '@/components/backup/BackupView'
@@ -1447,12 +1447,7 @@ export default function Home() {
             currentUser={user ? { name: user.name, username: user.username } : undefined}
           />
         ) : activeTab === 'gantt' ? (
-          <GanttChartView
-            projects={projects}
-            loading={loading}
-            error={error}
-            onRefresh={fetchProjects}
-          />
+          <GanttWorkspace />
         ) : activeTab === 'issues' ? (
           <>
             <IssuesTable

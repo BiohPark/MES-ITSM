@@ -101,3 +101,4 @@ Get-ChildItem backups -Filter "backup-*.json" | Sort-Object LastWriteTime -Desce
 - 서버를 재시작하면 자동 백업 스케줄러가 다시 시작됩니다.
 - 프로덕션 환경에서는 서버가 항상 실행 중이어야 자동 백업이 정상 작동합니다.
 
+
