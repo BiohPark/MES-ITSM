@@ -49,6 +49,16 @@ export function Sidebar({ activeTab, onTabChange, user, isCollapsed = false, onT
       label: '이슈',
     },
     {
+      key: 'meetings',
+      label: '회의록',
+      children: [
+        {
+          key: 'action-items',
+          label: '액션 아이템',
+        },
+      ],
+    },
+    {
       key: 'voc',
       label: 'VOC 관리',
     },
@@ -107,17 +117,58 @@ export function Sidebar({ activeTab, onTabChange, user, isCollapsed = false, onT
             }
 
             const isActive = activeTab === item.key
+            const hasChildren = item.children && item.children.length > 0
+            const isExpanded = expandedSections.has(item.key)
 
             return (
               <li key={item.key} className="servicenow-sidebar__menu-item">
-                <button
-                  className={`servicenow-sidebar__menu-link ${isActive ? 'servicenow-sidebar__menu-link--active' : ''}`}
-                  onClick={() => handleMenuClick(item.key)}
-                  title={isCollapsed ? item.label : undefined}
-                >
-                  {item.icon && <span className="servicenow-sidebar__menu-icon">{item.icon}</span>}
-                  {!isCollapsed && <span className="servicenow-sidebar__menu-text">{item.label}</span>}
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                  <button
+                    className={`servicenow-sidebar__menu-link ${isActive ? 'servicenow-sidebar__menu-link--active' : ''}`}
+                    onClick={() => handleMenuClick(item.key)}
+                    title={isCollapsed ? item.label : undefined}
+                    style={{ flex: 1 }}
+                  >
+                    {item.icon && <span className="servicenow-sidebar__menu-icon">{item.icon}</span>}
+                    {!isCollapsed && <span className="servicenow-sidebar__menu-text">{item.label}</span>}
+                  </button>
+                  {hasChildren && !isCollapsed && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        toggleSection(item.key)
+                      }}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        padding: '0.5rem',
+                        fontSize: '0.75rem',
+                        color: '#666',
+                      }}
+                    >
+                      {isExpanded ? '▼' : '▶'}
+                    </button>
+                  )}
+                </div>
+                {hasChildren && isExpanded && !isCollapsed && (
+                  <ul style={{ paddingLeft: '1.5rem', marginTop: '0.25rem' }}>
+                    {item.children!.map((child) => {
+                      const isChildActive = activeTab === child.key
+                      return (
+                        <li key={child.key} style={{ marginBottom: '0.25rem' }}>
+                          <button
+                            className={`servicenow-sidebar__menu-link ${isChildActive ? 'servicenow-sidebar__menu-link--active' : ''}`}
+                            onClick={() => handleMenuClick(child.key)}
+                            style={{ fontSize: '0.875rem', padding: '0.5rem 1rem', width: '100%', textAlign: 'left' }}
+                          >
+                            {child.label}
+                          </button>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
               </li>
             )
           })}

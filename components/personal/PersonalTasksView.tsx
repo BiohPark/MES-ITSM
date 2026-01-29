@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import type { Project, ProjectChild } from '@/types/project'
 import { StatusBadge } from '../common/StatusBadge'
 import { Progress } from '../common/Progress'
@@ -39,7 +39,6 @@ export function PersonalTasksView({
         if (child.owner) owners.add(child.owner)
         // 단계별 담당자들도 추가
         if ((child as any).phases?.pi?.owner) owners.add((child as any).phases.pi.owner)
-        if ((child as any).phases?.pm?.owner) owners.add((child as any).phases.pm.owner)
         if ((child as any).phases?.development?.owner) owners.add((child as any).phases.development.owner)
       })
     })
@@ -47,7 +46,6 @@ export function PersonalTasksView({
     orphanTasks.forEach((task) => {
       if (task.owner) owners.add(task.owner)
       if ((task as any).phases?.pi?.owner) owners.add((task as any).phases.pi.owner)
-      if ((task as any).phases?.pm?.owner) owners.add((task as any).phases.pm.owner)
       if ((task as any).phases?.development?.owner) owners.add((task as any).phases.development.owner)
     })
     // GMP Record 중 Deviation인 것들의 owner도 추가
@@ -86,10 +84,9 @@ export function PersonalTasksView({
           // 대표 담당자(PI) 또는 단계별 담당자 중 하나라도 일치하면 포함
           const isOwner = child.owner === owner
           const isPiOwner = (child as any).phases?.pi?.owner === owner
-          const isPmOwner = (child as any).phases?.pm?.owner === owner
           const isDevOwner = (child as any).phases?.development?.owner === owner
           
-          if (isOwner || isPiOwner || isPmOwner || isDevOwner) {
+          if (isOwner || isPiOwner || isDevOwner) {
             ownerTasks.push({
               task: child,
               projectId: project.id,
@@ -108,10 +105,9 @@ export function PersonalTasksView({
         
         const isOwner = task.owner === owner
         const isPiOwner = (task as any).phases?.pi?.owner === owner
-        const isPmOwner = (task as any).phases?.pm?.owner === owner
         const isDevOwner = (task as any).phases?.development?.owner === owner
         
-        if (isOwner || isPiOwner || isPmOwner || isDevOwner) {
+        if (isOwner || isPiOwner || isDevOwner) {
           ownerTasks.push({
             task,
             projectId: null,
@@ -140,6 +136,60 @@ export function PersonalTasksView({
   }, [filteredOwners, projects, gmpRecords, orphanTasks])
 
   // 로그인한 사용자의 일감 데이터
+  // 액션 아이템 상태
+  const [myActionItems, setMyActionItems] = useState<Array<{
+    id: string
+    description: string
+    assignee: string
+    due_date: string | null
+    status: 'pending' | 'in_progress' | 'completed'
+    meeting_note_id: string
+    meeting_title: string
+    meeting_date: string
+  }>>([])
+  const [actionItemsLoading, setActionItemsLoading] = useState(false)
+
+  // 진행 중인 액션 아이템 조회
+  useEffect(() => {
+    if (!currentUser?.name) {
+      setMyActionItems([])
+      return
+    }
+
+    const fetchActionItems = async () => {
+      try {
+        setActionItemsLoading(true)
+        const response = await fetch(`/api/action-items?assignee=${encodeURIComponent(currentUser.name)}`, {
+          cache: 'no-store',
+        })
+        if (response.ok) {
+          const data = await response.json()
+          if (process.env.NODE_ENV === 'development') {
+            console.log('[PersonalTasksView] 액션 아이템 조회 결과:', {
+              currentUser: currentUser.name,
+              totalItems: data.length,
+              items: data,
+            })
+          }
+          // 진행 중인 액션 아이템만 필터링 (status가 'in_progress'인 것만)
+          const inProgressItems = data.filter((item: any) => item.status === 'in_progress')
+          if (process.env.NODE_ENV === 'development') {
+            console.log('[PersonalTasksView] 진행 중인 액션 아이템:', inProgressItems)
+          }
+          setMyActionItems(inProgressItems)
+        } else {
+          console.error('[PersonalTasksView] 액션 아이템 조회 실패:', response.status, response.statusText)
+        }
+      } catch (err) {
+        console.error('[PersonalTasksView] Error fetching action items:', err)
+      } finally {
+        setActionItemsLoading(false)
+      }
+    }
+
+    fetchActionItems()
+  }, [currentUser?.name])
+
   const myTasksData = useMemo(() => {
     if (!currentUser?.name) return null
     
@@ -147,7 +197,9 @@ export function PersonalTasksView({
     const myTasks: Array<{ task: ProjectChild; projectId: string | null; projectName: string }> = []
 
     projects.forEach((project) => {
-      if (project.owner === currentUser.name) {
+      // 프로젝트는 진행 중인 것만 포함 (In Progress 상태)
+      const isProjectInProgress = project.status === 'In Progress' || project.status?.toLowerCase() === 'in progress'
+      if (project.owner === currentUser.name && isProjectInProgress) {
         myProjects.push(project)
       }
       project.children?.forEach((child: ProjectChild) => {
@@ -156,13 +208,18 @@ export function PersonalTasksView({
           return
         }
         
+        // 진행 중인 일감만 포함 (In Progress 상태)
+        const isInProgress = child.status === 'In Progress' || child.status?.toLowerCase() === 'in progress'
+        if (!isInProgress) {
+          return
+        }
+        
         // 대표 담당자(PI) 또는 단계별 담당자 중 하나라도 일치하면 포함
         const isOwner = child.owner === currentUser.name
         const isPiOwner = (child as any).phases?.pi?.owner === currentUser.name
-        const isPmOwner = (child as any).phases?.pm?.owner === currentUser.name
         const isDevOwner = (child as any).phases?.development?.owner === currentUser.name
         
-        if (isOwner || isPiOwner || isPmOwner || isDevOwner) {
+        if (isOwner || isPiOwner || isDevOwner) {
           myTasks.push({
             task: child,
             projectId: project.id,
@@ -179,12 +236,17 @@ export function PersonalTasksView({
         return
       }
       
+      // 진행 중인 일감만 포함
+      const isInProgress = task.status === 'In Progress' || task.status?.toLowerCase() === 'in progress'
+      if (!isInProgress) {
+        return
+      }
+      
       const isOwner = task.owner === currentUser.name
       const isPiOwner = (task as any).phases?.pi?.owner === currentUser.name
-      const isPmOwner = (task as any).phases?.pm?.owner === currentUser.name
       const isDevOwner = (task as any).phases?.development?.owner === currentUser.name
       
-      if (isOwner || isPiOwner || isPmOwner || isDevOwner) {
+      if (isOwner || isPiOwner || isDevOwner) {
         myTasks.push({
           task,
           projectId: null,
@@ -193,9 +255,10 @@ export function PersonalTasksView({
       }
     })
 
-    // GMP Record 중 Deviation인 것들도 추가
+    // GMP Record 중 Deviation인 것들도 추가 (진행 중인 것만)
     gmpRecords.forEach((record) => {
-      if (record.kind === 'Deviation' && record.owner === currentUser.name) {
+      const isInProgress = record.status === 'In Progress' || record.status?.toLowerCase() === 'in progress'
+      if (record.kind === 'Deviation' && record.owner === currentUser.name && isInProgress) {
         myTasks.push({
           task: record,
           projectId: record.projectId || null,
@@ -204,33 +267,13 @@ export function PersonalTasksView({
       }
     })
 
-    // 상태별 갯수 계산
+    // 상태별 갯수 계산 (진행 중인 것만 표시하므로 In Progress만 카운트)
     const statusCounts = {
       Planning: 0,
-      'In Progress': 0,
+      'In Progress': myTasks.length + myProjects.length,
       Completed: 0,
       Dropped: 0,
     }
-
-    myTasks.forEach(({ task }) => {
-      const status = task.status || 'Planning'
-      if (status === 'Planning') statusCounts.Planning++
-      else if (status?.toLowerCase() === 'in progress' || status === 'In Progress') {
-        statusCounts['In Progress']++
-      }
-      else if (status === 'Completed') statusCounts.Completed++
-      else if (status === 'Dropped') statusCounts.Dropped++
-    })
-
-    myProjects.forEach((project) => {
-      const status = project.status || 'Planning'
-      if (status === 'Planning') statusCounts.Planning++
-      else if (status?.toLowerCase() === 'in progress' || status === 'In Progress') {
-        statusCounts['In Progress']++
-      }
-      else if (status === 'Completed') statusCounts.Completed++
-      else if (status === 'Dropped') statusCounts.Dropped++
-    })
 
     return {
       projects: myProjects,
@@ -287,33 +330,18 @@ export function PersonalTasksView({
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-          {/* My 일감 섹션 */}
-          {myTasksData && (myTasksData.projects.length > 0 || myTasksData.tasks.length > 0) && (
+          {/* My 진행 중 일감 섹션 */}
+          {myTasksData && (myTasksData.projects.length > 0 || myTasksData.tasks.length > 0 || myActionItems.length > 0) && (
             <div style={{ border: '2px solid #3b82f6', borderRadius: '0.75rem', padding: '1.5rem', backgroundColor: '#eff6ff' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                 <h3 style={{ fontSize: '1.25rem', fontWeight: 600, color: '#1e40af' }}>
-                  My 일감 ({currentUser?.name})
+                  My 진행 중 일감 ({currentUser?.name})
                 </h3>
-                {/* 상태별 갯수 요약 */}
+                {/* 진행 중인 일감만 표시되므로 In Progress만 표시 */}
                 <div style={{ display: 'flex', gap: '1rem', fontSize: '0.875rem' }}>
-                  {myTasksData.statusCounts.Planning > 0 && (
-                    <span style={{ color: '#1d4ed8' }}>
-                      Planning: {myTasksData.statusCounts.Planning}
-                    </span>
-                  )}
                   {myTasksData.statusCounts['In Progress'] > 0 && (
                     <span style={{ color: '#15803d' }}>
-                      In Progress: {myTasksData.statusCounts['In Progress']}
-                    </span>
-                  )}
-                  {myTasksData.statusCounts.Completed > 0 && (
-                    <span style={{ color: '#92400e' }}>
-                      Completed: {myTasksData.statusCounts.Completed}
-                    </span>
-                  )}
-                  {myTasksData.statusCounts.Dropped > 0 && (
-                    <span style={{ color: '#6b7280' }}>
-                      Dropped: {myTasksData.statusCounts.Dropped}
+                      진행 중: {myTasksData.statusCounts['In Progress']}
                     </span>
                   )}
                 </div>
@@ -416,6 +444,53 @@ export function PersonalTasksView({
                   </table>
                 </div>
               )}
+
+              {/* 액션 아이템 섹션 */}
+              {actionItemsLoading ? (
+                <div style={{ marginTop: '1.5rem', padding: '1rem', textAlign: 'center', color: '#666' }}>
+                  액션 아이템 로딩 중...
+                </div>
+              ) : myActionItems.length > 0 ? (
+                <div style={{ marginTop: '1.5rem' }}>
+                  <h4 style={{ marginBottom: '0.75rem', fontSize: '1rem', fontWeight: 500, color: '#475569' }}>
+                    회의록 액션 아이템 ({myActionItems.length})
+                  </h4>
+                  <table style={{ width: '100%' }}>
+                    <thead>
+                      <tr>
+                        <th>설명</th>
+                        <th>마감일</th>
+                        <th>상태</th>
+                        <th>회의록</th>
+                        <th>회의 일시</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {myActionItems.map((item) => (
+                        <tr key={`${item.meeting_note_id}-${item.id}`}>
+                          <td style={{ fontWeight: 500 }}>{item.description}</td>
+                          <td>{item.due_date || '-'}</td>
+                          <td>
+                            <StatusBadge
+                              status={
+                                item.status === 'completed'
+                                  ? 'Completed'
+                                  : item.status === 'in_progress'
+                                  ? 'In Progress'
+                                  : 'Planning'
+                              }
+                            />
+                          </td>
+                          <td>
+                            <span style={{ fontSize: '0.875rem', color: '#666' }}>{item.meeting_title}</span>
+                          </td>
+                          <td>{item.meeting_date}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
             </div>
           )}
 
@@ -537,4 +612,3 @@ export function PersonalTasksView({
     </div>
   )
 }
-

@@ -39,7 +39,7 @@ export function GanttWorkspace() {
   const [tasksError, setTasksError] = useState<string | null>(null)
   const [projectNameInput, setProjectNameInput] = useState('')
   const [importing, setImporting] = useState(false)
-  const [csvFile, setCsvFile] = useState<File | null>(null)
+  const [xmlFile, setXmlFile] = useState<File | null>(null)
   const [activeSubTab, setActiveSubTab] = useState<SubTabKey>('wbs')
 
   const selectedProject = useMemo(
@@ -136,6 +136,77 @@ export function GanttWorkspace() {
     setTasks((prev) => {
       const copy = [...prev]
       copy[index] = { ...copy[index], [field]: value }
+      
+      // 날짜가 변경된 경우, 모든 상위 레벨의 날짜 자동 업데이트
+      if (field === 'startDate' || field === 'finishDate') {
+        const current = copy[index]
+        const currentLevel = current.outlineLevel || 1
+        
+        // 모든 상위 레벨 항목 찾기 및 업데이트 (레벨이 낮을수록 상위)
+        for (let targetLevel = currentLevel - 1; targetLevel >= 1; targetLevel--) {
+          // 해당 레벨의 상위 항목 찾기 (현재 항목 이전에 있는 항목)
+          let parentIndex = -1
+          for (let i = index - 1; i >= 0; i--) {
+            if ((copy[i].outlineLevel || 1) === targetLevel) {
+              parentIndex = i
+              break
+            }
+          }
+          
+          if (parentIndex === -1) continue
+          
+          const parent = copy[parentIndex]
+          
+          // 상위 레벨의 모든 직접 하위 항목들 찾기
+          const childItems: GanttTask[] = []
+          for (let j = parentIndex + 1; j < copy.length; j++) {
+            const next = copy[j]
+            const nextLevel = next.outlineLevel || 1
+            
+            // 같은 레벨이나 더 낮은 레벨이 나오면 종료
+            if (nextLevel <= targetLevel) {
+              break
+            }
+            
+            // 바로 다음 레벨인 경우만 직접 하위 항목으로 간주
+            if (nextLevel === targetLevel + 1) {
+              childItems.push(next)
+            }
+          }
+          
+          if (childItems.length === 0) continue
+          
+          // 상위 레벨의 시작일과 종료일 자동 계산
+          const childStartDates = childItems
+            .map(item => item.startDate)
+            .filter((date): date is string => date !== null && date !== undefined)
+            .map(date => new Date(date).getTime())
+          
+          const childFinishDates = childItems
+            .map(item => item.finishDate)
+            .filter((date): date is string => date !== null && date !== undefined)
+            .map(date => new Date(date).getTime())
+
+          if (childStartDates.length > 0) {
+            const minStartDate = new Date(Math.min(...childStartDates))
+            parent.startDate = minStartDate.toISOString().split('T')[0]
+          }
+
+          if (childFinishDates.length > 0) {
+            const maxFinishDate = new Date(Math.max(...childFinishDates))
+            parent.finishDate = maxFinishDate.toISOString().split('T')[0]
+          }
+
+          // duration_days도 자동 계산
+          if (parent.startDate && parent.finishDate) {
+            const start = new Date(parent.startDate)
+            const finish = new Date(parent.finishDate)
+            const diffTime = finish.getTime() - start.getTime()
+            parent.durationDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+          }
+        }
+      }
+      
       return copy
     })
   }
@@ -157,15 +228,82 @@ export function GanttWorkspace() {
   const recomputeWbsCodes = (items: GanttTask[]): GanttTask[] => {
     const counters: number[] = []
     const result: GanttTask[] = []
-    for (const t of items
+    const sorted = items
       .slice()
-      .sort((a, b) => (a.sortOrder ?? 1) - (b.sortOrder ?? 1))) {
+      .sort((a, b) => (a.sortOrder ?? 1) - (b.sortOrder ?? 1))
+    
+    // 1단계: WBS 코드 계산
+    for (const t of sorted) {
       const level = Math.max(1, t.outlineLevel || 1)
       counters.length = level
       counters[level - 1] = (counters[level - 1] || 0) + 1
       const wbs = counters.slice(0, level).join('.')
       result.push({ ...t, outlineLevel: level, wbsCode: wbs })
     }
+
+    // 2단계: 상위 레벨의 시작/종료 날짜를 하위 레벨에 따라 자동 계산
+    // 하위 레벨부터 상위 레벨 순으로 계산 (역순으로 처리)
+    const maxLevel = Math.max(...result.map(t => t.outlineLevel || 1))
+    
+    // 레벨이 높은 것부터 낮은 것 순으로 처리 (하위 레벨부터 상위 레벨로)
+    for (let targetLevel = maxLevel - 1; targetLevel >= 1; targetLevel--) {
+      for (let i = 0; i < result.length; i++) {
+        const current = result[i]
+        const currentLevel = current.outlineLevel || 1
+        
+        // 현재 처리할 레벨이 아니면 스킵
+        if (currentLevel !== targetLevel) continue
+        
+        // 하위 레벨 항목들 찾기 (현재 항목 다음에 오는 더 높은 레벨의 항목들)
+        const childItems: GanttTask[] = []
+        for (let j = i + 1; j < result.length; j++) {
+          const next = result[j]
+          const nextLevel = next.outlineLevel || 1
+          
+          // 같은 레벨이나 더 낮은 레벨이 나오면 하위 항목 종료
+          if (nextLevel <= currentLevel) {
+            break
+          }
+          
+          // 바로 다음 레벨인 경우만 직접 하위 항목으로 간주
+          if (nextLevel === currentLevel + 1) {
+            childItems.push(next)
+          }
+        }
+
+        // 하위 항목이 있는 경우, 시작일과 종료일 자동 계산
+        if (childItems.length > 0) {
+          const childStartDates = childItems
+            .map(item => item.startDate)
+            .filter((date): date is string => date !== null && date !== undefined)
+            .map(date => new Date(date).getTime())
+          
+          const childFinishDates = childItems
+            .map(item => item.finishDate)
+            .filter((date): date is string => date !== null && date !== undefined)
+            .map(date => new Date(date).getTime())
+
+          if (childStartDates.length > 0) {
+            const minStartDate = new Date(Math.min(...childStartDates))
+            current.startDate = minStartDate.toISOString().split('T')[0]
+          }
+
+          if (childFinishDates.length > 0) {
+            const maxFinishDate = new Date(Math.max(...childFinishDates))
+            current.finishDate = maxFinishDate.toISOString().split('T')[0]
+          }
+
+          // duration_days도 자동 계산
+          if (current.startDate && current.finishDate) {
+            const start = new Date(current.startDate)
+            const finish = new Date(current.finishDate)
+            const diffTime = finish.getTime() - start.getTime()
+            current.durationDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+          }
+        }
+      }
+    }
+
     return result
   }
 
@@ -228,15 +366,44 @@ export function GanttWorkspace() {
     }
   }
 
-  const handleImportCsv = async () => {
-    if (!csvFile) {
-      alert('CSV 파일을 선택하세요.')
+  const handleDeleteProject = async () => {
+    if (!selectedProjectId) {
+      alert('삭제할 프로젝트를 선택하세요.')
+      return
+    }
+
+    const projectName = selectedProject?.name || `프로젝트 #${selectedProjectId}`
+    if (!confirm(`"${projectName}" 프로젝트를 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없으며, 프로젝트의 모든 작업도 함께 삭제됩니다.`)) {
+      return
+    }
+
+    try {
+      const res = await fetch(`/api/gantt/projects?id=${selectedProjectId}`, {
+        method: 'DELETE',
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || '프로젝트 삭제 실패')
+      }
+      alert('프로젝트가 삭제되었습니다.')
+      setSelectedProjectId(null)
+      setTasks([])
+      await loadProjects()
+    } catch (err: any) {
+      console.error('Failed to delete gantt project', err)
+      alert(err.message || '프로젝트 삭제 실패')
+    }
+  }
+
+  const handleImportXml = async () => {
+    if (!xmlFile) {
+      alert('XML 파일을 선택하세요.')
       return
     }
     setImporting(true)
     try {
       const form = new FormData()
-      form.append('file', csvFile)
+      form.append('file', xmlFile)
       if (projectNameInput.trim()) {
         form.append('projectName', projectNameInput.trim())
       }
@@ -247,25 +414,25 @@ export function GanttWorkspace() {
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || 'CSV Import 실패')
+        throw new Error(data.error || 'XML Import 실패')
       }
       const data = await res.json()
-      alert('CSV Import가 완료되었습니다.')
-      setCsvFile(null)
+      alert('MS Project XML Import가 완료되었습니다.')
+      setXmlFile(null)
       setProjectNameInput('')
       await loadProjects()
       if (data.projectId) {
         setSelectedProjectId(data.projectId)
       }
     } catch (err: any) {
-      console.error('Failed to import csv', err)
-      alert(err.message || 'CSV Import 실패')
+      console.error('Failed to import xml', err)
+      alert(err.message || 'XML Import 실패')
     } finally {
       setImporting(false)
     }
   }
 
-  const handleExportCsv = async () => {
+  const handleExportXml = async () => {
     if (!selectedProjectId) {
       alert('먼저 Gantt 프로젝트를 선택하세요.')
       return
@@ -274,20 +441,20 @@ export function GanttWorkspace() {
       const res = await fetch(`/api/gantt/export/${selectedProjectId}`)
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || 'CSV Export 실패')
+        throw new Error(data.error || 'XML Export 실패')
       }
       const blob = await res.blob()
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `gantt_project_${selectedProjectId}.csv`
+      a.download = `gantt_project_${selectedProjectId}.xml`
       document.body.appendChild(a)
       a.click()
       a.remove()
       URL.revokeObjectURL(url)
     } catch (err: any) {
-      console.error('Failed to export csv', err)
-      alert(err.message || 'CSV Export 실패')
+      console.error('Failed to export xml', err)
+      alert(err.message || 'XML Export 실패')
     }
   }
 
@@ -327,6 +494,16 @@ export function GanttWorkspace() {
             >
               새로고침
             </button>
+            {selectedProjectId && (
+              <button
+                type="button"
+                className="servicenow-button servicenow-button--danger"
+                onClick={handleDeleteProject}
+                style={{ marginLeft: '0.5rem' }}
+              >
+                삭제
+              </button>
+            )}
           </div>
           <div className="servicenow-toolbar__row" style={{ marginTop: '0.5rem' }}>
             <input
@@ -347,32 +524,32 @@ export function GanttWorkspace() {
           </div>
         </div>
 
-        {/* Row 2: CSV Import / Export */}
+        {/* Row 2: XML Import / Export */}
         <div className="servicenow-toolbar__section">
           <h3 className="servicenow-toolbar__title">
-            MS Project CSV Import / Export
+            MS Project XML Import / Export
           </h3>
           <div className="servicenow-toolbar__row">
             <input
               type="file"
-              accept=".csv,text/csv"
-              onChange={(e) => setCsvFile(e.target.files?.[0] ?? null)}
+              accept=".xml,application/xml,text/xml"
+              onChange={(e) => setXmlFile(e.target.files?.[0] ?? null)}
               style={{ flex: 1 }}
             />
             <button
               type="button"
               className="servicenow-button servicenow-button--primary"
-              onClick={handleImportCsv}
+              onClick={handleImportXml}
               disabled={importing}
             >
-              CSV Import
+              XML Import
             </button>
             <button
               type="button"
               className="servicenow-button servicenow-button--secondary"
-              onClick={handleExportCsv}
+              onClick={handleExportXml}
             >
-              CSV Export
+              XML Export
             </button>
           </div>
           <p
@@ -383,9 +560,8 @@ export function GanttWorkspace() {
               marginBottom: 0,
             }}
           >
-            MS Project에서 CSV로 내보낸 파일(열: Task Name, Start, Finish,
-            Duration, Predecessors, Resource Names 등)을 업로드하면 새 Gantt
-            프로젝트로 Import 됩니다.
+            Microsoft Project XML 형식 파일을 업로드하면 새 Gantt 프로젝트로 Import 됩니다.
+            Export된 XML 파일은 Microsoft Project에서 열 수 있습니다.
           </p>
         </div>
       </div>

@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "timestamp": "2025-12-14T09:12:15.202Z",
+  "timestamp": "2026-01-22T21:14:52.035Z",
   "tables": {
     "projects": [
       {
@@ -48,7 +48,8 @@
         "phases": "{\"pi\":{\"owner\":\"pim_mgr\",\"status\":\"요구사항 접수\",\"progress\":100,\"start\":\"2025-12-13\",\"due\":\"2025-12-31\"},\"pm\":{\"owner\":\"\",\"status\":\"CC 및 Val 확정\",\"progress\":100,\"start\":\"2025-12-13\",\"due\":\"\"},\"development\":{\"owner\":\"\",\"status\":\"설계 리뷰\",\"progress\":100,\"start\":\"2025-12-13\",\"due\":\"\"}}",
         "linked_gmp_record_id": null,
         "current_status_id": null,
-        "workflow_scheme_id": null
+        "workflow_scheme_id": null,
+        "task_index": null
       },
       {
         "id": "TASK-00002",
@@ -65,7 +66,8 @@
         "phases": "{\"pi\":{\"owner\":\"그룹매니저\",\"status\":\"Dropped\",\"progress\":100,\"start\":\"2025-12-13\",\"due\":\"2025-12-13\"},\"pm\":{\"owner\":\"\",\"status\":\"담당자 지정\",\"progress\":100,\"start\":\"2025-12-13\",\"due\":\"\"},\"development\":{\"owner\":\"\",\"status\":\"설계 리뷰\",\"progress\":100,\"start\":\"2025-12-13\",\"due\":\"\"}}",
         "linked_gmp_record_id": null,
         "current_status_id": null,
-        "workflow_scheme_id": null
+        "workflow_scheme_id": null,
+        "task_index": null
       },
       {
         "id": "TASK-00003",
@@ -82,7 +84,8 @@
         "phases": "{\"pi\":{\"owner\":\"pim_mgr\",\"status\":\"설계 확정\",\"progress\":100,\"start\":\"2025-12-13\",\"due\":\"2025-12-13\"},\"pm\":{\"owner\":\"유승진\",\"status\":\"CC 및 Val 확정\",\"progress\":100,\"start\":\"2025-12-13\",\"due\":\"2025-12-13\"},\"development\":{\"owner\":\"devmgr\",\"status\":\"유닛 테스트\",\"progress\":0,\"start\":\"2025-12-13\",\"due\":\"2026-01-31\"}}",
         "linked_gmp_record_id": null,
         "current_status_id": null,
-        "workflow_scheme_id": null
+        "workflow_scheme_id": null,
+        "task_index": null
       },
       {
         "id": "TASK-00004",
@@ -99,7 +102,8 @@
         "phases": "{\"pi\":{\"owner\":\"유승진\",\"status\":\"Dropped\",\"progress\":100,\"start\":\"2025-12-13\",\"due\":\"\"},\"pm\":{\"owner\":\"\",\"status\":\"담당자 지정\",\"progress\":100,\"start\":\"2025-12-13\",\"due\":\"\"},\"development\":{\"owner\":\"\",\"status\":\"설계 리뷰\",\"progress\":100,\"start\":\"2025-12-13\",\"due\":\"\"}}",
         "linked_gmp_record_id": null,
         "current_status_id": null,
-        "workflow_scheme_id": null
+        "workflow_scheme_id": null,
+        "task_index": null
       },
       {
         "id": "TASK-00005",
@@ -116,7 +120,8 @@
         "phases": "{\"pi\":{\"owner\":\"pim_mgr\",\"status\":\"요구사항 접수\",\"progress\":0,\"start\":\"2025-12-13\",\"due\":\"\"},\"pm\":{\"owner\":\"유승진\",\"status\":\"담당자 지정\",\"progress\":0,\"start\":\"2025-12-13\",\"due\":\"\"},\"development\":{\"owner\":\"\",\"status\":\"설계 리뷰\",\"progress\":0,\"start\":\"2025-12-13\",\"due\":\"\"}}",
         "linked_gmp_record_id": null,
         "current_status_id": null,
-        "workflow_scheme_id": null
+        "workflow_scheme_id": null,
+        "task_index": null
       },
       {
         "id": "TASK-00006",
@@ -133,7 +138,8 @@
         "phases": "{\"pi\":{\"owner\":\"\",\"status\":\"요구사항 접수\",\"progress\":0,\"start\":\"2025-12-13\",\"due\":\"\"},\"pm\":{\"owner\":\"\",\"status\":\"담당자 지정\",\"progress\":0,\"start\":\"2025-12-13\",\"due\":\"\"},\"development\":{\"owner\":\"\",\"status\":\"설계 리뷰\",\"progress\":0,\"start\":\"2025-12-13\",\"due\":\"\"}}",
         "linked_gmp_record_id": null,
         "current_status_id": null,
-        "workflow_scheme_id": null
+        "workflow_scheme_id": null,
+        "task_index": null
       },
       {
         "id": "TASK-00008",
@@ -150,7 +156,8 @@
         "phases": "{\"pi\":{\"owner\":\"그룹매니저\",\"status\":\"설계 확정\",\"progress\":100,\"start\":\"2025-12-13\",\"due\":\"\"},\"pm\":{\"owner\":\"\",\"status\":\"담당자 지정\",\"progress\":100,\"start\":\"2025-12-13\",\"due\":\"\"},\"development\":{\"owner\":\"\",\"status\":\"설계 리뷰\",\"progress\":100,\"start\":\"2025-12-13\",\"due\":\"\"}}",
         "linked_gmp_record_id": null,
         "current_status_id": null,
-        "workflow_scheme_id": null
+        "workflow_scheme_id": null,
+        "task_index": null
       },
       {
         "id": "TASK-00009",
@@ -167,7 +174,8 @@
         "phases": "{\"pi\":{\"owner\":\"\",\"status\":\"요구사항 접수\",\"progress\":0,\"start\":\"2025-12-13\",\"due\":\"\"},\"pm\":{\"owner\":\"\",\"status\":\"담당자 지정\",\"progress\":0,\"start\":\"2025-12-13\",\"due\":\"\"},\"development\":{\"owner\":\"\",\"status\":\"설계 리뷰\",\"progress\":0,\"start\":\"2025-12-13\",\"due\":\"\"}}",
         "linked_gmp_record_id": null,
         "current_status_id": null,
-        "workflow_scheme_id": null
+        "workflow_scheme_id": null,
+        "task_index": null
       },
       {
         "id": "TASK-00010",
@@ -184,7 +192,8 @@
         "phases": "{\"pi\":{\"owner\":\"\",\"status\":\"요구사항 접수\",\"progress\":0,\"start\":\"2025-12-13\",\"due\":\"\"},\"pm\":{\"owner\":\"\",\"status\":\"담당자 지정\",\"progress\":0,\"start\":\"2025-12-13\",\"due\":\"\"},\"development\":{\"owner\":\"\",\"status\":\"설계 리뷰\",\"progress\":0,\"start\":\"2025-12-13\",\"due\":\"\"}}",
         "linked_gmp_record_id": null,
         "current_status_id": null,
-        "workflow_scheme_id": null
+        "workflow_scheme_id": null,
+        "task_index": null
       }
     ],
     "gmp_records": [
@@ -467,13 +476,283 @@
         "created_at": "2025-12-14T07:16:17.000Z"
       },
       {
-        "id": 10,
-        "filename": "backup-2025-12-14T08-12-15-195Z.json",
-        "file_path": "C:\\Users\\seung\\YSJ_Projects\\Test_1\\backups\\backup-2025-12-14T08-12-15-195Z.json",
-        "file_size": 19045,
+        "id": 49,
+        "filename": "backup-2025-12-25T07-25-24-967.json",
+        "file_path": "C:\\Users\\seung\\YSJ_Projects\\Test_1\\backups\\backup-2025-12-25T07-25-24-967.json",
+        "file_size": 32526,
         "backup_type": "auto",
         "created_by": null,
-        "created_at": "2025-12-14T08:12:15.000Z"
+        "created_at": "2025-12-24T22:25:25.000Z"
+      },
+      {
+        "id": 50,
+        "filename": "backup-2025-12-25T18-42-34-330.json",
+        "file_path": "C:\\Users\\seung\\YSJ_Projects\\Test_1\\backups\\backup-2025-12-25T18-42-34-330.json",
+        "file_size": 32865,
+        "backup_type": "auto",
+        "created_by": null,
+        "created_at": "2025-12-25T09:42:34.000Z"
+      },
+      {
+        "id": 51,
+        "filename": "backup-2026-01-01T10-43-21-054.json",
+        "file_path": "C:\\Users\\seung\\YSJ_Projects\\Test_1\\backups\\backup-2026-01-01T10-43-21-054.json",
+        "file_size": 33204,
+        "backup_type": "auto",
+        "created_by": null,
+        "created_at": "2026-01-01T01:43:21.000Z"
+      },
+      {
+        "id": 52,
+        "filename": "backup-2026-01-01T21-58-10-691.json",
+        "file_path": "C:\\Users\\seung\\YSJ_Projects\\Test_1\\backups\\backup-2026-01-01T21-58-10-691.json",
+        "file_size": 33543,
+        "backup_type": "auto",
+        "created_by": null,
+        "created_at": "2026-01-01T12:58:11.000Z"
+      },
+      {
+        "id": 53,
+        "filename": "backup-2026-01-02T14-52-50-727.json",
+        "file_path": "C:\\Users\\seung\\YSJ_Projects\\Test_1\\backups\\backup-2026-01-02T14-52-50-727.json",
+        "file_size": 33882,
+        "backup_type": "auto",
+        "created_by": null,
+        "created_at": "2026-01-02T05:52:51.000Z"
+      },
+      {
+        "id": 54,
+        "filename": "backup-2026-01-03T06-25-27-080.json",
+        "file_path": "C:\\Users\\seung\\YSJ_Projects\\Test_1\\backups\\backup-2026-01-03T06-25-27-080.json",
+        "file_size": 34221,
+        "backup_type": "auto",
+        "created_by": null,
+        "created_at": "2026-01-02T21:25:27.000Z"
+      },
+      {
+        "id": 55,
+        "filename": "backup-2026-01-04T00-29-19-616.json",
+        "file_path": "C:\\Users\\seung\\YSJ_Projects\\Test_1\\backups\\backup-2026-01-04T00-29-19-616.json",
+        "file_size": 34560,
+        "backup_type": "auto",
+        "created_by": null,
+        "created_at": "2026-01-03T15:29:19.000Z"
+      },
+      {
+        "id": 56,
+        "filename": "backup-2026-01-04T10-02-29-333.json",
+        "file_path": "C:\\Users\\seung\\YSJ_Projects\\Test_1\\backups\\backup-2026-01-04T10-02-29-333.json",
+        "file_size": 34899,
+        "backup_type": "auto",
+        "created_by": null,
+        "created_at": "2026-01-04T01:02:29.000Z"
+      },
+      {
+        "id": 57,
+        "filename": "backup-2026-01-07T21-09-26-321.json",
+        "file_path": "C:\\Users\\seung\\YSJ_Projects\\Test_1\\backups\\backup-2026-01-07T21-09-26-321.json",
+        "file_size": 35238,
+        "backup_type": "auto",
+        "created_by": null,
+        "created_at": "2026-01-07T12:09:26.000Z"
+      },
+      {
+        "id": 58,
+        "filename": "backup-2026-01-07T21-12-39-074.json",
+        "file_path": "C:\\Users\\seung\\YSJ_Projects\\Test_1\\backups\\backup-2026-01-07T21-12-39-074.json",
+        "file_size": 35577,
+        "backup_type": "auto",
+        "created_by": null,
+        "created_at": "2026-01-07T12:12:39.000Z"
+      },
+      {
+        "id": 59,
+        "filename": "backup-2026-01-07T21-42-14-713.json",
+        "file_path": "C:\\Users\\seung\\YSJ_Projects\\Test_1\\backups\\backup-2026-01-07T21-42-14-713.json",
+        "file_size": 35916,
+        "backup_type": "auto",
+        "created_by": null,
+        "created_at": "2026-01-07T12:42:14.000Z"
+      },
+      {
+        "id": 60,
+        "filename": "backup-2026-01-07T22-42-14-720.json",
+        "file_path": "C:\\Users\\seung\\YSJ_Projects\\Test_1\\backups\\backup-2026-01-07T22-42-14-720.json",
+        "file_size": 36255,
+        "backup_type": "auto",
+        "created_by": null,
+        "created_at": "2026-01-07T13:42:14.000Z"
+      },
+      {
+        "id": 61,
+        "filename": "backup-2026-01-07T23-42-14-735.json",
+        "file_path": "C:\\Users\\seung\\YSJ_Projects\\Test_1\\backups\\backup-2026-01-07T23-42-14-735.json",
+        "file_size": 36594,
+        "backup_type": "auto",
+        "created_by": null,
+        "created_at": "2026-01-07T14:42:14.000Z"
+      },
+      {
+        "id": 62,
+        "filename": "backup-2026-01-08T13-44-08-082.json",
+        "file_path": "C:\\Users\\seung\\YSJ_Projects\\Test_1\\backups\\backup-2026-01-08T13-44-08-082.json",
+        "file_size": 36933,
+        "backup_type": "auto",
+        "created_by": null,
+        "created_at": "2026-01-08T04:44:08.000Z"
+      },
+      {
+        "id": 63,
+        "filename": "backup-2026-01-08T20-31-54-375.json",
+        "file_path": "C:\\Users\\seung\\YSJ_Projects\\Test_1\\backups\\backup-2026-01-08T20-31-54-375.json",
+        "file_size": 37272,
+        "backup_type": "auto",
+        "created_by": null,
+        "created_at": "2026-01-08T11:31:54.000Z"
+      },
+      {
+        "id": 64,
+        "filename": "backup-2026-01-08T22-11-20-082.json",
+        "file_path": "C:\\Users\\seung\\YSJ_Projects\\Test_1\\backups\\backup-2026-01-08T22-11-20-082.json",
+        "file_size": 37611,
+        "backup_type": "auto",
+        "created_by": null,
+        "created_at": "2026-01-08T13:11:20.000Z"
+      },
+      {
+        "id": 65,
+        "filename": "backup-2026-01-08T23-11-19-929.json",
+        "file_path": "C:\\Users\\seung\\YSJ_Projects\\Test_1\\backups\\backup-2026-01-08T23-11-19-929.json",
+        "file_size": 37950,
+        "backup_type": "auto",
+        "created_by": null,
+        "created_at": "2026-01-08T14:11:19.000Z"
+      },
+      {
+        "id": 66,
+        "filename": "backup-2026-01-09T11-15-36-429.json",
+        "file_path": "C:\\Users\\seung\\YSJ_Projects\\Test_1\\backups\\backup-2026-01-09T11-15-36-429.json",
+        "file_size": 37432,
+        "backup_type": "auto",
+        "created_by": null,
+        "created_at": "2026-01-09T02:15:37.000Z"
+      },
+      {
+        "id": 67,
+        "filename": "backup-2026-01-09T23-38-47-986.json",
+        "file_path": "C:\\Users\\seung\\YSJ_Projects\\Test_1\\backups\\backup-2026-01-09T23-38-47-986.json",
+        "file_size": 38628,
+        "backup_type": "auto",
+        "created_by": null,
+        "created_at": "2026-01-09T14:38:48.000Z"
+      },
+      {
+        "id": 68,
+        "filename": "backup-2026-01-10T13-42-49-816.json",
+        "file_path": "C:\\Users\\seung\\YSJ_Projects\\Test_1\\backups\\backup-2026-01-10T13-42-49-816.json",
+        "file_size": 38967,
+        "backup_type": "auto",
+        "created_by": null,
+        "created_at": "2026-01-10T04:42:50.000Z"
+      },
+      {
+        "id": 69,
+        "filename": "backup-2026-01-19T22-37-45-019.json",
+        "file_path": "C:\\Users\\seung\\YSJ_Projects\\Test_1\\backups\\backup-2026-01-19T22-37-45-019.json",
+        "file_size": 39306,
+        "backup_type": "auto",
+        "created_by": null,
+        "created_at": "2026-01-19T13:37:45.000Z"
+      },
+      {
+        "id": 70,
+        "filename": "backup-2026-01-19T23-37-45-042.json",
+        "file_path": "C:\\Users\\seung\\YSJ_Projects\\Test_1\\backups\\backup-2026-01-19T23-37-45-042.json",
+        "file_size": 27772,
+        "backup_type": "auto",
+        "created_by": null,
+        "created_at": "2026-01-19T14:37:45.000Z"
+      },
+      {
+        "id": 71,
+        "filename": "backup-2026-01-20T09-11-53-028.json",
+        "file_path": "C:\\Users\\seung\\YSJ_Projects\\Test_1\\backups\\backup-2026-01-20T09-11-53-028.json",
+        "file_size": 28111,
+        "backup_type": "auto",
+        "created_by": null,
+        "created_at": "2026-01-20T00:11:53.000Z"
+      },
+      {
+        "id": 72,
+        "filename": "backup-2026-01-20T20-51-24-180.json",
+        "file_path": "C:\\Users\\seung\\YSJ_Projects\\Test_1\\backups\\backup-2026-01-20T20-51-24-180.json",
+        "file_size": 28111,
+        "backup_type": "auto",
+        "created_by": null,
+        "created_at": "2026-01-20T11:51:24.000Z"
+      },
+      {
+        "id": 73,
+        "filename": "backup-2026-01-20T21-51-24-192.json",
+        "file_path": "C:\\Users\\seung\\YSJ_Projects\\Test_1\\backups\\backup-2026-01-20T21-51-24-192.json",
+        "file_size": 28450,
+        "backup_type": "auto",
+        "created_by": null,
+        "created_at": "2026-01-20T12:51:24.000Z"
+      },
+      {
+        "id": 74,
+        "filename": "backup-2026-01-20T22-51-24-204.json",
+        "file_path": "C:\\Users\\seung\\YSJ_Projects\\Test_1\\backups\\backup-2026-01-20T22-51-24-204.json",
+        "file_size": 28789,
+        "backup_type": "auto",
+        "created_by": null,
+        "created_at": "2026-01-20T13:51:24.000Z"
+      },
+      {
+        "id": 75,
+        "filename": "backup-2026-01-21T21-55-44-651.json",
+        "file_path": "C:\\Users\\seung\\YSJ_Projects\\Test_1\\backups\\backup-2026-01-21T21-55-44-651.json",
+        "file_size": 28271,
+        "backup_type": "auto",
+        "created_by": null,
+        "created_at": "2026-01-21T12:55:45.000Z"
+      },
+      {
+        "id": 76,
+        "filename": "backup-2026-01-21T22-55-44-680.json",
+        "file_path": "C:\\Users\\seung\\YSJ_Projects\\Test_1\\backups\\backup-2026-01-21T22-55-44-680.json",
+        "file_size": 29467,
+        "backup_type": "auto",
+        "created_by": null,
+        "created_at": "2026-01-21T13:55:44.000Z"
+      },
+      {
+        "id": 77,
+        "filename": "backup-2026-01-21T23-55-44-691.json",
+        "file_path": "C:\\Users\\seung\\YSJ_Projects\\Test_1\\backups\\backup-2026-01-21T23-55-44-691.json",
+        "file_size": 29467,
+        "backup_type": "auto",
+        "created_by": null,
+        "created_at": "2026-01-21T14:55:44.000Z"
+      },
+      {
+        "id": 78,
+        "filename": "backup-2026-01-22T07-58-52-518.json",
+        "file_path": "C:\\Users\\seung\\YSJ_Projects\\Test_1\\backups\\backup-2026-01-22T07-58-52-518.json",
+        "file_size": 28610,
+        "backup_type": "auto",
+        "created_by": null,
+        "created_at": "2026-01-21T22:58:53.000Z"
+      },
+      {
+        "id": 79,
+        "filename": "backup-2026-01-23T01-31-01-511.json",
+        "file_path": "C:\\Users\\seung\\YSJ_Projects\\Test_1\\backups\\backup-2026-01-23T01-31-01-511.json",
+        "file_size": 28949,
+        "backup_type": "auto",
+        "created_by": null,
+        "created_at": "2026-01-22T16:31:01.000Z"
       }
     ]
   }

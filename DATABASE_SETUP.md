@@ -1,28 +1,32 @@
 # 데이터베이스 설정 가이드
 
-## MySQL 설치
+## MariaDB 설치
+
+이 프로젝트는 MariaDB를 사용합니다. MariaDB는 MySQL과 호환되며, mysql2 드라이버를 통해 연결됩니다.
 
 ### Windows
 
-1. [MySQL 공식 사이트](https://dev.mysql.com/downloads/mysql/)에서 MySQL Installer를 다운로드
-2. 설치 프로그램 실행 후 "Developer Default" 옵션 선택
-3. 설치 완료 후 MySQL 서버 시작
+1. [MariaDB 공식 사이트](https://mariadb.org/download/)에서 MariaDB 설치 프로그램을 다운로드
+2. 설치 프로그램 실행 후 기본 설정으로 설치
+3. 설치 완료 후 MariaDB 서버 시작
+   - Windows 서비스에서 "MariaDB" 서비스가 실행 중인지 확인
+   - 또는 명령 프롬프트에서: `net start MariaDB`
 
 ### macOS
 
 ```bash
 # Homebrew를 사용한 설치
-brew install mysql
-brew services start mysql
+brew install mariadb
+brew services start mariadb
 ```
 
 ### Linux (Ubuntu/Debian)
 
 ```bash
 sudo apt update
-sudo apt install mysql-server
-sudo systemctl start mysql
-sudo systemctl enable mysql
+sudo apt install mariadb-server
+sudo systemctl start mariadb
+sudo systemctl enable mariadb
 ```
 
 ## 데이터베이스 초기화
@@ -62,9 +66,13 @@ npm run migrate
 
 ## 데이터베이스 연결 확인
 
-MySQL에 접속하여 데이터베이스가 정상적으로 생성되었는지 확인할 수 있습니다:
+MariaDB에 접속하여 데이터베이스가 정상적으로 생성되었는지 확인할 수 있습니다:
 
 ```bash
+# Windows (MariaDB 설치 경로에 따라 다를 수 있음)
+"C:\Program Files\MariaDB XX.X\bin\mysql.exe" -u root -p
+
+# macOS/Linux
 mysql -u root -p
 ```
 
@@ -74,4 +82,17 @@ SHOW TABLES;
 SELECT * FROM projects;
 SELECT * FROM project_children;
 ```
+
+## MariaDB 연결 테스트
+
+프로젝트에서 MariaDB 연결을 테스트하려면:
+
+```bash
+npx tsx scripts/test-mariadb-connection.ts
+```
+
+이 스크립트는:
+- MariaDB 서버 연결 상태 확인
+- 데이터베이스 버전 확인
+- 데이터베이스 및 테이블 목록 확인
 

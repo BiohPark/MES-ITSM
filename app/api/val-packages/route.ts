@@ -5,6 +5,7 @@ import {
   updateValPackage,
   deleteValPackage,
   getNextValPackageId,
+  getValPackagesForTask,
 } from '@/lib/db'
 import type { Project } from '@/types/project'
 
@@ -27,10 +28,17 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url)
     const type = searchParams.get('type')
+    const taskId = searchParams.get('taskId')
 
     if (type === 'val-package') {
       const nextId = await getNextValPackageId()
       return NextResponse.json({ nextId })
+    }
+
+    // taskId가 있으면 해당 일감에 연결된 VAL Pkg 조회
+    if (taskId) {
+      const valPackages = await getValPackagesForTask(taskId)
+      return NextResponse.json(valPackages)
     }
 
     // 기본: VAL Pkg 목록 조회

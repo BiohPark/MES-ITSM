@@ -8,6 +8,10 @@ import { buildNewProject, buildNewChild, buildNewGmpRecord, buildNewIssue, build
 import type { Issue } from '@/types/issue'
 import { IssuesTable } from '@/components/issues/IssuesTable'
 import { IssueEditModal } from '@/components/issues/IssueEditModal'
+import { MeetingNotesView } from '@/components/meetings/MeetingNotesView'
+import { MeetingNoteEditModal } from '@/components/meetings/MeetingNoteEditModal'
+import { ActionItemsView } from '@/components/action-items/ActionItemsView'
+import type { MeetingNote } from '@/types/meeting'
 import { DashboardView } from '@/components/dashboard/DashboardView'
 import { ProjectsTable } from '@/components/projects/ProjectsTable'
 import { ProjectEditModal } from '@/components/projects/ProjectEditModal'
@@ -79,6 +83,15 @@ export default function Home() {
   const [isIssueEditing, setIsIssueEditing] = useState(false)
   const [issueEditMode, setIssueEditMode] = useState<'create' | 'edit'>('edit')
   const [selectedIssueIds, setSelectedIssueIds] = useState<Set<string>>(new Set())
+  // 회의록 관련 상태
+  const [meetingNotes, setMeetingNotes] = useState<MeetingNote[]>([])
+  const [meetingNotesLoading, setMeetingNotesLoading] = useState(false)
+  const [meetingNotesError, setMeetingNotesError] = useState<string | null>(null)
+  const [selectedMeetingNote, setSelectedMeetingNote] = useState<MeetingNote | null>(null)
+  const [isMeetingNoteEditing, setIsMeetingNoteEditing] = useState(false)
+  const [meetingNoteEditMode, setMeetingNoteEditMode] = useState<'create' | 'edit'>('edit')
+  const [selectedMeetingNoteIds, setSelectedMeetingNoteIds] = useState<Set<string>>(new Set())
+  const [meetingNoteSearchKeyword, setMeetingNoteSearchKeyword] = useState<string>('')
   // 인증 관련 상태
   const [user, setUser] = useState<{ id: string; username: string; name: string; role: 'admin' | 'user'; email?: string } | null>(null)
   const [isLoadingSession, setIsLoadingSession] = useState(true)
@@ -372,6 +385,48 @@ export default function Home() {
     }
   }, [])
 
+  // 회의록 관련 함수들
+  const fetchMeetingNotes = useCallback(async (signal?: AbortSignal) => {
+    try {
+      setMeetingNotesLoading(true)
+      setMeetingNotesError(null)
+      const url = meetingNoteSearchKeyword
+        ? `/api/meetings?keyword=${encodeURIComponent(meetingNoteSearchKeyword)}`
+        : '/api/meetings'
+      const response = await fetch(url, { 
+        cache: 'no-store',
+        signal,
+      })
+      if (signal?.aborted) return
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || `HTTP ${response.status}: Failed to fetch meeting notes`)
+      }
+      const data = (await response.json()) as MeetingNote[]
+      if (signal?.aborted) return
+      setMeetingNotes(data)
+    } catch (err) {
+      if (signal?.aborted) return
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+      setMeetingNotesError(errorMessage)
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error fetching meeting notes:', err)
+      }
+    } finally {
+      if (!signal?.aborted) {
+        setMeetingNotesLoading(false)
+      }
+    }
+  }, [meetingNoteSearchKeyword])
+
+  useEffect(() => {
+    if (activeTab === 'meetings') {
+      const abortController = new AbortController()
+      fetchMeetingNotes(abortController.signal)
+      return () => abortController.abort()
+    }
+  }, [activeTab, meetingNoteSearchKeyword, fetchMeetingNotes])
+
   useEffect(() => {
     const abortController = new AbortController()
     let isMounted = true
@@ -389,6 +444,16 @@ export default function Home() {
       if (activeTab === 'val-pkg' && isMounted) {
         await fetchValPackages(abortController.signal)
       }
+      // 회의록 탭이 활성화될 때 데이터 로드
+      if (activeTab === 'meetings' && isMounted) {
+        await fetchMeetingNotes(abortController.signal)
+      }
+      // 내 일감 탭이 활성화될 때 데이터 로드
+      if (activeTab === 'personal' && isMounted) {
+        await fetchProjects(abortController.signal)
+        await fetchGmpRecords(abortController.signal)
+        await fetchOrphanTasks(abortController.signal)
+      }
     }
 
     loadTabData()
@@ -397,7 +462,7 @@ export default function Home() {
       isMounted = false
       abortController.abort()
     }
-  }, [activeTab, fetchGmpRecords, fetchIssues, fetchValPackages])
+  }, [activeTab, fetchGmpRecords, fetchIssues, fetchValPackages, fetchProjects, fetchOrphanTasks])
 
   useEffect(() => {
     const closeMenu = () => setContextMenu(null)
@@ -494,7 +559,10 @@ export default function Home() {
         throw new Error('Failed to add task')
       }
 
+      // 데이터 새로고침 (내 일감 탭도 자동 업데이트됨)
       await fetchProjects()
+      await fetchGmpRecords()
+      await fetchOrphanTasks()
     } catch (err) {
       if (process.env.NODE_ENV === 'development') {
         console.error('Error adding task:', err)
@@ -654,7 +722,10 @@ export default function Home() {
         throw new Error('Failed to add GMP record')
       }
 
+      // 데이터 새로고침 (내 일감 탭도 자동 업데이트됨)
       await fetchGmpRecords()
+      await fetchProjects()
+      await fetchOrphanTasks()
     } catch (err) {
       if (process.env.NODE_ENV === 'development') {
         console.error('Error adding GMP record:', err)
@@ -1013,6 +1084,134 @@ export default function Home() {
         console.error('Error deleting issues:', err)
       }
       alert('이슈 삭제에 실패했습니다.')
+    }
+  }
+
+  // 회의록 관련 핸들러
+  const handleAddMeetingNote = async (meetingNote: MeetingNote) => {
+    try {
+      const response = await fetch('/api/meetings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'add',
+          meetingNote: meetingNote,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to add meeting note')
+      }
+
+      await fetchMeetingNotes()
+    } catch (err) {
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error adding meeting note:', err)
+      }
+      alert('회의록 추가에 실패했습니다.')
+      throw err
+    }
+  }
+
+  const handleUpdateMeetingNote = async (meetingNote: MeetingNote) => {
+    try {
+      const response = await fetch('/api/meetings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'update',
+          meetingNote: meetingNote,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to update meeting note')
+      }
+
+      await fetchMeetingNotes()
+    } catch (err) {
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error updating meeting note:', err)
+      }
+      alert('회의록 수정에 실패했습니다.')
+      throw err
+    }
+  }
+
+  const handleBatchDeleteMeetingNotes = async () => {
+    if (selectedMeetingNoteIds.size === 0) {
+      alert('삭제할 회의록을 선택해주세요.')
+      return
+    }
+
+    if (!confirm(`선택한 ${selectedMeetingNoteIds.size}개의 회의록을 삭제하시겠습니까?`)) {
+      return
+    }
+
+    try {
+      for (const meetingNoteId of Array.from(selectedMeetingNoteIds)) {
+        const response = await fetch('/api/meetings', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            action: 'delete',
+            id: meetingNoteId,
+          }),
+        })
+
+        if (!response.ok) {
+          throw new Error(`Failed to delete meeting note ${meetingNoteId}`)
+        }
+      }
+
+      await fetchMeetingNotes()
+      setSelectedMeetingNoteIds(new Set())
+      setIsDeleteMode(false)
+      alert('회의록이 삭제되었습니다.')
+    } catch (err) {
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error deleting meeting notes:', err)
+      }
+      alert('회의록 삭제에 실패했습니다.')
+    }
+  }
+
+  const handleNewMeetingNote = async () => {
+    try {
+      const response = await fetch('/api/meetings?type=nextId')
+      if (!response.ok) {
+        throw new Error('Failed to get next meeting note ID')
+      }
+      const data = await response.json()
+      const nextId = data.nextId
+
+      const newMeetingNote: MeetingNote = {
+        id: nextId,
+        title: '',
+        meeting_date: new Date().toISOString().slice(0, 10),
+        attendees: [],
+        agenda: [],
+        discussion: '',
+        decisions: '',
+        action_items: [],
+        next_meeting_date: null,
+        created_by: user?.name || '',
+      }
+
+      setSelectedMeetingNote(newMeetingNote)
+      setMeetingNoteEditMode('create')
+      setIsMeetingNoteEditing(true)
+    } catch (err) {
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error creating new meeting note:', err)
+      }
+      alert('새 회의록 생성에 실패했습니다.')
     }
   }
 
@@ -1602,11 +1801,10 @@ export default function Home() {
                       throw new Error('Failed to update GMP record')
                     }
                   }
+                  // 데이터 새로고침 (내 일감 탭도 자동 업데이트됨)
                   await fetchGmpRecords()
-                  // 프로젝트 목록 탭이면 프로젝트 목록도 새로고침
-                  if (activeTab === 'list') {
-                    await fetchProjects()
-                  }
+                  await fetchProjects()
+                  await fetchOrphanTasks()
                 } else {
                   // 일반 일감 저장
                   if (taskEditMode === 'create') {
@@ -1628,7 +1826,10 @@ export default function Home() {
                       throw new Error('Failed to update task')
                     }
                   }
+                  // 데이터 새로고침 (내 일감 탭도 자동 업데이트됨)
                   await fetchProjects()
+                  await fetchGmpRecords()
+                  await fetchOrphanTasks()
                 }
                 setIsTaskEditing(false)
                 setSelectedTask(null)
@@ -1674,6 +1875,99 @@ export default function Home() {
           />
         )}
 
+        {/* 회의록 탭 */}
+        {activeTab === 'meetings' && (
+          <MeetingNotesView
+            meetingNotes={meetingNotes}
+            loading={meetingNotesLoading}
+            error={meetingNotesError}
+            onRefresh={fetchMeetingNotes}
+            onMeetingNoteClick={(meetingNote: MeetingNote) => {
+              if (!isDeleteMode) {
+                setSelectedMeetingNote(meetingNote)
+                setMeetingNoteEditMode('edit')
+                setIsMeetingNoteEditing(true)
+              }
+            }}
+            onNewMeetingNote={handleNewMeetingNote}
+            isDeleteMode={isDeleteMode}
+            selectedMeetingNoteIds={selectedMeetingNoteIds}
+            onToggleMeetingNoteSelection={(meetingNoteId: string) => {
+              const newSet = new Set(selectedMeetingNoteIds)
+              if (newSet.has(meetingNoteId)) {
+                newSet.delete(meetingNoteId)
+              } else {
+                newSet.add(meetingNoteId)
+              }
+              setSelectedMeetingNoteIds(newSet)
+            }}
+            onDeleteModeChange={(enabled: boolean) => {
+              setIsDeleteMode(enabled)
+              if (!enabled) {
+                setSelectedMeetingNoteIds(new Set())
+              }
+            }}
+            onBatchDelete={handleBatchDeleteMeetingNotes}
+            searchKeyword={meetingNoteSearchKeyword}
+            onSearchChange={setMeetingNoteSearchKeyword}
+          />
+        )}
+
+        {/* 액션 아이템 탭 */}
+        {activeTab === 'action-items' && (
+          <ActionItemsView
+            currentUser={user ? { name: user.name, username: user.username } : undefined}
+            onMeetingNoteClick={async (meetingNoteId: string) => {
+              // 회의록 탭으로 이동하고 해당 회의록 열기
+              setActiveTab('meetings')
+              try {
+                const response = await fetch(`/api/meetings`)
+                if (response.ok) {
+                  const meetingNotes = await response.json()
+                  const meetingNote = meetingNotes.find((mn: MeetingNote) => mn.id === meetingNoteId)
+                  if (meetingNote) {
+                    setSelectedMeetingNote(meetingNote)
+                    setMeetingNoteEditMode('edit')
+                    setIsMeetingNoteEditing(true)
+                  }
+                }
+              } catch (err) {
+                console.error('Error fetching meeting note:', err)
+              }
+            }}
+          />
+        )}
+
+        {/* 회의록 편집 모달 */}
+        {activeTab === 'meetings' && isMeetingNoteEditing && selectedMeetingNote && (
+          <MeetingNoteEditModal
+            meetingNote={selectedMeetingNote}
+            mode={meetingNoteEditMode}
+            onClose={() => {
+              setIsMeetingNoteEditing(false)
+              setSelectedMeetingNote(null)
+              setMeetingNoteEditMode('edit')
+            }}
+            onSave={async (updatedMeetingNote: MeetingNote) => {
+              try {
+                if (meetingNoteEditMode === 'create') {
+                  await handleAddMeetingNote(updatedMeetingNote)
+                } else {
+                  await handleUpdateMeetingNote(updatedMeetingNote)
+                }
+                setIsMeetingNoteEditing(false)
+                setSelectedMeetingNote(null)
+                setMeetingNoteEditMode('edit')
+              } catch (err) {
+                if (process.env.NODE_ENV === 'development') {
+                  console.error('Error saving meeting note:', err)
+                }
+                alert('회의록 저장에 실패했습니다.')
+              }
+            }}
+          />
+        )}
+
         {/* 개인별 일감 탭에서도 일감 수정 모달 표시 */}
         {activeTab === 'personal' && isTaskEditing && selectedTask && (
           <TaskEditModal
@@ -1709,7 +2003,10 @@ export default function Home() {
                     throw new Error('Failed to update task')
                   }
                 }
+                // 데이터 새로고침 (내 일감 탭도 자동 업데이트됨)
                 await fetchProjects()
+                await fetchGmpRecords()
+                await fetchOrphanTasks()
                 setIsTaskEditing(false)
                 setSelectedTask(null)
                 setTaskEditMode('edit')

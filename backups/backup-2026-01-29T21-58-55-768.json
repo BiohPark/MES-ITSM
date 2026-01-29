@@ -1,0 +1,30 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-01-29T12:58:55.780Z",
+  "tables": {
+    "projects": [],
+    "project_children": [],
+    "gmp_records": [],
+    "val_packages": [],
+    "val_package_task_links": [],
+    "issues": [],
+    "users": [
+      {
+        "id": "USER-00001",
+        "name": "유승진",
+        "email": "seungjinwa@gmail.com",
+        "created_at": "2026-01-29T12:58:08.000Z",
+        "updated_at": "2026-01-29T12:58:08.000Z",
+        "username": "admin",
+        "password": "$2b$10$XDeB3F6hYbXniKRbJhbd7udkqWfnHmoA3eaNoiGLwxUcKvEmU4tvu",
+        "role": "admin",
+        "password_reset_token": null,
+        "password_reset_expires": null
+      }
+    ],
+    "voc_feedbacks": [],
+    "comments": [],
+    "attachments": [],
+    "backup_metadata": []
+  }
+}

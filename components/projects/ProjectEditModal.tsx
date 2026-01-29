@@ -49,6 +49,8 @@ export function ProjectEditModal({
     if (!projectWithFields.description) projectWithFields.description = ''
     if (!projectWithFields.start) projectWithFields.start = new Date().toISOString().slice(0, 10)
     if (!projectWithFields.srb_ver) projectWithFields.srb_ver = ''
+    if (projectWithFields.has_cc === undefined) projectWithFields.has_cc = false
+    if (projectWithFields.cc_number === undefined) projectWithFields.cc_number = null
     setFormData(projectWithFields)
 
     return () => {
@@ -241,6 +243,42 @@ export function ProjectEditModal({
                 placeholder="예: SRB 26.1"
               />
             </div>
+
+            <div className="form-group">
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={formData.has_cc || false}
+                  onChange={(e) => {
+                    setFormData((prev: any) => ({
+                      ...prev,
+                      has_cc: e.target.checked,
+                      cc_number: e.target.checked ? prev.cc_number : null,
+                    }))
+                  }}
+                  style={{ cursor: 'pointer' }}
+                />
+                현업 CC 존재
+              </label>
+            </div>
+
+            {formData.has_cc && (
+              <div className="form-group">
+                <label htmlFor="cc_number">CC 번호</label>
+                <input
+                  type="text"
+                  id="cc_number"
+                  name="cc_number"
+                  value={formData.cc_number || ''}
+                  onChange={handleChange}
+                  className="form-input"
+                  placeholder="예: CC-00001"
+                />
+                <small style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.25rem', display: 'block' }}>
+                  프로젝트에 연결된 CC 번호를 입력하세요. 이 프로젝트 하위의 모든 일감에서 CC 연결로 인식됩니다.
+                </small>
+              </div>
+            )}
 
             <div className="form-group">
               <label htmlFor="start">시작일</label>

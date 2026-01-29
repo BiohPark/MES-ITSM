@@ -2,9 +2,10 @@ import mysql from 'mysql2/promise'
 import type { Project, ProjectChild } from '@/types/project'
 import type { Issue } from '@/types/issue'
 import type { Comment, CommentEntityType } from '@/types/comment'
+import type { MeetingNote, ActionItem } from '@/types/meeting'
 import { getUsers, createUser, getNextUserId } from '@/lib/users'
 
-// 데이터베이스 연결 설정
+// MariaDB 연결 설정 (mysql2는 MariaDB와 호환됨)
 const dbConfig = {
   host: process.env.DB_HOST || '127.0.0.1',
   port: parseInt(process.env.DB_PORT || '3306', 10),
@@ -17,9 +18,7 @@ const dbConfig = {
   enableKeepAlive: true,
   keepAliveInitialDelay: 0,
   connectTimeout: 10000, // 10초 타임아웃
-  acquireTimeout: 10000, // 연결 획득 타임아웃
-  timeout: 10000, // 쿼리 타임아웃
-  reconnect: true,
+  // MariaDB/mysql2 호환을 위해 일부 옵션 제거
 }
 
 // 연결 풀 생성
@@ -100,7 +99,8 @@ export async function testConnection(maxRetries: number = 1): Promise<boolean> {
   return false
 }
 
-// 데이터베이스 초기화 (테이블 생성)
+// MariaDB 데이터베이스 초기화 (기본 테이블 생성)
+// 참고: 모든 테이블은 npm run setup-db를 통해 생성됩니다
 export async function initializeDatabase(): Promise<void> {
   const connection = await mysql.createConnection({
     host: dbConfig.host,
@@ -330,6 +330,7 @@ export async function getProjects(): Promise<Project[]> {
             start: child.start ? (typeof child.start === 'string' ? child.start : new Date(child.start).toISOString().slice(0, 10)) : today,
             due: child.due ? (typeof child.due === 'string' ? child.due : new Date(child.due).toISOString().slice(0, 10)) : '',
             description: child.description || '',
+            issue_reason: child.issue_reason || null,
             phases: phases,
             linked_gmp_record_id: child.linked_gmp_record_id || null,
             linked_val_packages: valPackageLinks.get(child.id) || [],
@@ -391,6 +392,8 @@ export async function getProjects(): Promise<Project[]> {
         due: project.due ? (typeof project.due === 'string' ? project.due : new Date(project.due).toISOString().slice(0, 10)) : '',
         description: project.description || '',
         srb_ver: project.srb_ver || '',
+        has_cc: project.has_cc || false,
+        cc_number: project.cc_number || null,
         children: allChildren,
       })
     }
@@ -482,6 +485,7 @@ export async function getOrphanTasks(): Promise<ProjectChild[]> {
       start: task.start ? (typeof task.start === 'string' ? task.start : new Date(task.start).toISOString().slice(0, 10)) : today,
       due: task.due ? (typeof task.due === 'string' ? task.due : new Date(task.due).toISOString().slice(0, 10)) : '',
       description: task.description || '',
+      issue_reason: task.issue_reason || null,
       phases: phases,
       linked_gmp_record_id: task.linked_gmp_record_id || null,
       linked_val_packages: valPackageLinks.get(task.id) || [],
@@ -517,8 +521,8 @@ export async function createProject(project: Project): Promise<void> {
 
     // 프로젝트 추가
     await connection.query(
-      `INSERT INTO projects (id, name, owner, members, status, progress, start, due, description, srb_ver)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO projects (id, name, owner, members, status, progress, start, due, description, srb_ver, has_cc, cc_number)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         project.id,
         project.name,
@@ -530,6 +534,8 @@ export async function createProject(project: Project): Promise<void> {
         project.due,
         project.description || null,
         (project as any).srb_ver || null,
+        (project as any).has_cc || false,
+        (project as any).cc_number || null,
       ]
     )
 
@@ -575,7 +581,7 @@ export async function updateProject(project: Project): Promise<void> {
     // 프로젝트 업데이트
     await connection.query(
       `UPDATE projects 
-       SET name = ?, owner = ?, members = ?, status = ?, progress = ?, start = ?, due = ?, description = ?, srb_ver = ?
+       SET name = ?, owner = ?, members = ?, status = ?, progress = ?, start = ?, due = ?, description = ?, srb_ver = ?, has_cc = ?, cc_number = ?
        WHERE id = ?`,
       [
         project.name,
@@ -587,6 +593,8 @@ export async function updateProject(project: Project): Promise<void> {
         project.due,
         project.description || null,
         (project as any).srb_ver || null,
+        (project as any).has_cc || false,
+        (project as any).cc_number || null,
         project.id,
       ]
     )
@@ -730,10 +738,11 @@ export async function addChildToProject(
   const pool = getPool()
   const phasesJson = (child as any).phases ? JSON.stringify((child as any).phases) : null
   const linkedGmpRecordId = (child as any).linked_gmp_record_id || null
+  const issueReason = (child as any).issue_reason || null
   await pool.query(
-    `INSERT INTO project_children (id, project_id, title, owner, status, progress, start, due, description, phases, linked_gmp_record_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [child.id, projectId, child.title, child.owner, child.status, child.progress || 0, child.start || null, child.due || null, child.description || null, phasesJson, linkedGmpRecordId]
+    `INSERT INTO project_children (id, project_id, title, owner, status, progress, start, due, description, phases, linked_gmp_record_id, issue_reason)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [child.id, projectId, child.title, child.owner, child.status, child.progress || 0, child.start || null, child.due || null, child.description || null, phasesJson, linkedGmpRecordId, issueReason]
   )
   
   // 프로젝트가 있는 경우 마감일 자동 업데이트
@@ -756,26 +765,123 @@ export async function updateChild(
   )
   const oldProjectId = existingRows.length > 0 ? existingRows[0].project_id : null
   
-    // 상태 자동 관리: Dropped 상태는 유지, 그 외 실적 진척도가 100%이면 "Completed", 그 외 Risk 체크, 0%보다 크면 "In Progress"
-    let finalStatus = child.status
-    // Dropped 상태는 진행률이 100%여도 Completed로 변경하지 않음
-    if (child.status === 'Dropped') {
-      finalStatus = 'Dropped'
-    } else if ((child.progress || 0) >= 100) {
-      finalStatus = 'Completed'
-    } else if (checkRiskStatus(child.start, child.due, child.progress || 0)) {
-      finalStatus = 'Issued'
-    } else if ((child.progress || 0) > 0) {
-      finalStatus = 'In Progress'
+  // Issue 상태 체크 함수
+  const checkIssueStatus = async (taskId: string, projectId: string | null, due: string | null): Promise<{ isIssue: boolean; reason: string | null }> => {
+    if (!due) {
+      return { isIssue: false, reason: null }
     }
+
+    // 마감일 2개월 전인지 체크
+    const dueDate = new Date(due)
+    const twoMonthsBefore = new Date(dueDate)
+    twoMonthsBefore.setMonth(twoMonthsBefore.getMonth() - 2)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    twoMonthsBefore.setHours(0, 0, 0, 0)
+
+    if (today < twoMonthsBefore) {
+      return { isIssue: false, reason: null }
+    }
+
+    // Val Pkg 연결 확인
+    const [valPackageLinks] = await pool.query<any[]>(
+      'SELECT COUNT(*) as count FROM val_package_task_links WHERE task_id = ?',
+      [taskId]
+    )
+    const hasValPackage = valPackageLinks[0]?.count > 0
+
+    // 프로젝트에 CC가 있는지 확인
+    let hasProjectCc = false
+    if (projectId) {
+      // 프로젝트의 CC 확인
+      const [projectRows] = await pool.query<any[]>(
+        'SELECT has_cc, cc_number FROM projects WHERE id = ?',
+        [projectId]
+      )
+      if (projectRows.length > 0) {
+        const project = projectRows[0]
+        if (project.has_cc && project.cc_number) {
+          hasProjectCc = true
+        }
+      }
+
+      // 프로젝트에 연결된 GMP Record CC 확인
+      if (!hasProjectCc) {
+        const [ccRecords] = await pool.query<any[]>(
+          'SELECT COUNT(*) as count FROM gmp_records WHERE project_id = ? AND kind = "CC"',
+          [projectId]
+        )
+        hasProjectCc = ccRecords[0]?.count > 0
+      }
+    }
+
+    // Issue 조건: 마감일 2개월 전이고, Val Pkg 연결이 없고, 프로젝트에 CC가 없는 경우
+    if (!hasValPackage && !hasProjectCc) {
+      const reasons: string[] = []
+      if (!hasValPackage) {
+        reasons.push('VAL Pkg가 연결되지 않았습니다')
+      }
+      if (!hasProjectCc) {
+        reasons.push('프로젝트에 CC가 연결되지 않았습니다')
+      }
+      return {
+        isIssue: true,
+        reason: `마감일 2개월 전까지 다음 조건을 만족해야 합니다:\n- ${reasons.join('\n- ')}\n\n해결 방법:\n- 일감에 VAL Pkg를 연결하거나\n- 프로젝트에 현업 CC를 연결하세요`
+      }
+    }
+
+    return { isIssue: false, reason: null }
+  }
+
+  // 상태 자동 관리: Dropped 상태는 유지, 그 외 실적 진척도가 100%이면 "Completed", 그 외 Issue 체크, Risk 체크, 0%보다 크면 "In Progress"
+  let finalStatus = child.status
+  let issueReason: string | null = (child as any).issue_reason || null
+
+  // Dropped 상태는 진행률이 100%여도 Completed로 변경하지 않음
+  if (child.status === 'Dropped') {
+    finalStatus = 'Dropped'
+    issueReason = null
+  } else if ((child.progress || 0) >= 100) {
+    finalStatus = 'Completed'
+    issueReason = null // 완료되면 Issue 해결
+  } else {
+    // Issue 상태 체크 (일감만, GMP Record는 제외)
+    const isGmpRecord = !!(child as any).kind_number || !!(child as any).isGmpRecord
+    if (!isGmpRecord) {
+      const issueCheck = await checkIssueStatus(child.id, projectId, child.due || null)
+      if (issueCheck.isIssue) {
+        finalStatus = 'Issue'
+        issueReason = issueCheck.reason
+      } else {
+        // Issue가 아니면 issue_reason 삭제
+        issueReason = null
+        // 기존 로직
+        if (checkRiskStatus(child.start, child.due, child.progress || 0)) {
+          finalStatus = 'Issued'
+        } else if ((child.progress || 0) > 0) {
+          finalStatus = 'In Progress'
+        } else {
+          finalStatus = 'Planning'
+        }
+      }
+    } else {
+      // GMP Record는 기존 로직
+      issueReason = null
+      if (checkRiskStatus(child.start, child.due, child.progress || 0)) {
+        finalStatus = 'Issued'
+      } else if ((child.progress || 0) > 0) {
+        finalStatus = 'In Progress'
+      }
+    }
+  }
   
   const phasesJson = (child as any).phases ? JSON.stringify((child as any).phases) : null
   const linkedGmpRecordId = (child as any).linked_gmp_record_id || null
   await pool.query(
     `UPDATE project_children 
-     SET project_id = ?, title = ?, owner = ?, status = ?, progress = ?, start = ?, due = ?, description = ?, phases = ?, linked_gmp_record_id = ?
+     SET project_id = ?, title = ?, owner = ?, status = ?, progress = ?, start = ?, due = ?, description = ?, phases = ?, linked_gmp_record_id = ?, issue_reason = ?
      WHERE id = ?`,
-    [projectId, child.title, child.owner, finalStatus, child.progress || 0, child.start || null, child.due || null, child.description || null, phasesJson, linkedGmpRecordId, child.id]
+    [projectId, child.title, child.owner, finalStatus, child.progress || 0, child.start || null, child.due || null, child.description || null, phasesJson, linkedGmpRecordId, issueReason, child.id]
   )
   
   // 프로젝트가 변경되었거나 업데이트된 경우 마감일 자동 업데이트
@@ -1022,7 +1128,7 @@ export async function addGmpRecord(
         devManager = { id: userId, name: '개발 매니저', role: '개발 매니저' }
       }
       
-      // 일감 phases 설정 (PI, PM은 PIM 매니저, 개발은 개발 매니저)
+      // 일감 phases 설정 (PI는 PIM 매니저, 개발은 개발 매니저)
       const taskPhases = {
         pi: {
           owner: pimManager!.name,
@@ -1030,13 +1136,6 @@ export async function addGmpRecord(
           progress: phases.pi?.progress || 0,
           start: phases.pi?.start || phases.start || new Date().toISOString().slice(0, 10),
           due: phases.pi?.due || phases.due || '',
-        },
-        pm: {
-          owner: pimManager!.name,
-          status: phases.pm?.status || 'Planning',
-          progress: phases.pm?.progress || 0,
-          start: phases.pm?.start || phases.start || new Date().toISOString().slice(0, 10),
-          due: phases.pm?.due || phases.due || '',
         },
         development: {
           owner: devManager!.name,
@@ -1151,13 +1250,6 @@ export async function updateGmpRecord(
           progress: phases.pi?.progress || 0,
           start: phases.pi?.start || phases.start || new Date().toISOString().slice(0, 10),
           due: phases.pi?.due || phases.due || '',
-        },
-        pm: {
-          owner: pimManager!.name,
-          status: phases.pm?.status || 'Planning',
-          progress: phases.pm?.progress || 0,
-          start: phases.pm?.start || phases.start || new Date().toISOString().slice(0, 10),
-          due: phases.pm?.due || phases.due || '',
         },
         development: {
           owner: devManager!.name,
@@ -2083,5 +2175,314 @@ export async function unlinkAllTasksFromValPackage(valPackageId: string): Promis
     'DELETE FROM val_package_task_links WHERE val_package_id = ?',
     [valPackageId]
   )
+}
+
+// ==================== 회의록 관련 함수 ====================
+
+// 모든 회의록 조회
+export async function getAllMeetingNotes(): Promise<MeetingNote[]> {
+  const pool = getPool()
+  const [rows] = await pool.query<any[]>(
+    `SELECT * FROM meeting_notes ORDER BY meeting_date DESC, created_at DESC`
+  )
+
+  return rows.map((row) => ({
+    id: row.id,
+    title: row.title,
+    meeting_date: row.meeting_date ? (typeof row.meeting_date === 'string' ? row.meeting_date : new Date(row.meeting_date).toISOString().slice(0, 10)) : '',
+    attendees: row.attendees ? (typeof row.attendees === 'string' ? JSON.parse(row.attendees) : row.attendees) : [],
+    agenda: row.agenda ? (typeof row.agenda === 'string' ? JSON.parse(row.agenda) : row.agenda) : [],
+    discussion: row.discussion || '',
+    decisions: row.decisions || '',
+    action_items: row.action_items ? (typeof row.action_items === 'string' ? JSON.parse(row.action_items) : row.action_items) : [],
+    next_meeting_date: row.next_meeting_date ? (typeof row.next_meeting_date === 'string' ? row.next_meeting_date : new Date(row.next_meeting_date).toISOString().slice(0, 10)) : null,
+    created_by: row.created_by,
+    created_at: row.created_at ? new Date(row.created_at).toISOString() : undefined,
+    updated_at: row.updated_at ? new Date(row.updated_at).toISOString() : undefined,
+  }))
+}
+
+// 회의록 ID로 조회
+export async function getMeetingNoteById(id: string): Promise<MeetingNote | null> {
+  const pool = getPool()
+  const [rows] = await pool.query<any[]>(
+    'SELECT * FROM meeting_notes WHERE id = ?',
+    [id]
+  )
+
+  if (rows.length === 0) {
+    return null
+  }
+
+  const row = rows[0]
+  return {
+    id: row.id,
+    title: row.title,
+    meeting_date: row.meeting_date ? (typeof row.meeting_date === 'string' ? row.meeting_date : new Date(row.meeting_date).toISOString().slice(0, 10)) : '',
+    attendees: row.attendees ? (typeof row.attendees === 'string' ? JSON.parse(row.attendees) : row.attendees) : [],
+    agenda: row.agenda ? (typeof row.agenda === 'string' ? JSON.parse(row.agenda) : row.agenda) : [],
+    discussion: row.discussion || '',
+    decisions: row.decisions || '',
+    action_items: row.action_items ? (typeof row.action_items === 'string' ? JSON.parse(row.action_items) : row.action_items) : [],
+    next_meeting_date: row.next_meeting_date ? (typeof row.next_meeting_date === 'string' ? row.next_meeting_date : new Date(row.next_meeting_date).toISOString().slice(0, 10)) : null,
+    created_by: row.created_by,
+    created_at: row.created_at ? new Date(row.created_at).toISOString() : undefined,
+    updated_at: row.updated_at ? new Date(row.updated_at).toISOString() : undefined,
+  }
+}
+
+// 회의록 추가
+export async function addMeetingNote(meetingNote: MeetingNote): Promise<void> {
+  const pool = getPool()
+  await pool.query(
+    `INSERT INTO meeting_notes 
+     (id, title, meeting_date, attendees, agenda, discussion, decisions, action_items, next_meeting_date, created_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      meetingNote.id,
+      meetingNote.title,
+      meetingNote.meeting_date,
+      JSON.stringify(meetingNote.attendees || []),
+      JSON.stringify(meetingNote.agenda || []),
+      meetingNote.discussion || null,
+      meetingNote.decisions || null,
+      JSON.stringify(meetingNote.action_items || []),
+      meetingNote.next_meeting_date || null,
+      meetingNote.created_by,
+    ]
+  )
+}
+
+// 회의록 수정
+export async function updateMeetingNote(meetingNote: MeetingNote): Promise<void> {
+  const pool = getPool()
+  await pool.query(
+    `UPDATE meeting_notes 
+     SET title = ?, meeting_date = ?, attendees = ?, agenda = ?, discussion = ?, 
+         decisions = ?, action_items = ?, next_meeting_date = ?
+     WHERE id = ?`,
+    [
+      meetingNote.title,
+      meetingNote.meeting_date,
+      JSON.stringify(meetingNote.attendees || []),
+      JSON.stringify(meetingNote.agenda || []),
+      meetingNote.discussion || null,
+      meetingNote.decisions || null,
+      JSON.stringify(meetingNote.action_items || []),
+      meetingNote.next_meeting_date || null,
+      meetingNote.id,
+    ]
+  )
+}
+
+// 회의록 삭제
+export async function deleteMeetingNote(id: string): Promise<void> {
+  const pool = getPool()
+  await pool.query('DELETE FROM meeting_notes WHERE id = ?', [id])
+}
+
+// 회의록 검색
+export async function searchMeetingNotes(keyword: string): Promise<MeetingNote[]> {
+  const pool = getPool()
+  const searchKeyword = `%${keyword}%`
+  const [rows] = await pool.query<any[]>(
+    `SELECT * FROM meeting_notes 
+     WHERE title LIKE ? OR discussion LIKE ? OR decisions LIKE ?
+     ORDER BY meeting_date DESC, created_at DESC`,
+    [searchKeyword, searchKeyword, searchKeyword]
+  )
+
+  return rows.map((row) => ({
+    id: row.id,
+    title: row.title,
+    meeting_date: row.meeting_date ? (typeof row.meeting_date === 'string' ? row.meeting_date : new Date(row.meeting_date).toISOString().slice(0, 10)) : '',
+    attendees: row.attendees ? (typeof row.attendees === 'string' ? JSON.parse(row.attendees) : row.attendees) : [],
+    agenda: row.agenda ? (typeof row.agenda === 'string' ? JSON.parse(row.agenda) : row.agenda) : [],
+    discussion: row.discussion || '',
+    decisions: row.decisions || '',
+    action_items: row.action_items ? (typeof row.action_items === 'string' ? JSON.parse(row.action_items) : row.action_items) : [],
+    next_meeting_date: row.next_meeting_date ? (typeof row.next_meeting_date === 'string' ? row.next_meeting_date : new Date(row.next_meeting_date).toISOString().slice(0, 10)) : null,
+    created_by: row.created_by,
+    created_at: row.created_at ? new Date(row.created_at).toISOString() : undefined,
+    updated_at: row.updated_at ? new Date(row.updated_at).toISOString() : undefined,
+  }))
+}
+
+// 다음 회의록 ID 생성
+export async function getNextMeetingNoteId(): Promise<string> {
+  const pool = getPool()
+  const [rows] = await pool.query<any[]>(
+    `SELECT id FROM meeting_notes WHERE id LIKE 'MTG-%' ORDER BY id DESC LIMIT 1`
+  )
+
+  if (rows.length === 0) {
+    return 'MTG-00001'
+  }
+
+  const lastId = rows[0].id
+  const match = lastId.match(/MTG-(\d+)/)
+  if (match) {
+    const nextNum = parseInt(match[1], 10) + 1
+    return `MTG-${String(nextNum).padStart(5, '0')}`
+  }
+
+  return 'MTG-00001'
+}
+
+// ==================== 액션 아이템 관련 함수 ====================
+
+// 모든 액션 아이템 조회 (회의록 정보 포함)
+export async function getAllActionItems(): Promise<Array<{
+  id: string
+  description: string
+  assignee: string
+  due_date: string | null
+  status: 'pending' | 'in_progress' | 'completed'
+  meeting_note_id: string
+  meeting_title: string
+  meeting_date: string
+  created_at: string
+}>> {
+  const pool = getPool()
+  const [rows] = await pool.query<any[]>(
+    `SELECT 
+      mn.id as meeting_note_id,
+      mn.title as meeting_title,
+      mn.meeting_date,
+      mn.created_at,
+      JSON_EXTRACT(mn.action_items, '$[*]') as action_items_json
+     FROM meeting_notes mn
+     WHERE mn.action_items IS NOT NULL 
+       AND mn.action_items != '[]'
+       AND JSON_LENGTH(mn.action_items) > 0
+     ORDER BY mn.meeting_date DESC, mn.created_at DESC`
+  )
+
+  const allActionItems: Array<{
+    id: string
+    description: string
+    assignee: string
+    due_date: string | null
+    status: 'pending' | 'in_progress' | 'completed'
+    meeting_note_id: string
+    meeting_title: string
+    meeting_date: string
+    created_at: string
+  }> = []
+
+  rows.forEach((row) => {
+    let actionItems: ActionItem[] = []
+    try {
+      const itemsJson = typeof row.action_items_json === 'string' 
+        ? JSON.parse(row.action_items_json) 
+        : row.action_items_json
+      
+      if (Array.isArray(itemsJson)) {
+        actionItems = itemsJson
+      } else if (typeof itemsJson === 'object' && itemsJson !== null) {
+        // 단일 객체인 경우 배열로 변환
+        actionItems = [itemsJson]
+      }
+    } catch (e) {
+      // JSON 파싱 실패 시 빈 배열
+      actionItems = []
+    }
+
+    actionItems.forEach((item: ActionItem) => {
+      allActionItems.push({
+        id: item.id,
+        description: item.description,
+        assignee: item.assignee,
+        due_date: item.due_date || null,
+        status: item.status || 'pending',
+        meeting_note_id: row.meeting_note_id,
+        meeting_title: row.meeting_title,
+        meeting_date: row.meeting_date ? (typeof row.meeting_date === 'string' ? row.meeting_date : new Date(row.meeting_date).toISOString().slice(0, 10)) : '',
+        created_at: row.created_at ? new Date(row.created_at).toISOString() : '',
+      })
+    })
+  })
+
+  return allActionItems
+}
+
+// 특정 담당자의 액션 아이템 조회
+export async function getActionItemsByAssignee(assignee: string): Promise<Array<{
+  id: string
+  description: string
+  assignee: string
+  due_date: string | null
+  status: 'pending' | 'in_progress' | 'completed'
+  meeting_note_id: string
+  meeting_title: string
+  meeting_date: string
+  created_at: string
+}>> {
+  const allItems = await getAllActionItems()
+  // 담당자 이름 정확히 일치하는 항목만 반환 (대소문자 구분)
+  const filtered = allItems.filter(item => item.assignee === assignee)
+  
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[getActionItemsByAssignee]', {
+      assignee,
+      totalItems: allItems.length,
+      filteredCount: filtered.length,
+      allAssignees: Array.from(new Set(allItems.map(item => item.assignee))),
+      filteredItems: filtered,
+    })
+  }
+  
+  return filtered
+}
+
+// 액션 아이템 상태 업데이트
+export async function updateActionItemStatus(
+  meetingNoteId: string,
+  actionItemId: string,
+  status: 'pending' | 'in_progress' | 'completed'
+): Promise<void> {
+  const pool = getPool()
+  const connection = await pool.getConnection()
+
+  try {
+    await connection.beginTransaction()
+
+    // 회의록 조회
+    const [rows] = await connection.query<any[]>(
+      'SELECT action_items FROM meeting_notes WHERE id = ?',
+      [meetingNoteId]
+    )
+
+    if (rows.length === 0) {
+      throw new Error('Meeting note not found')
+    }
+
+    let actionItems: ActionItem[] = []
+    try {
+      actionItems = typeof rows[0].action_items === 'string'
+        ? JSON.parse(rows[0].action_items)
+        : rows[0].action_items || []
+    } catch (e) {
+      actionItems = []
+    }
+
+    // 액션 아이템 상태 업데이트
+    const updatedActionItems = actionItems.map((item: ActionItem) =>
+      item.id === actionItemId ? { ...item, status } : item
+    )
+
+    // 회의록 업데이트
+    await connection.query(
+      'UPDATE meeting_notes SET action_items = ? WHERE id = ?',
+      [JSON.stringify(updatedActionItems), meetingNoteId]
+    )
+
+    await connection.commit()
+  } catch (error) {
+    await connection.rollback()
+    throw error
+  } finally {
+    connection.release()
+  }
 }
 

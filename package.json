@@ -3,11 +3,11 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "npx kill-port 3000 && next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "setup-db": "npm run init-db && npm run add-users-table && npm run add-auth-columns && npm run add-task-phases-column && npm run add-task-link-columns && npm run add-srb-ver-column && npm run add-comments-table && npm run add-issues-table && npm run add-resolved-sw-version-column && npm run add-workflow-tables && npm run add-development-workflow && npm run add-voc-table && npm run add-backup-table && npm run add-attachments-table && npm run create-admin",
+    "setup-db": "npm run init-db && npm run add-users-table && npm run add-auth-columns && npm run add-task-phases-column && npm run add-task-link-columns && npm run add-srb-ver-column && npm run add-comments-table && npm run add-issues-table && npm run add-resolved-sw-version-column && npm run add-workflow-tables && npm run add-development-workflow && npm run add-voc-table && npm run add-backup-table && npm run add-attachments-table && npm run add-predecessors-table && npm run add-gantt-tables && npm run add-meetings-table && npm run add-project-cc-columns && npm run add-task-issue-reason-column && npm run create-admin",
     "postinstall": "node scripts/install-python-deps.js && npm run setup-db",
     "install-python-deps": "node scripts/install-python-deps.js",
     "init-db": "tsx scripts/init-db.ts",
@@ -55,6 +55,9 @@
     "add-attachments-table": "tsx scripts/add-attachments-table.ts",
     "add-predecessors-table": "tsx scripts/add-predecessors-table.ts",
     "add-gantt-tables": "tsx scripts/add-gantt-tables.ts",
+    "add-meetings-table": "tsx scripts/add-meetings-table.ts",
+    "add-project-cc-columns": "tsx scripts/add-project-cc-columns.ts",
+    "add-task-issue-reason-column": "tsx scripts/add-task-issue-reason-column.ts",
     "auto-backup": "tsx scripts/setup-auto-backup.ts",
     "analyze-logs": "tsx scripts/analyze-logs.ts"
   },
@@ -62,6 +65,7 @@
     "bcrypt": "^6.0.0",
     "csv-parse": "^6.1.0",
     "csv-stringify": "^6.6.0",
+    "fast-xml-parser": "^5.3.3",
     "jose": "^6.1.2",
     "mysql2": "^3.15.3",
     "next": "^14.2.5",
@@ -75,6 +79,7 @@
     "@types/react-dom": "^18.3.0",
     "eslint": "^8.57.0",
     "eslint-config-next": "^14.2.5",
+    "kill-port": "^2.0.1",
     "tsx": "^4.20.6",
     "typescript": "^5.5.4"
   }

@@ -156,17 +156,16 @@ export function TasksTable({
       // 일반 일감 분류
       const phases = (task as any).phases || {}
       const piProgress = Number(phases?.pi?.progress) || 0
-      const pmProgress = Number(phases?.pm?.progress) || 0
       
       // 완료일감: status가 Completed인 경우
       if (task.status === 'Completed') {
         completed.push({ task, projectId, projectName })
       }
-      // PIM일감: PI와 PM 진척율이 모두 100%가 아닌 경우
-      else if (piProgress < 100 || pmProgress < 100) {
+      // PIM일감: PI 진척율이 100%가 아닌 경우
+      else if (piProgress < 100) {
         pim.push({ task, projectId, projectName })
       }
-      // 개발일감: PI와 PM 진척율이 모두 100%이고 완료되지 않은 경우
+      // 개발일감: PI 진척율이 100%이고 완료되지 않은 경우
       else {
         dev.push({ task, projectId, projectName })
       }
@@ -356,7 +355,6 @@ export function TasksTable({
           {tasks.map(({ task, projectId, projectName }) => {
             const phases = (task as any).phases || {}
             const piStatus = phases?.pi?.status || '-'
-            const pmStatus = phases?.pm?.status || '-'
             const devStatus = phases?.development?.status || '-'
             
             // colSpan 계산
@@ -458,7 +456,6 @@ export function TasksTable({
                           <strong style={{ color: '#374151' }}>PI:</strong> {piStatus}
                         </span>
                         <span>
-                          <strong style={{ color: '#374151' }}>PM:</strong> {pmStatus}
                         </span>
                         <span>
                           <strong style={{ color: '#374151' }}>개발:</strong> {devStatus}

@@ -15,9 +15,9 @@ export interface ProjectChild {
   start?: string
   due: string
   description?: string
+  issue_reason?: string | null
   phases?: {
     pi?: TaskPhase
-    pm?: TaskPhase
     development?: TaskPhase
   }
   // GMP Record 전용 필드들 (일반 일감에는 사용되지 않을 수 있음)
@@ -40,6 +40,8 @@ export interface Project {
   due: string
   description?: string
   srb_ver?: string
+  has_cc?: boolean
+  cc_number?: string | null
   children: ProjectChild[]
 }
 

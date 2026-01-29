@@ -14,6 +14,8 @@ export const StatusBadge = memo(function StatusBadge({ status }: { status: strin
     tone = 'badge--blue'
   } else if (normalizedStatus === 'Issued') {
     tone = 'badge--red'
+  } else if (normalizedStatus === 'Issue') {
+    tone = 'badge--orange'
   } else if (normalizedStatus === 'Completed') {
     tone = 'badge--yellow'
   } else if (normalizedStatus === 'Open') {

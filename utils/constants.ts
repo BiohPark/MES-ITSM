@@ -1,4 +1,4 @@
-export type TabKey = 'dashboard' | 'gmp-record' | 'list' | 'val-pkg' | 'tasks' | 'personal' | 'gantt' | 'issues' | 'search' | 'voc' | 'backup'
+export type TabKey = 'dashboard' | 'gmp-record' | 'list' | 'val-pkg' | 'tasks' | 'personal' | 'gantt' | 'issues' | 'search' | 'voc' | 'backup' | 'meetings' | 'action-items'
 
 export const TABS: { key: TabKey; label: string }[] = [
   { key: 'dashboard', label: 'Dashboard' },
@@ -9,6 +9,7 @@ export const TABS: { key: TabKey; label: string }[] = [
   { key: 'personal', label: '개인별 일감' },
   { key: 'gantt', label: 'Gantt Chart' },
   { key: 'issues', label: '이슈 관리' },
+  { key: 'meetings', label: '회의록' },
   { key: 'voc', label: 'VOC 관리' },
   { key: 'backup', label: '백업' },
   { key: 'search', label: 'search' },

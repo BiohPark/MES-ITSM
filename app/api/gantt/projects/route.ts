@@ -73,9 +73,25 @@ export async function DELETE(req: NextRequest) {
     }
 
     const pool = getPool()
-    await pool.query(`DELETE FROM gantt_projects WHERE id = ?`, [id])
+    const conn = await pool.getConnection()
 
-    return NextResponse.json({ success: true })
+    try {
+      await conn.beginTransaction()
+
+      // 관련 태스크 먼저 삭제
+      await conn.query(`DELETE FROM gantt_tasks WHERE project_id = ?`, [id])
+
+      // 프로젝트 삭제
+      await conn.query(`DELETE FROM gantt_projects WHERE id = ?`, [id])
+
+      await conn.commit()
+      return NextResponse.json({ success: true })
+    } catch (error: any) {
+      await conn.rollback()
+      throw error
+    } finally {
+      conn.release()
+    }
   } catch (error: any) {
     console.error('[gantt/projects][DELETE] 오류:', error)
     return NextResponse.json(
