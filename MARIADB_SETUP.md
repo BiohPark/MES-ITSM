@@ -115,3 +115,4 @@ npm run setup-db
 - `mysql2` 드라이버는 MariaDB와 MySQL 모두를 지원합니다
 - SQL 문법은 거의 동일합니다
 
+
