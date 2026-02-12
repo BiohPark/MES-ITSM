@@ -135,10 +135,36 @@ npm run dev
 - `delete`: 프로젝트 삭제
 - `addChild`: 특정 프로젝트에 하위 아이템 추가
 
+## 오프라인 배포 (npm 접속 불가 환경)
+
+회사 보안 정책 등으로 npm 접속이 불가능한 환경에서 실행할 수 있습니다.
+
+### 개발자 (집에서 수행)
+
+1. `npm run build:offline` 실행
+2. 생성된 `release` 폴더를 Git에 커밋하거나 압축하여 전달
+
+### 배포 환경 (회사에서 수행)
+
+1. `release` 폴더로 이동
+2. `.env` 파일 생성 (DB 연결 정보 등 - 프로젝트 루트의 `.env.example` 참고)
+3. `node server.js` 실행
+
+```bash
+cd release
+node server.js
+```
+
+기본 포트: 3000 (PORT 환경변수로 변경 가능)
+**필요사항**: Node.js만 설치되어 있으면 됩니다. npm 설치 불필요.
+
+---
+
 ## 스크립트
 
 - `npm run dev` - 개발 서버 실행
 - `npm run build` - 프로덕션 빌드
+- `npm run build:offline` - 오프라인 배포용 빌드 (release 폴더 생성)
 - `npm run start` - 프로덕션 서버 실행
 - `npm run lint` - ESLint 실행
 - `npm run init-db` - 데이터베이스 및 테이블 초기화
