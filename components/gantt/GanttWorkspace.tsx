@@ -637,33 +637,36 @@ export function GanttWorkspace() {
             current.durationDays = calcDurationFromDates(current.startDate, current.finishDate)
           }
 
-          // 상위 실적 %: 하위가 하나라도 실적을 가지면 하위 기준으로 항상 자동 계산 (0이어도 반영)
-          const childrenWithProgress = childItems.filter(
-            (c) => c.progressPercent != null
-          )
-          if (childrenWithProgress.length > 0) {
-            const weightedChildren = childrenWithProgress.filter(
-              (c) => (c.durationDays ?? 0) > 0
+          // 상위 실적 %: 이미 입력된 값이 있으면 유지(리셋 방지), 없을 때만 하위 기준 자동 계산
+          const hasExistingProgress = current.progressPercent != null
+          if (!hasExistingProgress) {
+            const childrenWithProgress = childItems.filter(
+              (c) => c.progressPercent != null
             )
-            let agg = 0
-            if (weightedChildren.length > 0) {
-              const totalWeight = weightedChildren.reduce(
-                (sum, c) => sum + (c.durationDays ?? 0),
-                0
+            if (childrenWithProgress.length > 0) {
+              const weightedChildren = childrenWithProgress.filter(
+                (c) => (c.durationDays ?? 0) > 0
               )
-              const weightedSum = weightedChildren.reduce(
-                (sum, c) => sum + (c.progressPercent ?? 0) * (c.durationDays ?? 0),
-                0
-              )
-              agg = totalWeight > 0 ? weightedSum / totalWeight : 0
-            } else {
-              agg =
-                childrenWithProgress.reduce(
-                  (sum, c) => sum + (c.progressPercent ?? 0),
+              let agg = 0
+              if (weightedChildren.length > 0) {
+                const totalWeight = weightedChildren.reduce(
+                  (sum, c) => sum + (c.durationDays ?? 0),
                   0
-                ) / childrenWithProgress.length
+                )
+                const weightedSum = weightedChildren.reduce(
+                  (sum, c) => sum + (c.progressPercent ?? 0) * (c.durationDays ?? 0),
+                  0
+                )
+                agg = totalWeight > 0 ? weightedSum / totalWeight : 0
+              } else {
+                agg =
+                  childrenWithProgress.reduce(
+                    (sum, c) => sum + (c.progressPercent ?? 0),
+                    0
+                  ) / childrenWithProgress.length
+              }
+              current.progressPercent = Math.round(agg * 100) / 100
             }
-            current.progressPercent = Math.round(agg * 100) / 100
           }
         }
       }
@@ -677,10 +680,10 @@ export function GanttWorkspace() {
 
   /** 프로젝트 실적 요약: 계획 기간, 계획 실적 %, 전체 실적 % (가중 평균) */
   const projectProgressSummary = useMemo(() => {
-    const empty = { planDays: 0, plannedProgress: 0, overallProgress: 0, startDate: null as string | null, finishDate: null as string | null }
+    const empty = { planDays: 0, plannedProgress: 0, overallProgress: 0, startDate: null as string | null, finishDate: null as string | null, plannedProgressReason: '' as string }
     if (displayTasks.length === 0) return empty
     const withDates = displayTasks.filter((t) => t.startDate && t.finishDate)
-    if (withDates.length === 0) return empty
+    if (withDates.length === 0) return { ...empty, plannedProgressReason: '시작/종료일이 있는 작업이 없습니다.' }
     const minStart = withDates.reduce((a, t) => {
       const s = t.startDate!.includes('T') ? t.startDate!.split('T')[0] : t.startDate!
       return s < a ? s : a
@@ -695,18 +698,26 @@ export function GanttWorkspace() {
       ? Math.ceil((finishMs - startMs) / (1000 * 60 * 60 * 24)) + 1
       : 0
     const planDays = Math.max(1, diffDays)
-    // 계획 실적: 현재일 기준 경과 비율 (시작일~종료일 사이에서)
+    // 계획 실적: 오늘 기준으로 계획 기간(시작~종료) 중 경과한 비율
     let plannedProgress = 0
+    let plannedProgressReason = ''
     if (!isNaN(startMs) && !isNaN(finishMs)) {
       const today = new Date()
       today.setHours(0, 0, 0, 0)
       const todayMs = today.getTime()
-      if (todayMs < startMs) plannedProgress = 0
-      else if (todayMs >= finishMs) plannedProgress = 100
-      else {
+      if (todayMs < startMs) {
+        plannedProgress = 0
+        plannedProgressReason = '오늘이 프로젝트 시작일보다 이전이라 0%입니다.'
+      } else if (todayMs >= finishMs) {
+        plannedProgress = 100
+        plannedProgressReason = '프로젝트 종료일이 지났습니다.'
+      } else {
         const elapsedDays = Math.ceil((todayMs - startMs) / (1000 * 60 * 60 * 24))
         plannedProgress = Math.min(100, Math.max(0, (elapsedDays / planDays) * 100))
+        plannedProgressReason = '오늘 기준 계획 기간 대비 경과율입니다.'
       }
+    } else {
+      plannedProgressReason = '시작/종료일을 확인할 수 없습니다.'
     }
     // 리프 작업만 가중 평균 (기간 기준)
     const leafTasks = displayTasks.filter((t, i) => {
@@ -723,7 +734,22 @@ export function GanttWorkspace() {
     } else if (leafTasks.length > 0) {
       overallProgress = leafTasks.reduce((s, t) => s + (t.progressPercent ?? 0), 0) / leafTasks.length
     }
-    return { planDays, plannedProgress, overallProgress, startDate: minStart, finishDate: maxFinish }
+    return { planDays, plannedProgress, overallProgress, startDate: minStart, finishDate: maxFinish, plannedProgressReason }
+  }, [displayTasks])
+
+  /** 작업 지표: 전체 / 미시작 / 진행 중 / 완료 */
+  const taskStats = useMemo(() => {
+    const total = displayTasks.length
+    let notStarted = 0
+    let inProgress = 0
+    let completed = 0
+    for (const t of displayTasks) {
+      const p = t.progressPercent ?? 0
+      if (p >= 100) completed++
+      else if (p > 0) inProgress++
+      else notStarted++
+    }
+    return { total, notStarted, inProgress, completed }
   }, [displayTasks])
 
   const readOnlyWbs = canEditWbs === false
@@ -741,12 +767,17 @@ export function GanttWorkspace() {
     autoSaveTimerRef.current = window.setTimeout(async () => {
       try {
         const normalized = recomputeWbsCodes(tasks)
+        // 저장 시 실적은 원본 tasks 기준 유지(하위 추가 등으로 리셋 방지)
+        const toSave = normalized.map((n, i) => ({
+          ...n,
+          progressPercent: tasks[i]?.progressPercent ?? n.progressPercent,
+        }))
         await fetch(`/api/gantt/tasks/${selectedProjectId}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ tasks: normalized }),
+          body: JSON.stringify({ tasks: toSave }),
         })
         setHasUnsavedChanges(false)
       } catch (err) {
@@ -768,6 +799,11 @@ export function GanttWorkspace() {
       return
     }
     const normalized = recomputeWbsCodes(tasks)
+    // 저장 시 실적은 원본 tasks 기준 유지(하위 추가 등으로 리셋 방지)
+    const toSave = normalized.map((n, i) => ({
+      ...n,
+      progressPercent: tasks[i]?.progressPercent ?? n.progressPercent,
+    }))
     setHasUnsavedChanges(false)
     setTasks(normalized)
     setTasksLoading(true)
@@ -777,7 +813,7 @@ export function GanttWorkspace() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ tasks: normalized }),
+        body: JSON.stringify({ tasks: toSave }),
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
@@ -1088,6 +1124,100 @@ export function GanttWorkspace() {
             </button>
           </div>
 
+          {/* 작업 지표 (WBS·간트 차트 공통) */}
+          <div
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '1rem 1.5rem',
+              padding: '0.875rem 1.25rem',
+              marginBottom: '1rem',
+              backgroundColor: '#f8fafc',
+              borderRadius: 10,
+              border: '1px solid #e2e8f0',
+              fontSize: '0.875rem',
+            }}
+          >
+            <span style={{ color: '#475569', fontWeight: 600 }}>작업 지표</span>
+            <span style={{ color: '#64748b' }}>
+              전체 <strong style={{ color: '#0f172a', marginLeft: '0.25rem' }}>{taskStats.total}</strong>개
+            </span>
+            <span style={{ color: '#cbd5e1' }}>|</span>
+            <span style={{ color: '#64748b' }}>
+              미시작 <strong style={{ color: '#64748b', marginLeft: '0.25rem' }}>{taskStats.notStarted}</strong>개
+            </span>
+            <span style={{ color: '#64748b' }}>
+              진행 중 <strong style={{ color: '#2A84D5', marginLeft: '0.25rem' }}>{taskStats.inProgress}</strong>개
+            </span>
+            <span style={{ color: '#64748b' }}>
+              완료 <strong style={{ color: '#059669', marginLeft: '0.25rem' }}>{taskStats.completed}</strong>개
+            </span>
+          </div>
+
+          {/* 계획 대비 실적 요약 (WBS·간트 차트 공통) */}
+          {displayTasks.length > 0 && (
+            <div
+              style={{
+                display: 'flex',
+                gap: '1.5rem',
+                padding: '1rem 1.25rem',
+                marginBottom: '1.25rem',
+                background: 'linear-gradient(135deg, rgba(248,250,252,0.9) 0%, rgba(241,245,249,0.95) 100%)',
+                borderRadius: 12,
+                border: '1px solid rgba(226,232,240,0.6)',
+                flexWrap: 'wrap',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                backdropFilter: 'blur(8px)',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span style={{ color: '#64748b', fontSize: '0.85rem' }}>계획 기간</span>
+                <strong style={{ fontSize: '1rem' }}>
+                  {Number.isFinite(projectProgressSummary.planDays) ? projectProgressSummary.planDays : 0}일
+                </strong>
+                {projectProgressSummary.startDate && projectProgressSummary.finishDate && (
+                  <span style={{ color: '#94a3b8', fontSize: '0.8rem' }}>
+                    ({projectProgressSummary.startDate} ~ {projectProgressSummary.finishDate})
+                  </span>
+                )}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span style={{ color: '#64748b', fontSize: '0.85rem' }}>계획 실적</span>
+                <strong
+                  style={{ fontSize: '1.05rem', color: '#64748b', cursor: projectProgressSummary.plannedProgressReason ? 'help' : undefined }}
+                  title={projectProgressSummary.plannedProgressReason || undefined}
+                >
+                  {Number.isFinite(projectProgressSummary.plannedProgress) ? projectProgressSummary.plannedProgress.toFixed(1) : '0.0'}%
+                </strong>
+                <span style={{ color: '#cbd5e1', margin: '0 0.25rem' }}>{' | '}</span>
+                <span style={{ color: '#64748b', fontSize: '0.85rem' }}>전체 실적</span>
+                <strong style={{ fontSize: '1.1rem', color: '#2A84D5' }}>
+                  {Number.isFinite(projectProgressSummary.overallProgress) ? projectProgressSummary.overallProgress.toFixed(1) : '0.0'}%
+                </strong>
+              </div>
+              <div
+                style={{
+                  flex: 1,
+                  minWidth: 120,
+                  maxWidth: 200,
+                  height: 8,
+                  backgroundColor: '#e2e8f0',
+                  borderRadius: 4,
+                  overflow: 'hidden',
+                }}
+              >
+                <div
+                  style={{
+                    width: `${Math.min(100, Math.max(0, Number.isFinite(projectProgressSummary.overallProgress) ? projectProgressSummary.overallProgress : 0))}%`,
+                    height: '100%',
+                    backgroundColor: '#2A84D5',
+                    transition: 'width 0.2s',
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
           {activeSubTab === 'wbs' ? (
             <>
               {readOnlyWbs && (
@@ -1178,67 +1308,6 @@ export function GanttWorkspace() {
                   </button>
                 </div>
               </div>
-
-              {/* 계획 대비 실적 요약 - 글래스모피즘 스타일 */}
-              {displayTasks.length > 0 && (
-                <div
-                  style={{
-                    display: 'flex',
-                    gap: '1.5rem',
-                    padding: '1rem 1.25rem',
-                    marginBottom: '1.25rem',
-                    background: 'linear-gradient(135deg, rgba(248,250,252,0.9) 0%, rgba(241,245,249,0.95) 100%)',
-                    borderRadius: 12,
-                    border: '1px solid rgba(226,232,240,0.6)',
-                    flexWrap: 'wrap',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-                    backdropFilter: 'blur(8px)',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <span style={{ color: '#64748b', fontSize: '0.85rem' }}>계획 기간</span>
-                    <strong style={{ fontSize: '1rem' }}>
-                      {Number.isFinite(projectProgressSummary.planDays) ? projectProgressSummary.planDays : 0}일
-                    </strong>
-                    {projectProgressSummary.startDate && projectProgressSummary.finishDate && (
-                      <span style={{ color: '#94a3b8', fontSize: '0.8rem' }}>
-                        ({projectProgressSummary.startDate} ~ {projectProgressSummary.finishDate})
-                      </span>
-                    )}
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <span style={{ color: '#64748b', fontSize: '0.85rem' }}>계획 실적</span>
-                    <strong style={{ fontSize: '1.05rem', color: '#64748b' }}>
-                      {Number.isFinite(projectProgressSummary.plannedProgress) ? projectProgressSummary.plannedProgress.toFixed(1) : '0.0'}%
-                    </strong>
-                    <span style={{ color: '#cbd5e1', margin: '0 0.25rem' }}>{' | '}</span>
-                    <span style={{ color: '#64748b', fontSize: '0.85rem' }}>전체 실적</span>
-                    <strong style={{ fontSize: '1.1rem', color: '#2A84D5' }}>
-                      {Number.isFinite(projectProgressSummary.overallProgress) ? projectProgressSummary.overallProgress.toFixed(1) : '0.0'}%
-                    </strong>
-                  </div>
-                  <div
-                    style={{
-                      flex: 1,
-                      minWidth: 120,
-                      maxWidth: 200,
-                      height: 8,
-                      backgroundColor: '#e2e8f0',
-                      borderRadius: 4,
-                      overflow: 'hidden',
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: `${Math.min(100, Math.max(0, Number.isFinite(projectProgressSummary.overallProgress) ? projectProgressSummary.overallProgress : 0))}%`,
-                        height: '100%',
-                        backgroundColor: '#2A84D5',
-                        transition: 'width 0.2s',
-                      }}
-                    />
-                  </div>
-                </div>
-              )}
 
               <div
                 style={{
@@ -1427,6 +1496,8 @@ export function GanttWorkspace() {
                       <input
                         type="date"
                         value={toDateInputValue(t.startDate)}
+                        min="1900-01-01"
+                        max="2099-12-31"
                         readOnly={readOnlyWbs}
                         onChange={(e) =>
                           handleChangeTask(idx, 'startDate', e.target.value || null)
@@ -1444,6 +1515,8 @@ export function GanttWorkspace() {
                       <input
                         type="date"
                         value={toDateInputValue(t.finishDate)}
+                        min="1900-01-01"
+                        max="2099-12-31"
                         readOnly={readOnlyWbs}
                         onChange={(e) =>
                           handleChangeTask(idx, 'finishDate', e.target.value || null)
