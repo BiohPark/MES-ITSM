@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getUsers, deleteUser } from '@/lib/users'
 import { createAccount, updateAccount } from '@/lib/accounts'
-import { validatePasswordStrength } from '@/lib/auth'
+import { getSession, validatePasswordStrength } from '@/lib/auth'
 
 export async function GET() {
   try {
@@ -84,14 +84,22 @@ export async function PUT(request: NextRequest) {
         )
       }
 
+      const session = await getSession()
+      const isAdmin = session?.role === 'admin'
+      // WBS 수정 권한은 admin만 부여/해제 가능
+      const updates: Parameters<typeof updateAccount>[1] = {
+        username: user.username,
+        name: user.name,
+        email: user.email,
+        password: user.password,
+        role: user.role,
+      }
+      if (isAdmin && typeof user.can_edit_wbs === 'boolean') {
+        updates.can_edit_wbs = user.can_edit_wbs
+      }
+
       try {
-        await updateAccount(userId, {
-          username: user.username,
-          name: user.name,
-          email: user.email,
-          password: user.password, // 비밀번호가 제공된 경우에만 업데이트
-          role: user.role,
-        })
+        await updateAccount(userId, updates)
         const users = await getUsers()
         return NextResponse.json({ success: true, users })
       } catch (error: any) {

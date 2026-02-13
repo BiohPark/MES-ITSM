@@ -8,19 +8,20 @@ interface UserManagementModalProps {
 }
 
 export function UserManagementModal({ onClose, currentUser }: UserManagementModalProps) {
-  const [users, setUsers] = useState<Array<{ id: string; name: string; username?: string; email?: string; role?: string }>>([])
+  const [users, setUsers] = useState<Array<{ id: string; name: string; username?: string; email?: string; role?: string; can_edit_wbs?: boolean }>>([])
   const [loading, setLoading] = useState(true)
   const [newUserUsername, setNewUserUsername] = useState('')
   const [newUserName, setNewUserName] = useState('')
   const [newUserEmail, setNewUserEmail] = useState('')
   const [newUserPassword, setNewUserPassword] = useState('')
   const [newUserRole, setNewUserRole] = useState<string>('user')
-  const [editingUser, setEditingUser] = useState<{ id: string; username: string; name: string; email: string; role: string } | null>(null)
+  const [editingUser, setEditingUser] = useState<{ id: string; username: string; name: string; email: string; role: string; can_edit_wbs?: boolean } | null>(null)
   const [editUsername, setEditUsername] = useState('')
   const [editName, setEditName] = useState('')
   const [editEmail, setEditEmail] = useState('')
   const [editPassword, setEditPassword] = useState('')
   const [editRole, setEditRole] = useState<string>('user')
+  const [editCanEditWbs, setEditCanEditWbs] = useState(false)
   const [addingUser, setAddingUser] = useState(false)
   
   const isAdmin = currentUser?.role === 'admin'
@@ -116,7 +117,7 @@ export function UserManagementModal({ onClose, currentUser }: UserManagementModa
     }
   }
 
-  const handleRowClick = (user: { id: string; name: string; username?: string; email?: string; role?: string }) => {
+  const handleRowClick = (user: { id: string; name: string; username?: string; email?: string; role?: string; can_edit_wbs?: boolean }) => {
     if (!isAdmin) {
       alert('관리자만 사용자 정보를 수정할 수 있습니다.')
       return
@@ -128,12 +129,14 @@ export function UserManagementModal({ onClose, currentUser }: UserManagementModa
       name: user.name,
       email: user.email || '',
       role: user.role || 'user',
+      can_edit_wbs: user.can_edit_wbs,
     })
     setEditUsername(user.username || '')
     setEditName(user.name)
     setEditEmail(user.email || '')
     setEditPassword('')
     setEditRole(user.role || 'user')
+    setEditCanEditWbs(!!user.can_edit_wbs)
   }
 
   const handleCancelEdit = () => {
@@ -143,6 +146,7 @@ export function UserManagementModal({ onClose, currentUser }: UserManagementModa
     setEditEmail('')
     setEditPassword('')
     setEditRole('user')
+    setEditCanEditWbs(false)
   }
 
   const handleUpdateUser = async () => {
@@ -180,6 +184,7 @@ export function UserManagementModal({ onClose, currentUser }: UserManagementModa
             email: editEmail,
             password: editPassword || undefined, // 비밀번호가 입력된 경우에만 전송
             role: editRole,
+            can_edit_wbs: isAdmin ? editCanEditWbs : undefined,
           },
         }),
       })
@@ -398,6 +403,18 @@ export function UserManagementModal({ onClose, currentUser }: UserManagementModa
                 </select>
               </div>
 
+              {isAdmin && (
+                <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <input
+                    type="checkbox"
+                    id="edit-user-can-edit-wbs"
+                    checked={editCanEditWbs}
+                    onChange={(e) => setEditCanEditWbs(e.target.checked)}
+                  />
+                  <label htmlFor="edit-user-can-edit-wbs" style={{ marginBottom: 0 }}>WBS 수정 권한 부여 (간트 차트 WBS 편집 가능)</label>
+                </div>
+              )}
+
               <div className="form-actions">
                 <button
                   type="button"
@@ -433,6 +450,7 @@ export function UserManagementModal({ onClose, currentUser }: UserManagementModa
                     <th>이름</th>
                     <th>이메일</th>
                     <th>권한</th>
+                    {isAdmin && <th>WBS 수정</th>}
                     <th>작업</th>
                   </tr>
                 </thead>
@@ -460,6 +478,7 @@ export function UserManagementModal({ onClose, currentUser }: UserManagementModa
                       <td>{user.name}</td>
                       <td>{user.email || '-'}</td>
                       <td>{user.role || 'user'}</td>
+                      {isAdmin && <td>{user.can_edit_wbs ? '✓' : '-'}</td>}
                       <td>
                         <button
                           onClick={(e) => handleDeleteUser(user.id, e)}

@@ -7,23 +7,24 @@ export interface User {
   username?: string
   email?: string
   role?: string
+  can_edit_wbs?: boolean
   created_at?: string
 }
 
-// 로그인 가능한 사용자 목록 조회 (username이 있는 계정만)
+// 로그인 가능한 사용자 목록 조회
+// 스키마에 can_edit_wbs 등이 없어도 동작하도록 SELECT * 사용
 export async function getUsers(): Promise<User[]> {
   const pool = getPool()
   const [rows] = await pool.query<any[]>(
-    `SELECT id, username, name, email, role, created_at 
-     FROM users 
-     ORDER BY created_at DESC`
+    `SELECT * FROM users ORDER BY created_at DESC`
   )
-  return rows.map((row) => ({
-    id: row.id,
-    name: row.name,
-    username: row.username || '',
-    email: row.email || '',
-    role: row.role || 'user',
+  return (rows || []).map((row) => ({
+    id: String(row.id ?? ''),
+    name: String(row.name ?? ''),
+    username: row.username != null ? String(row.username) : '',
+    email: row.email != null ? String(row.email) : '',
+    role: row.role != null ? String(row.role) : 'user',
+    can_edit_wbs: !!row.can_edit_wbs,
     created_at: row.created_at ? new Date(row.created_at).toISOString() : '',
   }))
 }

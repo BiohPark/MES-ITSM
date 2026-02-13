@@ -22,6 +22,7 @@ import { TaskEditModal } from '@/components/tasks/TaskEditModal'
 import { ChildItemModal } from '@/components/tasks/ChildItemModal'
 import { PersonalTasksView } from '@/components/personal/PersonalTasksView'
 import { GanttWorkspace } from '@/components/gantt/GanttWorkspace'
+import { GanttHistoryView } from '@/components/gantt/GanttHistoryView'
 import { SearchView } from '@/components/search/SearchView'
 import { VocView } from '@/components/voc/VocView'
 import { BackupView } from '@/components/backup/BackupView'
@@ -1645,6 +1646,8 @@ export default function Home() {
             }}
             currentUser={user ? { name: user.name, username: user.username } : undefined}
           />
+        ) : activeTab === 'gantt-history' ? (
+          <GanttHistoryView />
         ) : activeTab === 'gantt' ? (
           <GanttWorkspace />
         ) : activeTab === 'issues' ? (

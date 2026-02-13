@@ -1,6 +1,24 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+
+/** 반응형 스타일 - 좁은 컬럼으로 더 많은 차트 표시 */
+const GANTT_CHART_SIZES = {
+  // 좌측 정보 패널: 작업명이 너무 짤리지 않도록 소폭 확대
+  leftPanel: 'clamp(13rem, 18vw, 17rem)',
+  index: 'clamp(2rem, 2.2vw, 2.5rem)',
+  wbs: 'clamp(2.8rem, 3.5vw, 4rem)',
+  duration: 'clamp(2.5rem, 3vw, 3.5rem)',
+  float: 'clamp(2.5rem, 3vw, 3.5rem)',
+  cp: 'clamp(1.5rem, 2vw, 2rem)',
+  // 헤더 높이(좌측/우측 동일 적용으로 행 정렬 오차 제거)
+  headerHeight: 40,
+  // 바디 행 높이
+  rowHeight: 32,
+  barHeight: 12,
+  /** 일 단위 셀 폭 (한 화면에 더 많은 날짜 표시, 가로 스크롤 가능) */
+  dayCellWidth: 18,
+} as const
 import { calculateSchedule, Task as CalcTask, Predecessor as CalcPredecessor } from '@/lib/schedule-calculator'
 import { parsePredecessorString } from '@/lib/predecessor-parser'
 
@@ -14,6 +32,7 @@ interface GanttTask {
   startDate?: string | null
   finishDate?: string | null
   durationDays?: number | null
+  progressPercent?: number | null
   predecessors?: string | null
   assignee?: string | null
   isMilestone?: boolean
@@ -42,9 +61,9 @@ export function GanttTasksChart({ tasks }: Props) {
     [tasks]
   )
 
-  const { schedules, predecessors } = useMemo(() => {
+  const { schedules, predecessors, projectedRange } = useMemo(() => {
     if (sortedTasks.length === 0) {
-      return { schedules: [], predecessors: [] as CalcPredecessor[] }
+      return { schedules: [], predecessors: [] as CalcPredecessor[], projectedRange: null as { start: Date; end: Date } | null }
     }
 
     const projectStart =
@@ -106,22 +125,38 @@ export function GanttTasksChart({ tasks }: Props) {
 
     const result = calculateSchedule(calcTasks, preds, projectStart, null)
 
-    // dateRange 자동 확장
+    // 프로젝트 전체 기간 산출 (시작일~종료일 모두 반영)
+    let range: { start: Date; end: Date } | null = null
     if (result.length > 0) {
-      const allDates = result
-        .map((s) => (s.startDate ? new Date(s.startDate) : null))
-        .filter(Boolean) as Date[]
-      if (allDates.length > 0) {
-        const minDate = new Date(Math.min(...allDates.map((d) => d.getTime())))
-        const maxDate = new Date(Math.max(...allDates.map((d) => d.getTime())))
+      const starts = result
+        .map((s) => (s.startDate ? new Date(s.startDate).getTime() : null))
+        .filter((t): t is number => t != null)
+      const ends = result
+        .map((s) => {
+          if (!s.startDate) return null
+          const d = new Date(s.startDate)
+          d.setDate(d.getDate() + s.durationDays)
+          return d.getTime()
+        })
+        .filter((t): t is number => t != null)
+      const all = [...starts, ...ends]
+      if (all.length > 0) {
+        const minDate = new Date(Math.min(...all))
+        const maxDate = new Date(Math.max(...all))
         minDate.setDate(minDate.getDate() - 7)
-        maxDate.setDate(maxDate.getDate() + 30)
-        setDateRange({ start: minDate, end: maxDate })
+        maxDate.setDate(maxDate.getDate() + 14)
+        range = { start: minDate, end: maxDate }
       }
     }
 
-    return { schedules: result, predecessors: preds }
+    return { schedules: result, predecessors: preds, projectedRange: range }
   }, [sortedTasks])
+
+  useEffect(() => {
+    if (projectedRange) {
+      setDateRange(projectedRange)
+    }
+  }, [projectedRange])
 
   const days = useMemo(() => {
     const list: Date[] = []
@@ -161,6 +196,66 @@ export function GanttTasksChart({ tasks }: Props) {
     return map
   }, [predecessors])
 
+  /** 선행 화살표 오버레이용 데이터 */
+  const arrowPaths = useMemo(() => {
+    const rows: Array<{ fromX: number; toX: number; fromY: number; toY: number; isCritical: boolean; depType: string; predName: string }> = []
+    const rowHeight = GANTT_CHART_SIZES.rowHeight
+    const rangeMs = dateRange.end.getTime() - dateRange.start.getTime()
+
+    sortedTasks.forEach((task) => {
+      const taskId = task.id != null ? String(task.id) : `local-${(task as any)._rowIndex}`
+      const pos = getItemPosition(taskId)
+      if (!pos) return
+      const taskPreds = predsByTask.get(taskId) || []
+      const toRow = sortedTasks.findIndex((t) => (t.id != null ? String(t.id) : `local-${(t as any)._rowIndex}`) === taskId) ?? 0
+
+      taskPreds.forEach((pred) => {
+        const fromPos = getItemPosition(pred.predecessorTaskId)
+        if (!fromPos) return
+
+        let fromX = 0
+        let toX = 0
+        switch (pred.dependencyType) {
+          case 'FS':
+            fromX = fromPos.left + fromPos.width
+            toX = pos.left
+            break
+          case 'SS':
+            fromX = fromPos.left
+            toX = pos.left
+            break
+          case 'FF':
+            fromX = fromPos.left + fromPos.width
+            toX = pos.left + pos.width
+            break
+          case 'SF':
+            fromX = fromPos.left
+            toX = pos.left + pos.width
+            break
+          default:
+            fromX = fromPos.left + fromPos.width
+            toX = pos.left
+        }
+        const lagPercent = (pred.lagDays * 24 * 60 * 60 * 1000 / rangeMs) * 100
+        toX = Math.min(100, toX + lagPercent)
+
+        const fromRow = sortedTasks.findIndex((t) => (t.id != null ? String(t.id) : `local-${(t as any)._rowIndex}`) === pred.predecessorTaskId) ?? 0
+        const predTask = sortedTasks[fromRow]
+        const predName = predTask?.name || `#${(predTask as any)?._rowIndex}` || ''
+
+        rows.push({
+          fromX, toX,
+          fromY: fromRow * rowHeight + rowHeight / 2,
+          toY: toRow * rowHeight + rowHeight / 2,
+          isCritical: pos.schedule?.isCritical ?? false,
+          depType: pred.dependencyType,
+          predName,
+        })
+      })
+    })
+    return rows
+  }, [sortedTasks, predsByTask, dateRange, schedules])
+
   if (sortedTasks.length === 0) {
     return (
       <div className="placeholder">
@@ -168,6 +263,9 @@ export function GanttTasksChart({ tasks }: Props) {
       </div>
     )
   }
+
+  const dayCellWidth = GANTT_CHART_SIZES.dayCellWidth
+  const chartWidth = days.length * dayCellWidth
 
   return (
     <div
@@ -177,197 +275,321 @@ export function GanttTasksChart({ tasks }: Props) {
         overflow: 'hidden',
       }}
     >
-      {/* 헤더 */}
+      {/* 헤더 + 바디를 하나의 가로 스크롤 컨테이너로 */}
       <div
         style={{
-          display: 'flex',
-          borderBottom: '2px solid #e2e8f0',
-          backgroundColor: '#f8fafc',
-        }}
-      >
-        <div
-          style={{
-            width: '420px',
-            padding: '0.5rem 0.75rem',
-            fontWeight: 600,
-            borderRight: '1px solid #e2e8f0',
-            display: 'flex',
-            gap: '0.75rem',
-            fontSize: '0.8rem',
-          }}
-        >
-          <div style={{ width: 50, textAlign: 'center' }}>Index</div>
-          <div style={{ width: 80 }}>WBS</div>
-          <div style={{ flex: 1 }}>작업명</div>
-          <div style={{ width: 70, textAlign: 'center' }}>기간</div>
-          <div style={{ width: 80, textAlign: 'center' }}>Float</div>
-          <div style={{ width: 40, textAlign: 'center' }}>CP</div>
-        </div>
-        <div style={{ flex: 1, display: 'flex' }}>
-          {days.map((day, idx) => {
-            if (idx % 7 !== 0 && idx !== 0) return null
-            return (
-              <div
-                key={day.getTime()}
-                style={{
-                  minWidth: `${100 / Math.ceil(days.length / 7)}%`,
-                  padding: '0.5rem 0.5rem',
-                  textAlign: 'center',
-                  fontSize: '0.8rem',
-                  borderRight: '1px solid #e2e8f0',
-                }}
-              >
-                {day.toLocaleDateString('ko-KR', {
-                  month: 'short',
-                  day: 'numeric',
-                })}
-              </div>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* 바디 */}
-      <div
-        style={{
-          maxHeight: 420,
+          maxHeight: 'min(70vh, 560px)',
           overflowY: 'auto',
+          overflowX: 'auto',
         }}
       >
-        {sortedTasks.map((task) => {
-          const taskId =
-            task.id != null ? String(task.id) : `local-${(task as any)._rowIndex}`
-          const pos = getItemPosition(taskId)
-          const schedule = pos?.schedule
-          const taskPreds = predsByTask.get(taskId) || []
-
-          return (
+        <div style={{ display: 'flex', minWidth: 'max-content' }}>
+          {/* 왼쪽 패널 (sticky) */}
+          <div
+            style={{
+              width: GANTT_CHART_SIZES.leftPanel,
+              minWidth: GANTT_CHART_SIZES.leftPanel,
+              flexShrink: 0,
+              position: 'sticky',
+              left: 0,
+              zIndex: 10,
+              backgroundColor: '#fff',
+            }}
+          >
+            {/* 헤더 */}
             <div
-              key={taskId}
               style={{
                 display: 'flex',
-                minHeight: 46,
-                borderBottom: '1px solid #e5e7eb',
+                borderBottom: '2px solid #e2e8f0',
+                backgroundColor: '#f8fafc',
+                padding: '0 0.75rem',
+                height: GANTT_CHART_SIZES.headerHeight,
+                minHeight: GANTT_CHART_SIZES.headerHeight,
+                maxHeight: GANTT_CHART_SIZES.headerHeight,
+                fontWeight: 600,
                 fontSize: '0.8rem',
-                position: 'relative',
+                gap: '0.75rem',
+                alignItems: 'center',
               }}
             >
-              {/* 왼쪽 정보 */}
-              <div
-                style={{
-                  width: '420px',
-                  padding: '0.4rem 0.5rem',
-                  borderRight: '1px solid #e2e8f0',
-                  display: 'flex',
-                  gap: '0.75rem',
-                  alignItems: 'center',
-                  backgroundColor: schedule?.isCritical ? '#ffebee' : 'transparent',
-                }}
-              >
+              <div style={{ width: GANTT_CHART_SIZES.index, minWidth: GANTT_CHART_SIZES.index, textAlign: 'center' }}>Index</div>
+              <div style={{ width: GANTT_CHART_SIZES.wbs, minWidth: GANTT_CHART_SIZES.wbs }}>WBS</div>
+              <div style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap' }}>작업명</div>
+              <div style={{ width: GANTT_CHART_SIZES.duration, minWidth: GANTT_CHART_SIZES.duration, textAlign: 'center' }}>기간</div>
+              <div style={{ width: GANTT_CHART_SIZES.cp, minWidth: GANTT_CHART_SIZES.cp, textAlign: 'center' }}>CP</div>
+            </div>
+            {/* 행들 */}
+            {sortedTasks.map((task) => {
+              const taskId =
+                task.id != null ? String(task.id) : `local-${(task as any)._rowIndex}`
+              const schedule = schedules.find((s) => s.taskId === taskId)
+              const isLevel1 = (task.outlineLevel ?? 1) === 1
+              return (
                 <div
+                  key={taskId}
                   style={{
-                    width: 50,
+                    display: 'flex',
+                    height: GANTT_CHART_SIZES.rowHeight + 'px',
+                    minHeight: GANTT_CHART_SIZES.rowHeight + 'px',
+                    maxHeight: GANTT_CHART_SIZES.rowHeight + 'px',
+                    borderBottom: '1px solid #e5e7eb',
+                    fontSize: isLevel1 ? '0.85rem' : '0.8rem',
+                    overflow: 'hidden',
+                    alignItems: 'center',
+                    padding: '0 0.5rem',
+                    backgroundColor: schedule?.isCritical ? '#ffebee' : isLevel1 ? 'rgba(30, 58, 138, 0.06)' : 'transparent',
+                  }}
+                >
+                  <div style={{
+                    width: GANTT_CHART_SIZES.index,
+                    minWidth: GANTT_CHART_SIZES.index,
                     textAlign: 'center',
-                    fontWeight: 600,
-                    color: schedule?.isCritical ? '#c62828' : '#334155',
-                  }}
-                >
-                  {(task as any)._rowIndex}
-                </div>
-                <div
-                  style={{
-                    width: 80,
-                    fontFamily: 'monospace',
-                    color: '#64748b',
-                  }}
-                >
-                  {task.wbsCode || '-'}
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div
-                    style={{
-                      fontWeight: 500,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {task.name || '(이름 없음)'}
+                    fontWeight: isLevel1 ? 700 : 600,
+                    color: schedule?.isCritical ? '#c62828' : isLevel1 ? '#1e3a8a' : '#334155',
+                  }}>
+                    {(task as any)._rowIndex}
                   </div>
-                  {task.assignee && (
-                    <div
+                  <div style={{
+                    width: GANTT_CHART_SIZES.wbs,
+                    minWidth: GANTT_CHART_SIZES.wbs,
+                    fontFamily: 'monospace',
+                    fontWeight: isLevel1 ? 600 : 400,
+                    color: isLevel1 ? '#1e40af' : '#64748b',
+                  }}>
+                    {task.wbsCode || '-'}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <span
                       style={{
-                        fontSize: '0.7rem',
-                        color: '#64748b',
+                        fontWeight: isLevel1 ? 700 : 500,
+                        fontFamily: isLevel1 ? '"Segoe UI", "Malgun Gothic", system-ui, sans-serif' : 'inherit',
+                        color: isLevel1 ? '#1e3a8a' : undefined,
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
                       }}
+                      title={task.name || '(이름 없음)'}
                     >
-                      {task.assignee}
-                    </div>
-                  )}
-                </div>
-                <div
-                  style={{
-                    width: 70,
+                      {task.name || '(이름 없음)'}
+                    </span>
+                    {task.assignee && (
+                      <span style={{ fontSize: '0.6rem', color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '4rem' }}>
+                        {task.assignee}
+                      </span>
+                    )}
+                  </div>
+                  <div style={{
+                    width: GANTT_CHART_SIZES.duration,
+                    minWidth: GANTT_CHART_SIZES.duration,
                     textAlign: 'center',
-                    color: '#475569',
-                  }}
-                >
-                  {schedule ? `${schedule.durationDays}일` : '-'}
+                    fontWeight: isLevel1 ? 600 : 400,
+                    color: isLevel1 ? '#1e40af' : '#475569',
+                  }}>
+                    {schedule ? `${schedule.durationDays}일` : '-'}
+                  </div>
+                  <div style={{ width: GANTT_CHART_SIZES.cp, minWidth: GANTT_CHART_SIZES.cp, textAlign: 'center' }}>
+                    {schedule?.isCritical ? <span style={{ color: '#c62828', fontWeight: 700 }}>●</span> : '-'}
+                  </div>
                 </div>
-                <div
-                  style={{
-                    width: 80,
-                    textAlign: 'center',
-                    color: schedule?.totalFloat === 0 ? '#c62828' : '#334155',
-                  }}
-                >
-                  {schedule ? `${schedule.totalFloat}일` : '-'}
-                </div>
-                <div style={{ width: 40, textAlign: 'center' }}>
-                  {schedule?.isCritical ? (
-                    <span style={{ color: '#c62828', fontWeight: 700 }}>●</span>
-                  ) : (
-                    '-'
-                  )}
-                </div>
-              </div>
+              )
+            })}
+          </div>
 
-              {/* 오른쪽 Gantt 차트 영역 */}
+          {/* 오른쪽 차트 영역 (가로 스크롤) */}
+          <div
+            style={{
+              width: chartWidth,
+              minWidth: chartWidth,
+              flexShrink: 0,
+              position: 'relative',
+            }}
+          >
+            {/* 헤더 날짜: 위 행 = 월(병합), 아래 행 = 일 */}
+            <div
+              style={{
+                borderBottom: '2px solid #e2e8f0',
+                backgroundColor: '#f8fafc',
+                height: GANTT_CHART_SIZES.headerHeight,
+                minHeight: GANTT_CHART_SIZES.headerHeight,
+                maxHeight: GANTT_CHART_SIZES.headerHeight,
+                display: 'flex',
+                flexDirection: 'column',
+              }}
+            >
+              {/* 월 헤더: 같은 월은 가로로 병합 */}
               <div
                 style={{
+                  display: 'flex',
                   flex: 1,
-                  position: 'relative',
-                  minHeight: 46,
-                  borderRight: '1px solid #e2e8f0',
+                  borderBottom: '1px solid #e2e8f0',
                 }}
               >
-                {/* 가로 그리드 라인 */}
+                {(() => {
+                  const segments: { key: string; month: number; year: number; length: number }[] = []
+                  if (days.length === 0) return null
+
+                  let currentMonth = days[0].getMonth()
+                  let currentYear = days[0].getFullYear()
+                  let startIdx = 0
+
+                  for (let i = 1; i <= days.length; i++) {
+                    const d = days[i]
+                    if (!d || d.getMonth() !== currentMonth || d.getFullYear() !== currentYear) {
+                      const length = i - startIdx
+                      segments.push({
+                        key: `${currentYear}-${currentMonth}-${startIdx}`,
+                        month: currentMonth + 1,
+                        year: currentYear,
+                        length,
+                      })
+                      if (d) {
+                        currentMonth = d.getMonth()
+                        currentYear = d.getFullYear()
+                        startIdx = i
+                      }
+                    }
+                  }
+
+                  return segments.map((seg, segIdx) => (
+                    <div
+                      key={seg.key}
+                      style={{
+                        width: seg.length * dayCellWidth,
+                        minWidth: seg.length * dayCellWidth,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '0.7rem',
+                        fontWeight: 600,
+                        borderRight: '1px solid #e2e8f0',
+                        backgroundColor: segIdx % 2 === 0 ? '#f8fafc' : '#eef2ff',
+                      }}
+                      title={`${seg.year}년 ${seg.month}월`}
+                    >
+                      {`${seg.month}월`}
+                    </div>
+                  ))
+                })()}
+              </div>
+
+              {/* 일 헤더: 각 날짜별로 숫자만 표시 */}
+              <div
+                style={{
+                  display: 'flex',
+                  flex: 1,
+                }}
+              >
+                {days.map((day, idx) => {
+                  const dd = String(day.getDate()).padStart(2, '0')
+                  return (
+                    <div
+                      key={day.getTime()}
+                      style={{
+                        width: dayCellWidth,
+                        minWidth: dayCellWidth,
+                        padding: '0.1rem 0.1rem',
+                        textAlign: 'center',
+                        fontSize: '0.75rem',
+                        borderRight: idx % 7 === 6 ? '1px solid #cbd5e1' : '1px solid #e2e8f0',
+                      }}
+                      title={day.toLocaleDateString('ko-KR', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                      })}
+                    >
+                      {dd}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* 차트 바디 (화살표 + 행) */}
+            <div style={{ position: 'relative' }}>
+              {arrowPaths.length > 0 && (
                 <div
                   style={{
                     position: 'absolute',
                     left: 0,
-                    right: 0,
-                    top: '50%',
-                    borderTop: '1px dashed #e5e7eb',
+                    top: 0,
+                    width: '100%',
+                    height: sortedTasks.length * GANTT_CHART_SIZES.rowHeight,
+                    pointerEvents: 'none',
+                    zIndex: 5,
                   }}
-                />
+                >
+                <svg
+                  width="100%"
+                  height="100%"
+                  preserveAspectRatio="none"
+                  style={{ overflow: 'visible' }}
+                >
+                  <defs>
+                    <marker id="gantt-arrow-pred" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+                      <path d="M0,0 L0,8 L8,4 z" fill="#6366f1" />
+                    </marker>
+                    <marker id="gantt-arrow-pred-critical" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+                      <path d="M0,0 L0,8 L8,4 z" fill="#dc2626" />
+                    </marker>
+                  </defs>
+                  {arrowPaths.map((a, idx) => (
+                    <g key={idx}>
+                      <line
+                        x1={`${a.fromX}%`}
+                        y1={a.fromY}
+                        x2={`${a.toX}%`}
+                        y2={a.toY}
+                        stroke={a.isCritical ? '#dc2626' : '#6366f1'}
+                        strokeWidth={2}
+                        strokeDasharray={a.depType === 'SS' || a.depType === 'FF' ? '4,3' : 'none'}
+                        markerEnd={`url(#gantt-arrow-pred${a.isCritical ? '-critical' : ''})`}
+                      />
+                      <title>{`선행: ${a.predName} (${a.depType})`}</title>
+                    </g>
+                  ))}
+                </svg>
+                </div>
+              )}
+              {/* 차트 행들 - 바 영역만 */}
+            {sortedTasks.map((task) => {
+              const taskId =
+                task.id != null ? String(task.id) : `local-${(task as any)._rowIndex}`
+              const pos = getItemPosition(taskId)
+              const schedule = pos?.schedule
+              const isLevel1 = (task.outlineLevel ?? 1) === 1
 
-                {pos && schedule && (
-                  <>
-                    {/* 작업 바 */}
+              return (
+                <div
+                  key={taskId}
+                  style={{
+                    height: GANTT_CHART_SIZES.rowHeight + 'px',
+                    minHeight: GANTT_CHART_SIZES.rowHeight + 'px',
+                    maxHeight: GANTT_CHART_SIZES.rowHeight + 'px',
+                    borderBottom: '1px solid #e5e7eb',
+                    position: 'relative',
+                    overflow: 'hidden',
+                    backgroundColor: isLevel1 ? 'rgba(30, 58, 138, 0.06)' : undefined,
+                  }}
+                >
+                  <div
+                    style={{
+                      position: 'absolute',
+                      left: 0,
+                      right: 0,
+                      top: '50%',
+                      borderTop: '1px dashed #e5e7eb',
+                    }}
+                  />
+                  {pos && schedule && (
                     <div
                       style={{
                         position: 'absolute',
                         left: `${pos.left}%`,
                         width: `${pos.width}%`,
-                        top: 10,
-                        height: 20,
-                        backgroundColor: schedule.isCritical
-                          ? '#c62828'
-                          : '#0ea5e9',
+                        top: (GANTT_CHART_SIZES.rowHeight - GANTT_CHART_SIZES.barHeight) / 2,
+                        height: GANTT_CHART_SIZES.barHeight + 'px',
+                        backgroundColor: schedule.isCritical ? '#c62828' : '#0ea5e9',
                         borderRadius: 4,
                         display: 'flex',
                         alignItems: 'center',
@@ -377,128 +599,47 @@ export function GanttTasksChart({ tasks }: Props) {
                         fontWeight: 500,
                         cursor: 'default',
                         boxShadow: '0 1px 2px rgba(15, 23, 42, 0.25)',
+                        overflow: 'hidden',
                       }}
-                      title={`${schedule.taskName} (${schedule.startDate} ~ ${new Date(
-                        new Date(schedule.startDate || '').getTime() +
-                          schedule.durationDays * 24 * 60 * 60 * 1000
-                      ).toLocaleDateString('ko-KR')})`}
+                      title={`${schedule.taskName} (${schedule.startDate} ~ ${new Date(new Date(schedule.startDate || '').getTime() + schedule.durationDays * 24 * 60 * 60 * 1000).toLocaleDateString('ko-KR')})${(task as any).progressPercent != null ? ` · 실적 ${(task as any).progressPercent}%` : ''}`}
                     >
-                      {pos.width > 6 && schedule.taskName}
-                    </div>
-
-                    {/* 선행 관계 화살표 */}
-                    {taskPreds.map((pred, idx) => {
-                      const fromPos = getItemPosition(pred.predecessorTaskId)
-                      if (!fromPos) return null
-
-                      let fromX = 0
-                      let toX = 0
-
-                      switch (pred.dependencyType) {
-                        case 'FS':
-                          fromX = fromPos.left + fromPos.width
-                          toX = pos.left
-                          break
-                        case 'SS':
-                          fromX = fromPos.left
-                          toX = pos.left
-                          break
-                        case 'FF':
-                          fromX = fromPos.left + fromPos.width
-                          toX = pos.left + pos.width
-                          break
-                        case 'SF':
-                          fromX = fromPos.left
-                          toX = pos.left + pos.width
-                          break
-                      }
-
-                      const lagMs =
-                        pred.lagDays * 24 * 60 * 60 * 1000
-                      const lagPercent =
-                        (lagMs /
-                          (dateRange.end.getTime() -
-                            dateRange.start.getTime())) *
-                        100
-                      toX += lagPercent
-
-                      const rowHeight = 46
-                      const fromRow =
-                        sortedTasks.findIndex((t) => {
-                          const id =
-                            t.id != null
-                              ? String(t.id)
-                              : `local-${(t as any)._rowIndex}`
-                          return id === pred.predecessorTaskId
-                        }) ?? 0
-                      const toRow =
-                        sortedTasks.findIndex((t) => {
-                          const id =
-                            t.id != null
-                              ? String(t.id)
-                              : `local-${(t as any)._rowIndex}`
-                          return id === taskId
-                        }) ?? 0
-
-                      const fromY = fromRow * rowHeight + rowHeight / 2
-                      const toY = toRow * rowHeight + rowHeight / 2
-
-                      return (
-                        <svg
-                          key={`${taskId}-${idx}`}
+                      {(task as any).progressPercent != null && (task as any).progressPercent > 0 && (
+                        <div
                           style={{
                             position: 'absolute',
                             left: 0,
                             top: 0,
-                            width: '100%',
-                            height: '100%',
-                            pointerEvents: 'none',
+                            bottom: 0,
+                            width: `${Math.min(100, (task as any).progressPercent)}%`,
+                            backgroundColor: 'rgba(255,255,255,0.35)',
+                            borderRadius: '4px 0 0 4px',
                           }}
-                        >
-                          <defs>
-                            <marker
-                              id={`gantt-arrow-${taskId}-${idx}`}
-                              markerWidth="10"
-                              markerHeight="10"
-                              refX="9"
-                              refY="3"
-                              orient="auto"
-                              markerUnits="strokeWidth"
-                            >
-                              <path
-                                d="M0,0 L0,6 L9,3 z"
-                                fill={
-                                  schedule.isCritical ? '#c62828' : '#0ea5e9'
-                                }
-                              />
-                            </marker>
-                          </defs>
-                          <line
-                            x1={`${fromX}%`}
-                            y1={fromY}
-                            x2={`${toX}%`}
-                            y2={toY}
-                            stroke={
-                              schedule.isCritical ? '#c62828' : '#0ea5e9'
-                            }
-                            strokeWidth={1.5}
-                            markerEnd={`url(#gantt-arrow-${taskId}-${idx})`}
-                            strokeDasharray={
-                              pred.dependencyType === 'SS' ||
-                              pred.dependencyType === 'FF'
-                                ? '4,4'
-                                : 'none'
-                            }
-                          />
-                        </svg>
-                      )
-                    })}
-                  </>
-                )}
-              </div>
+                        />
+                      )}
+                      <span
+                        style={{
+                          position: 'relative',
+                          zIndex: 1,
+                          whiteSpace: 'nowrap',
+                          textOverflow: 'ellipsis',
+                          overflow: 'hidden',
+                        }}
+                      >
+                        {schedule.taskName}
+                        {(task as any).progressPercent != null && (
+                          <span style={{ marginLeft: '0.35rem', opacity: 0.9 }}>
+                            {(task as any).progressPercent}%
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
             </div>
-          )
-        })}
+          </div>
+        </div>
       </div>
     </div>
   )

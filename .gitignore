@@ -37,3 +37,7 @@ next-env.d.ts
 
 # uploads
 /uploads
+
+# local backups (배포 시 제외)
+/backups
+release/backups

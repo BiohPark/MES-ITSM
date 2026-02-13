@@ -20,7 +20,7 @@ interface MenuItem {
 }
 
 export function Sidebar({ activeTab, onTabChange, user, isCollapsed = false, onToggleCollapse }: SidebarProps) {
-  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['main']))
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['main', 'gantt']))
 
   // 메뉴 구조 정의 (ServiceNow 스타일 계층 구조)
   const menuStructure: MenuItem[] = [
@@ -70,6 +70,9 @@ export function Sidebar({ activeTab, onTabChange, user, isCollapsed = false, onT
     {
       key: 'gantt',
       label: '간트 차트',
+      children: [
+        { key: 'gantt-history' as TabKey, label: 'History' },
+      ],
     },
     {
       key: 'search',

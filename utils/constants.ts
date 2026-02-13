@@ -1,4 +1,4 @@
-export type TabKey = 'dashboard' | 'gmp-record' | 'list' | 'val-pkg' | 'tasks' | 'personal' | 'gantt' | 'issues' | 'search' | 'voc' | 'backup' | 'meetings' | 'action-items'
+export type TabKey = 'dashboard' | 'gmp-record' | 'list' | 'val-pkg' | 'tasks' | 'personal' | 'gantt' | 'gantt-history' | 'issues' | 'search' | 'voc' | 'backup' | 'meetings' | 'action-items'
 
 export const TABS: { key: TabKey; label: string }[] = [
   { key: 'dashboard', label: 'Dashboard' },

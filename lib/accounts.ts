@@ -17,10 +17,15 @@ export interface Account {
   email?: string
   password?: string // 해싱된 비밀번호
   role: UserRole
+  can_edit_wbs?: boolean
   password_reset_token?: string | null
   password_reset_expires?: Date | null
   created_at?: string
   updated_at?: string
+}
+
+function parseCanEditWbs(value: unknown): boolean {
+  return value === 1 || value === true || value === '1'
 }
 
 // username으로 계정 조회
@@ -43,6 +48,7 @@ export async function getAccountByUsername(username: string): Promise<Account | 
     email: row.email || undefined,
     password: row.password || undefined,
     role: (row.role || 'user') as UserRole,
+    can_edit_wbs: parseCanEditWbs(row.can_edit_wbs),
     password_reset_token: row.password_reset_token || null,
     password_reset_expires: row.password_reset_expires ? new Date(row.password_reset_expires) : null,
     created_at: row.created_at ? new Date(row.created_at).toISOString() : undefined,
@@ -70,6 +76,7 @@ export async function getAccountByEmail(email: string): Promise<Account | null> 
     email: row.email || undefined,
     password: row.password || undefined,
     role: (row.role || 'user') as UserRole,
+    can_edit_wbs: parseCanEditWbs(row.can_edit_wbs),
     password_reset_token: row.password_reset_token || null,
     password_reset_expires: row.password_reset_expires ? new Date(row.password_reset_expires) : null,
     created_at: row.created_at ? new Date(row.created_at).toISOString() : undefined,
@@ -97,6 +104,7 @@ export async function getAccountById(id: string): Promise<Account | null> {
     email: row.email || undefined,
     password: row.password || undefined,
     role: (row.role || 'user') as UserRole,
+    can_edit_wbs: parseCanEditWbs(row.can_edit_wbs),
     password_reset_token: row.password_reset_token || null,
     password_reset_expires: row.password_reset_expires ? new Date(row.password_reset_expires) : null,
     created_at: row.created_at ? new Date(row.created_at).toISOString() : undefined,
@@ -150,11 +158,22 @@ export async function createAccount(
   // 비밀번호 해싱
   const hashedPassword = await hashPassword(password)
 
-  // 계정 생성
-  await pool.query(
-    'INSERT INTO users (id, username, name, email, password, role) VALUES (?, ?, ?, ?, ?, ?)',
-    [userId, username, name, email || null, hashedPassword, role]
-  )
+  // 계정 생성 (can_edit_wbs 컬럼이 없으면 제외하고 INSERT)
+  try {
+    await pool.query(
+      'INSERT INTO users (id, username, name, email, password, role, can_edit_wbs) VALUES (?, ?, ?, ?, ?, ?, 0)',
+      [userId, username, name, email || null, hashedPassword, role]
+    )
+  } catch (err: any) {
+    if (err?.code === 'ER_BAD_FIELD_ERROR' || err?.message?.includes("Unknown column 'can_edit_wbs'")) {
+      await pool.query(
+        'INSERT INTO users (id, username, name, email, password, role) VALUES (?, ?, ?, ?, ?, ?)',
+        [userId, username, name, email || null, hashedPassword, role]
+      )
+    } else {
+      throw err
+    }
+  }
 
   return userId
 }
@@ -189,6 +208,7 @@ export async function updateAccount(
     email?: string
     password?: string
     role?: UserRole
+    can_edit_wbs?: boolean
   }
 ): Promise<void> {
   const pool = getPool()
@@ -234,6 +254,10 @@ export async function updateAccount(
     updateFields.push('role = ?')
     updateValues.push(updates.role)
   }
+  if (updates.can_edit_wbs !== undefined) {
+    updateFields.push('can_edit_wbs = ?')
+    updateValues.push(updates.can_edit_wbs ? 1 : 0)
+  }
 
   if (updateFields.length === 0) {
     return // 업데이트할 내용이 없음
@@ -241,10 +265,32 @@ export async function updateAccount(
 
   updateValues.push(userId)
 
-  await pool.query(
-    `UPDATE users SET ${updateFields.join(', ')} WHERE id = ?`,
-    updateValues
-  )
+  try {
+    await pool.query(
+      `UPDATE users SET ${updateFields.join(', ')} WHERE id = ?`,
+      updateValues
+    )
+  } catch (err: any) {
+    // can_edit_wbs 컬럼이 없을 때 컬럼 추가 후 재시도
+    if (
+      (err?.code === 'ER_BAD_FIELD_ERROR' || err?.message?.includes("Unknown column 'can_edit_wbs'")) &&
+      updates.can_edit_wbs !== undefined
+    ) {
+      try {
+        await pool.query(
+          `ALTER TABLE users ADD COLUMN can_edit_wbs TINYINT(1) NOT NULL DEFAULT 0`
+        )
+      } catch (alterErr: any) {
+        if (alterErr?.code !== 'ER_DUP_FIELDNAME') throw alterErr
+      }
+      await pool.query(
+        `UPDATE users SET ${updateFields.join(', ')} WHERE id = ?`,
+        updateValues
+      )
+      return
+    }
+    throw err
+  }
 }
 
 // 비밀번호 변경
@@ -297,6 +343,7 @@ export async function getAccountByResetToken(token: string): Promise<Account | n
     email: row.email || undefined,
     password: row.password || undefined,
     role: (row.role || 'user') as UserRole,
+    can_edit_wbs: parseCanEditWbs(row.can_edit_wbs),
     password_reset_token: row.password_reset_token || null,
     password_reset_expires: row.password_reset_expires ? new Date(row.password_reset_expires) : null,
     created_at: row.created_at ? new Date(row.created_at).toISOString() : undefined,

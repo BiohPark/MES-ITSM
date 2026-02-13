@@ -32,25 +32,24 @@ export function parsePredecessorString(input: string): ParsedPredecessor[] {
 
   for (const part of parts) {
     try {
-      // 정규식: 숫자 + 타입(FS/SS/FF/SF) + 선택적 부호 + 선택적 숫자
-      const match = part.match(/^(\d+)(FS|SS|FF|SF)([+-]?\d*)$/i)
-      
+      // 형식 1: "2FS+5", "3SS-1" (MS Project 스타일)
+      const fullMatch = part.match(/^(\d+)(FS|SS|FF|SF)([+-]?\d*)$/i)
+      // 형식 2: "2" (단순 숫자 = FS로 간주)
+      const simpleMatch = part.match(/^(\d+)$/)
+
+      const match = fullMatch || simpleMatch
       if (!match) {
         console.warn(`Invalid predecessor format: ${part}`)
         continue
       }
 
       const index = parseInt(match[1], 10)
-      const type = match[2].toUpperCase() as DependencyType
-      const lagStr = match[3] || '0'
-      
-      // Lag 파싱 (+5, -1, +0, -0 등)
+      const type = (fullMatch ? fullMatch[2].toUpperCase() : 'FS') as DependencyType
       let lag = 0
-      if (lagStr) {
-        if (lagStr === '+' || lagStr === '-') {
-          lag = lagStr === '+' ? 0 : 0
-        } else {
-          lag = parseInt(lagStr, 10)
+      if (fullMatch && fullMatch[3]) {
+        const lagStr = fullMatch[3]
+        if (lagStr !== '+' && lagStr !== '-') {
+          lag = parseInt(lagStr, 10) || 0
         }
       }
 
@@ -94,7 +93,7 @@ export function validatePredecessorString(input: string): { valid: boolean; erro
     .filter(part => part.length > 0)
 
   for (const part of parts) {
-    const match = part.match(/^(\d+)(FS|SS|FF|SF)([+-]?\d*)$/i)
+    const match = part.match(/^(\d+)(FS|SS|FF|SF)([+-]?\d*)$/i) || part.match(/^(\d+)$/)
     if (!match) {
       return {
         valid: false,
