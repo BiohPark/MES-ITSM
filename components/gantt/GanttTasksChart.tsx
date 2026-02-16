@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 /** 반응형 스타일 - 좁은 컬럼으로 더 많은 차트 표시 */
 const GANTT_CHART_SIZES = {
@@ -38,11 +38,20 @@ interface GanttTask {
   isMilestone?: boolean
 }
 
-interface Props {
-  tasks: GanttTask[]
+export interface GanttChartEvent {
+  id?: string
+  date: string
+  name: string
 }
 
-export function GanttTasksChart({ tasks }: Props) {
+interface Props {
+  tasks: GanttTask[]
+  events?: GanttChartEvent[]
+  onDoubleClickDate?: (date: string) => void
+  onDeleteEvent?: (event: GanttChartEvent) => void
+}
+
+export function GanttTasksChart({ tasks, events = [], onDoubleClickDate, onDeleteEvent }: Props) {
   const [dateRange, setDateRange] = useState<{ start: Date; end: Date}>(() => {
     const today = new Date()
     const start = new Date(today)
@@ -256,6 +265,26 @@ export function GanttTasksChart({ tasks }: Props) {
     return rows
   }, [sortedTasks, predsByTask, dateRange, schedules])
 
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const dateHeaderRef = useRef<HTMLDivElement>(null)
+  const handleDateHeaderDoubleClick = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      const header = dateHeaderRef.current
+      if (!header || !onDoubleClickDate) return
+      const rect = header.getBoundingClientRect()
+      const dayCellWidth = GANTT_CHART_SIZES.dayCellWidth
+      // 뷰포트 기준이므로 스크롤은 rect에 이미 반영됨. scrollLeft 추가 시 dayIndex 과대 계산(예: 3/31 → 5/24)
+      const x = e.clientX - rect.left
+      const dayIndex = Math.floor(x / dayCellWidth)
+      if (dayIndex >= 0 && dayIndex < days.length) {
+        const d = days[dayIndex]
+        const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+        onDoubleClickDate(dateStr)
+      }
+    },
+    [days, onDoubleClickDate]
+  )
+
   if (sortedTasks.length === 0) {
     return (
       <div className="placeholder">
@@ -277,6 +306,7 @@ export function GanttTasksChart({ tasks }: Props) {
     >
       {/* 헤더 + 바디를 하나의 가로 스크롤 컨테이너로 */}
       <div
+        ref={scrollContainerRef}
         style={{
           maxHeight: 'min(70vh, 560px)',
           overflowY: 'auto',
@@ -472,12 +502,16 @@ export function GanttTasksChart({ tasks }: Props) {
                 })()}
               </div>
 
-              {/* 일 헤더: 각 날짜별로 숫자만 표시 */}
+              {/* 일 헤더: 각 날짜별로 숫자만 표시 - 더블클릭 시 해당 날짜에 이벤트 추가 */}
               <div
+                ref={dateHeaderRef}
                 style={{
                   display: 'flex',
                   flex: 1,
+                  cursor: onDoubleClickDate ? 'pointer' : undefined,
                 }}
+                onDoubleClick={handleDateHeaderDoubleClick}
+                title={onDoubleClickDate ? '날짜 셀 더블클릭: 이벤트 추가' : undefined}
               >
                 {days.map((day, idx) => {
                   const dd = String(day.getDate()).padStart(2, '0')
@@ -507,6 +541,92 @@ export function GanttTasksChart({ tasks }: Props) {
 
             {/* 차트 바디 (화살표 + 행) */}
             <div style={{ position: 'relative' }}>
+              {/* 이벤트 초록색 세로선 + 이벤트명 (오늘 라인과 구분) */}
+              {events.map((ev, evIdx) => {
+                const evDate = ev.date.includes('T') ? ev.date.split('T')[0] : ev.date
+                const [y, m, d] = evDate.split('-').map(Number)
+                const evMs = new Date(y, m - 1, d).getTime()
+                const rangeStartMs = dateRange.start.getTime()
+                const rangeEndMs = dateRange.end.getTime()
+                if (evMs < rangeStartMs || evMs > rangeEndMs) return null
+                const leftPercent = ((evMs - rangeStartMs) / (rangeEndMs - rangeStartMs)) * 100
+                const chartBodyHeight = sortedTasks.length * GANTT_CHART_SIZES.rowHeight
+                return (
+                  <div
+                    key={ev.id ?? `ev-${evIdx}-${ev.date}`}
+                    role="button"
+                    tabIndex={0}
+                    style={{
+                      position: 'absolute',
+                      left: `calc(${leftPercent}% - ${onDeleteEvent ? 7 : 1}px)`,
+                      top: 0,
+                      width: onDeleteEvent ? 14 : 2,
+                      height: chartBodyHeight,
+                      backgroundColor: 'transparent',
+                      pointerEvents: onDeleteEvent ? 'auto' : 'none',
+                      zIndex: 4,
+                      boxSizing: 'border-box',
+                      cursor: onDeleteEvent ? 'pointer' : undefined,
+                    }}
+                    title={onDeleteEvent ? `클릭하여 삭제: ${ev.name || '(이벤트)'}` : ev.name}
+                    onClick={onDeleteEvent ? () => onDeleteEvent(ev) : undefined}
+                  >
+                    <div style={{ position: 'absolute', left: onDeleteEvent ? 6 : 0, top: 0, width: 2, height: chartBodyHeight, backgroundColor: '#16a34a' }} />
+                    <div style={{ position: 'absolute', left: onDeleteEvent ? 6 : 0, top: 0, width: 2, height: 2, backgroundColor: '#16a34a' }} />
+                    <div style={{ position: 'absolute', left: onDeleteEvent ? 6 : 0, bottom: 0, width: 2, height: 2, backgroundColor: '#16a34a' }} />
+                    <span
+                      style={{
+                        position: 'absolute',
+                        left: onDeleteEvent ? 8 : 2,
+                        top: 2,
+                        fontSize: '0.65rem',
+                        fontWeight: 600,
+                        color: '#15803d',
+                        whiteSpace: 'nowrap',
+                        maxWidth: 120,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        backgroundColor: 'rgba(255,255,255,0.9)',
+                        padding: '0.1rem 0.25rem',
+                        borderRadius: 2,
+                        pointerEvents: 'none',
+                      }}
+                    >
+                      {ev.name || '(이벤트)'}
+                    </span>
+                  </div>
+                )
+              })}
+              {/* 오늘 날짜 빨간색 세로선 (상하 라인) */}
+              {(() => {
+                const today = new Date()
+                today.setHours(0, 0, 0, 0)
+                const todayMs = today.getTime()
+                const rangeStartMs = dateRange.start.getTime()
+                const rangeEndMs = dateRange.end.getTime()
+                if (todayMs < rangeStartMs || todayMs > rangeEndMs) return null
+                const leftPercent = ((todayMs - rangeStartMs) / (rangeEndMs - rangeStartMs)) * 100
+                const chartBodyHeight = sortedTasks.length * GANTT_CHART_SIZES.rowHeight
+                return (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      left: `calc(${leftPercent}% - 1px)`,
+                      top: 0,
+                      width: 2,
+                      height: chartBodyHeight,
+                      backgroundColor: '#dc2626',
+                      pointerEvents: 'none',
+                      zIndex: 4,
+                      boxSizing: 'border-box',
+                    }}
+                    title="오늘"
+                  >
+                    <div style={{ position: 'absolute', left: 0, top: 0, right: 0, height: 2, backgroundColor: '#dc2626' }} />
+                    <div style={{ position: 'absolute', left: 0, bottom: 0, right: 0, height: 2, backgroundColor: '#dc2626' }} />
+                  </div>
+                )
+              })()}
               {arrowPaths.length > 0 && (
                 <div
                   style={{

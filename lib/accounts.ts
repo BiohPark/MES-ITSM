@@ -41,12 +41,13 @@ export async function getAccountByUsername(username: string): Promise<Account | 
   }
 
   const row = rows[0]
+  const toStr = (v: unknown) => (v == null ? undefined : typeof v === 'string' ? v : Buffer.isBuffer(v) ? v.toString('utf8') : String(v))
   return {
     id: row.id,
     username: row.username,
     name: row.name,
     email: row.email || undefined,
-    password: row.password || undefined,
+    password: toStr(row.password) || undefined,
     role: (row.role || 'user') as UserRole,
     can_edit_wbs: parseCanEditWbs(row.can_edit_wbs),
     password_reset_token: row.password_reset_token || null,

@@ -10,13 +10,13 @@ const adminPaths = ['/api/users'] // 설정 관련 API는 나중에 확장 가�
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // public 경로는 통과
+  // 로그인/회원가입 등 인증 불필요 경로는 세션 검사 없이 통과
   const isPublicPath = publicPaths.some(path => pathname.startsWith(path))
   if (isPublicPath) {
     return NextResponse.next()
   }
 
-  // API 경로 처리
+  // API 경로 처리 (위에서 /api/auth 는 이미 publicPaths 로 통과)
   if (pathname.startsWith('/api')) {
     const token = request.cookies.get('session')?.value
 

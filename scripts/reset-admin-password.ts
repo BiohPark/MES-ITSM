@@ -1,83 +1,37 @@
+/**
+ * admin 계정 비밀번호를 1234로 재설정합니다.
+ * 로그인이 안 될 때(해시 불일치·손상 등) 실행하세요.
+ * 사용: npx tsx scripts/reset-admin-password.ts  또는  npm run reset-admin-password
+ */
+import './load-dotenv'
 import { getPool } from '../lib/db'
 import { hashPassword } from '../lib/password'
 
 async function resetAdminPassword() {
   const pool = getPool()
-  
-  try {
-    const newPassword = '1q2w3e4r'
-    
-    console.log('='.repeat(80))
-    console.log('admin 계정 비밀번호 리셋')
-    console.log('='.repeat(80))
-    console.log()
-
-    // admin 계정 확인
-    const [accounts] = await pool.query<any[]>(
-      `SELECT id, username, name, email, role 
-       FROM users 
-       WHERE username = 'admin'`
-    )
-
-    if (accounts.length === 0) {
-      console.log('❌ admin 계정을 찾을 수 없습니다.')
-      return
-    }
-
-    const admin = accounts[0]
-    
-    console.log('📋 admin 계정 정보:')
-    console.log('-'.repeat(80))
-    console.log(`  계정 ID: ${admin.id}`)
-    console.log(`  사용자명: ${admin.username}`)
-    console.log(`  이름: ${admin.name}`)
-    console.log(`  이메일: ${admin.email || '(없음)'}`)
-    console.log(`  권한: ${admin.role}`)
-    console.log()
-
-    // 비밀번호 해싱
-    console.log('🔐 비밀번호 해싱 중...')
-    const hashedPassword = await hashPassword(newPassword)
-    console.log('✅ 비밀번호 해싱 완료')
-    console.log()
-
-    // 비밀번호 업데이트
-    console.log('💾 데이터베이스 업데이트 중...')
-    await pool.query(
-      'UPDATE users SET password = ? WHERE username = ?',
-      [hashedPassword, 'admin']
-    )
-    console.log('✅ 비밀번호 업데이트 완료')
-    console.log()
-
-    console.log('='.repeat(80))
-    console.log('✅ admin 계정 비밀번호가 성공적으로 리셋되었습니다!')
-    console.log('='.repeat(80))
-    console.log()
-    console.log('📝 새로운 로그인 정보:')
-    console.log('-'.repeat(80))
-    console.log(`  사용자명: admin`)
-    console.log(`  비밀번호: ${newPassword}`)
-    console.log()
-
-  } catch (error) {
-    console.error('❌ 비밀번호 리셋 실패:', error)
-    throw error
-  } finally {
-    await pool.end()
-  }
-}
-
-async function main() {
-  try {
-    await resetAdminPassword()
-    process.exit(0)
-  } catch (error) {
-    console.error('Error:', error)
+  const [rows] = await pool.query<any[]>(
+    'SELECT id, username FROM users WHERE username = ?',
+    ['admin']
+  )
+  if (rows.length === 0) {
+    console.log('❌ admin 계정이 없습니다. 먼저 npm run create-admin 를 실행하세요.')
     process.exit(1)
   }
+  const hashed = await hashPassword('1234')
+  await pool.query('UPDATE users SET password = ? WHERE username = ?', [
+    hashed,
+    'admin',
+  ])
+  console.log('✅ admin 계정 비밀번호가 "1234"로 재설정되었습니다.')
+  process.exit(0)
 }
 
-main()
-
-
+resetAdminPassword().catch((err: any) => {
+  console.error('❌ 오류:', err?.message ?? err)
+  if (err?.code === 'ECONNREFUSED') {
+    console.error('\n💡 DB 연결이 거부되었습니다. 확인하세요:')
+    console.error('   - MySQL/MariaDB가 실행 중인지')
+    console.error('   - .env.local 의 DB_HOST, DB_PORT(현재:', process.env.DB_PORT || '3306', ')가 실제 DB와 일치하는지')
+  }
+  process.exit(1)
+})

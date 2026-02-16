@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { parsePredecessorString } from '@/lib/predecessor-parser'
-import { GanttTasksChart } from './GanttTasksChart'
+import { GanttTasksChart, type GanttChartEvent } from './GanttTasksChart'
 
 const LONG_PRESS_MS = 450
 
@@ -11,6 +11,40 @@ function toDateInputValue(date: string | null | undefined): string {
   if (!date) return ''
   const d = date.includes('T') ? date.split('T')[0] : date
   return d || ''
+}
+
+/** 셀 표시용: YYYY-MM-DD → yymmdd (6자리, 예: 260216) */
+function formatDateYymmdd(date: string | null | undefined): string {
+  const normalized = toDateInputValue(date)
+  if (!normalized || normalized.length < 10) return ''
+  const yy = normalized.slice(2, 4)
+  const mm = normalized.slice(5, 7)
+  const dd = normalized.slice(8, 10)
+  return `${yy}${mm}${dd}`
+}
+
+/** 입력값(yymmdd 6자리 또는 yyyymmdd 8자리)을 저장용 YYYY-MM-DD로 파싱. yy는 2000~2099 */
+function parseDateToYyyyMmDd(raw: string): string | null {
+  const s = raw.trim().replace(/-/g, '')
+  let y: number, m: number, d: number
+  if (s.length === 6) {
+    const yy = parseInt(s.slice(0, 2), 10)
+    y = yy >= 0 && yy <= 99 ? 2000 + yy : yy
+    m = parseInt(s.slice(2, 4), 10)
+    d = parseInt(s.slice(4, 6), 10)
+  } else if (s.length === 8) {
+    y = parseInt(s.slice(0, 4), 10)
+    m = parseInt(s.slice(4, 6), 10)
+    d = parseInt(s.slice(6, 8), 10)
+  } else {
+    return null
+  }
+  if (Number.isNaN(y) || Number.isNaN(m) || Number.isNaN(d)) return null
+  if (m < 1 || m > 12 || d < 1 || d > 31) return null
+  const date = new Date(y, m - 1, d)
+  if (date.getFullYear() !== y || date.getMonth() !== m - 1 || date.getDate() !== d) return null
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${y}-${pad(m)}-${pad(d)}`
 }
 
 /** YYYY-MM-DD를 로컬 날짜로 파싱 (타임존 버그 방지, ISO 형식 지원) */
@@ -33,22 +67,33 @@ function addDaysToDate(dateStr: string, days: number): string {
   return formatLocalDate(d)
 }
 
-/** 반응형 컬럼 스타일 - 고정 너비 컬럼 (flex: 0 0 auto) */
+/** 반응형 컬럼 스타일 - 고정 너비 컬럼 (flex: 0 0 auto), 레벨 컬럼 제거(작업명 들여쓰기로 대체) */
 const WBS_COLUMNS = {
   seq: 'clamp(2rem, 2.2vw, 2.5rem)',
   wbs: 'clamp(3rem, 4vw, 4.5rem)',
-  level: 'clamp(2.5rem, 3vw, 3.5rem)',
   date: 'clamp(5.5rem, 7vw, 8rem)',
   duration: 'clamp(3rem, 3.5vw, 4rem)',
   progress: 'clamp(3.5rem, 4vw, 5rem)',
   predecessors: 'clamp(5rem, 6.5vw, 8rem)',
   assignee: 'clamp(5rem, 6vw, 7.5rem)',
   indent: 'clamp(3rem, 3.5vw, 4rem)',
-  addChild: 'clamp(3.5rem, 4vw, 4.5rem)',
+  addChild: 'clamp(4.75rem, 5.5vw, 6rem)',
   delete: 'clamp(2.5rem, 2.8vw, 3rem)',
 } as const
+/** 작업명 셀 레벨당 들여쓰기(px) */
+const WBS_LEVEL_INDENT_PX = 20
 /** 작업명 컬럼: 남는 공간을 채움 (minWidth만 지정) */
-const WBS_NAME_MIN = 'clamp(8rem, 12vw, 14rem)'
+const WBS_NAME_MIN = 'clamp(6rem, 9vw, 11rem)'
+/** WBS 행 내 입력/버튼 공통 높이·스타일 (한 줄 정렬) */
+const WBS_ROW_CELL = {
+  minHeight: '1.85rem',
+  padding: '0.2rem 0.35rem',
+  border: '1px solid #d1d5db',
+  borderRadius: 3,
+  fontSize: '0.78rem',
+  boxSizing: 'border-box' as const,
+  lineHeight: 1.25,
+}
 
 interface GanttProject {
   id: number
@@ -74,7 +119,13 @@ interface GanttTask {
 
 type SubTabKey = 'wbs' | 'chart'
 
-export function GanttWorkspace() {
+export function GanttWorkspace({
+  initialProjectId,
+  onInitialProjectIdConsumed,
+}: {
+  initialProjectId?: number
+  onInitialProjectIdConsumed?: () => void
+} = {}) {
   const [projects, setProjects] = useState<GanttProject[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -92,6 +143,15 @@ export function GanttWorkspace() {
   const [activeSubTab, setActiveSubTab] = useState<SubTabKey>('wbs')
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [canEditWbs, setCanEditWbs] = useState<boolean | null>(null)
+  /** true면 레벨 1(최상위) 작업만 표시 */
+  const [filterLevel1Only, setFilterLevel1Only] = useState(false)
+  /** 담당자 검증용 등록 사용자 목록 (name, username) */
+  const [registeredUserNames, setRegisteredUserNames] = useState<Set<string>>(new Set())
+  const [assigneeError, setAssigneeError] = useState<string | null>(null)
+  /** 차트 이벤트 (특정 날짜 목표/마일스톤) - 프로젝트별 localStorage 저장 */
+  const [chartEvents, setChartEvents] = useState<GanttChartEvent[]>([])
+  /** 이벤트 추가 팝업: { date, name } */
+  const [addEventModal, setAddEventModal] = useState<{ date: string; name: string } | null>(null)
 
   // 드래그 앤 드롭 상태
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null)
@@ -131,6 +191,16 @@ export function GanttWorkspace() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  /** 내 일감에서 간트 작업 클릭 시 해당 프로젝트 선택 */
+  useEffect(() => {
+    if (initialProjectId == null || projects.length === 0) return
+    const exists = projects.some((p) => p.id === initialProjectId)
+    if (exists) {
+      setSelectedProjectId(initialProjectId)
+      onInitialProjectIdConsumed?.()
+    }
+  }, [initialProjectId, projects, onInitialProjectIdConsumed])
+
   useEffect(() => {
     let cancelled = false
     fetch('/api/gantt/permission')
@@ -140,6 +210,26 @@ export function GanttWorkspace() {
       })
       .catch(() => {
         if (!cancelled) setCanEditWbs(false)
+      })
+    return () => { cancelled = true }
+  }, [])
+
+  /** 담당자 검증용: 등록된 사용자 목록 로드 (name, username) */
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/users')
+      .then((res) => res.ok ? res.json() : { users: [] })
+      .then((data) => {
+        if (cancelled) return
+        const names = new Set<string>()
+        ;(data.users || []).forEach((u: { name?: string; username?: string }) => {
+          if (u.name) names.add(String(u.name).trim())
+          if (u.username) names.add(String(u.username).trim())
+        })
+        setRegisteredUserNames(names)
+      })
+      .catch(() => {
+        if (!cancelled) setRegisteredUserNames(new Set())
       })
     return () => { cancelled = true }
   }, [])
@@ -171,10 +261,27 @@ export function GanttWorkspace() {
   useEffect(() => {
     if (selectedProjectId) {
       loadTasks(selectedProjectId)
+      try {
+        const raw = localStorage.getItem(`gantt-events-${selectedProjectId}`)
+        setChartEvents(raw ? JSON.parse(raw) : [])
+      } catch {
+        setChartEvents([])
+      }
     } else {
       setTasks([])
+      setChartEvents([])
     }
   }, [selectedProjectId])
+
+  useEffect(() => {
+    if (selectedProjectId != null && chartEvents.length >= 0) {
+      try {
+        localStorage.setItem(`gantt-events-${selectedProjectId}`, JSON.stringify(chartEvents))
+      } catch {
+        // ignore
+      }
+    }
+  }, [selectedProjectId, chartEvents])
 
   const handleAddRow = () => {
     if (!selectedProjectId) {
@@ -489,16 +596,16 @@ export function GanttWorkspace() {
           
           if (childItems.length === 0) continue
           
-          // 상위 레벨의 시작일과 종료일 자동 계산
+          // 상위 레벨의 시작일과 종료일 자동 계산 (로컬 날짜 기준, 타임존으로 ±1일 오류 방지)
           const childStartDates = childItems
             .map(item => item.startDate)
             .filter((date): date is string => date !== null && date !== undefined)
-            .map(date => new Date(date).getTime())
+            .map(date => parseLocalDate(date).getTime())
           
           const childFinishDates = childItems
             .map(item => item.finishDate)
             .filter((date): date is string => date !== null && date !== undefined)
-            .map(date => new Date(date).getTime())
+            .map(date => parseLocalDate(date).getTime())
 
           if (childStartDates.length > 0) {
             const minStartDate = new Date(Math.min(...childStartDates))
@@ -610,17 +717,17 @@ export function GanttWorkspace() {
           }
         }
 
-        // 하위 항목이 있는 경우, 시작일·종료일·실적 자동 계산
+        // 하위 항목이 있는 경우, 시작일·종료일·실적 자동 계산 (로컬 날짜 기준, 타임존 ±1일 오류 방지)
         if (childItems.length > 0) {
           const childStartDates = childItems
             .map(item => item.startDate)
             .filter((date): date is string => date !== null && date !== undefined)
-            .map(date => new Date(date).getTime())
+            .map(date => parseLocalDate(date).getTime())
           
           const childFinishDates = childItems
             .map(item => item.finishDate)
             .filter((date): date is string => date !== null && date !== undefined)
-            .map(date => new Date(date).getTime())
+            .map(date => parseLocalDate(date).getTime())
 
           if (childStartDates.length > 0) {
             const minStartDate = new Date(Math.min(...childStartDates))
@@ -675,7 +782,7 @@ export function GanttWorkspace() {
     return result
   }
 
-  /** 표시용: WBS·날짜·기간이 재계산된 태스크 목록 */
+  /** 표시용: WBS·날짜·기간이 재계산된 태스크 목록 (필터는 행 표시 시 적용, 인덱스 일치 유지) */
   const displayTasks = useMemo(() => recomputeWbsCodes(tasks), [tasks])
 
   /** 프로젝트 실적 요약: 계획 기간, 계획 실적 %, 전체 실적 % (가중 평균) */
@@ -798,7 +905,15 @@ export function GanttWorkspace() {
       alert('먼저 Gantt 프로젝트를 선택하세요.')
       return
     }
+    setAssigneeError(null)
     const normalized = recomputeWbsCodes(tasks)
+    for (const t of normalized) {
+      const assignee = (t.assignee ?? '').trim()
+      if (assignee && !registeredUserNames.has(assignee)) {
+        setAssigneeError(`담당자 "${assignee}"(은)는 등록된 사용자가 아닙니다. 사용자 관리에서 등록 후 선택해 주세요.`)
+        return
+      }
+    }
     // 저장 시 실적은 원본 tasks 기준 유지(하위 추가 등으로 리셋 방지)
     const toSave = normalized.map((n, i) => ({
       ...n,
@@ -1235,6 +1350,40 @@ export function GanttWorkspace() {
                   WBS 수정 권한이 없습니다. 관리자(설정 → 사용자 관리)에서 WBS 수정 권한 부여를 요청하세요.
                 </div>
               )}
+              {assigneeError && (
+                <div
+                  style={{
+                    position: 'fixed',
+                    inset: 0,
+                    zIndex: 9999,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: 'rgba(0,0,0,0.4)',
+                  }}
+                  onClick={() => setAssigneeError(null)}
+                >
+                  <div
+                    style={{
+                      background: '#fff',
+                      padding: '1.25rem 1.5rem',
+                      borderRadius: 12,
+                      boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+                      maxWidth: 420,
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <p style={{ margin: 0, marginBottom: '1rem', color: '#b91c1c', fontWeight: 500 }}>{assigneeError}</p>
+                    <button
+                      type="button"
+                      className="servicenow-button servicenow-button--primary"
+                      onClick={() => setAssigneeError(null)}
+                    >
+                      확인
+                    </button>
+                  </div>
+                </div>
+              )}
               {/* WBS 편집 영역 - 모던 카드 스타일 */}
               <div
                 style={{
@@ -1278,7 +1427,15 @@ export function GanttWorkspace() {
                     </div>
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.8rem', color: '#475569', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={filterLevel1Only}
+                      onChange={(e) => setFilterLevel1Only(e.target.checked)}
+                    />
+                    레벨 1만 보기
+                  </label>
                   <button
                     type="button"
                     className="servicenow-button servicenow-button--secondary"
@@ -1319,34 +1476,39 @@ export function GanttWorkspace() {
                   boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
                 }}
               >
-              <div
-                style={{
-                  display: 'flex',
-                  width: '100%',
-                  minWidth: 0,
-                  background: 'linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%)',
-                  borderBottom: '2px solid #e2e8f0',
-                  fontSize: '0.78rem',
-                  fontWeight: 600,
-                  color: '#475569',
-                }}
-              >
-                <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.seq, minWidth: WBS_COLUMNS.seq, padding: '0.35rem 0.6rem', textAlign: 'center' }}>#</div>
-                <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.wbs, minWidth: WBS_COLUMNS.wbs, padding: '0.35rem 0.6rem', textAlign: 'center' }}>WBS</div>
-                <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.level, minWidth: WBS_COLUMNS.level, padding: '0.35rem 0.6rem', textAlign: 'center' }}>레벨</div>
-                <div style={{ flex: '1 1 0%', minWidth: WBS_NAME_MIN, padding: '0.35rem 0.6rem' }}>작업명</div>
-                <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.progress, minWidth: WBS_COLUMNS.progress, padding: '0.35rem 0.6rem', textAlign: 'center' }}>실적(%)</div>
-                <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.date, minWidth: WBS_COLUMNS.date, padding: '0.35rem 0.6rem' }}>시작</div>
-                <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.date, minWidth: WBS_COLUMNS.date, padding: '0.35rem 0.6rem' }}>종료</div>
-                <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.duration, minWidth: WBS_COLUMNS.duration, padding: '0.35rem 0.6rem', textAlign: 'center' }}>기간(일)</div>
-                <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.predecessors, minWidth: WBS_COLUMNS.predecessors, padding: '0.35rem 0.6rem' }}>선행 작업</div>
-                <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.assignee, minWidth: WBS_COLUMNS.assignee, padding: '0.35rem 0.6rem' }}>담당자</div>
-                <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.indent, minWidth: WBS_COLUMNS.indent, padding: '0.35rem 0.6rem', textAlign: 'center' }}>조정</div>
-                <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.addChild, minWidth: WBS_COLUMNS.addChild, padding: '0.35rem 0.6rem', textAlign: 'center' }}>하위</div>
-                <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.delete, minWidth: WBS_COLUMNS.delete, padding: '0.35rem 0.6rem', textAlign: 'center' }}>삭제</div>
-              </div>
               <div style={{ width: '100%', minWidth: 0, maxHeight: 'min(65vh, 600px)', overflow: 'auto' }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    width: '100%',
+                    minWidth: 0,
+                    minHeight: '2.25rem',
+                    alignItems: 'center',
+                    background: 'linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%)',
+                    borderBottom: '2px solid #e2e8f0',
+                    fontSize: '0.78rem',
+                    fontWeight: 600,
+                    color: '#475569',
+                    position: 'sticky',
+                    top: 0,
+                    zIndex: 1,
+                  }}
+                >
+                  <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.seq, minWidth: WBS_COLUMNS.seq, padding: '0.3rem 0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>#</div>
+                  <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.wbs, minWidth: WBS_COLUMNS.wbs, padding: '0.3rem 0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>WBS</div>
+                  <div style={{ flex: '1 1 0%', minWidth: WBS_NAME_MIN, padding: '0.3rem 0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>작업명</div>
+                  <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.progress, minWidth: WBS_COLUMNS.progress, padding: '0.3rem 0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center', whiteSpace: 'nowrap' }}>실적(%)</div>
+                  <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.date, minWidth: WBS_COLUMNS.date, padding: '0.3rem 0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>시작</div>
+                  <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.date, minWidth: WBS_COLUMNS.date, padding: '0.3rem 0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>종료</div>
+                  <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.duration, minWidth: WBS_COLUMNS.duration, padding: '0.3rem 0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center', whiteSpace: 'nowrap' }}>기간(일)</div>
+                  <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.predecessors, minWidth: WBS_COLUMNS.predecessors, padding: '0.3rem 0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>선행 작업</div>
+                  <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.assignee, minWidth: WBS_COLUMNS.assignee, padding: '0.3rem 0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>담당자</div>
+                  <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.indent, minWidth: WBS_COLUMNS.indent, padding: '0.3rem 0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>조정</div>
+                  <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.addChild, minWidth: WBS_COLUMNS.addChild, padding: '0.3rem 0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>하위</div>
+                  <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.delete, minWidth: WBS_COLUMNS.delete, padding: '0.3rem 0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>삭제</div>
+                </div>
                 {displayTasks.map((t, idx) => {
+                  if (filterLevel1Only && (t.outlineLevel ?? 1) !== 1) return null
                   const isDragging = draggingIndex != null && getDraggedSubtreeIndices(draggingIndex).includes(idx)
                   const isDropChild = dropTarget?.type === 'child' && dropTarget.index === idx
                   const isDropSiblingBefore = dropTarget?.type === 'sibling' && dropTarget.index === idx
@@ -1384,6 +1546,7 @@ export function GanttWorkspace() {
                       display: 'flex',
                       width: '100%',
                       minWidth: 0,
+                      minHeight: '2.25rem',
                       borderBottom: '1px solid #f1f5f9',
                       fontSize: '0.8rem',
                       alignItems: 'center',
@@ -1430,29 +1593,14 @@ export function GanttWorkspace() {
                     <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.wbs, minWidth: WBS_COLUMNS.wbs, padding: '0.3rem 0.55rem', fontFamily: 'monospace' }}>
                       {t.wbsCode || '-'}
                     </div>
-                    <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.level, minWidth: WBS_COLUMNS.level, padding: '0.3rem 0.55rem' }}>
-                      <input
-                        type="number"
-                        min={1}
-                        value={t.outlineLevel || 1}
-                        readOnly={readOnlyWbs}
-                        onChange={(e) =>
-                          handleChangeTask(
-                            idx,
-                            'outlineLevel',
-                            Math.max(1, Number(e.target.value) || 1)
-                          )
-                        }
-                        style={{
-                          width: '100%',
-                          padding: '0.15rem',
-                          border: '1px solid #d1d5db',
-                          borderRadius: 3,
-                          fontSize: '0.8rem',
-                        }}
-                      />
-                    </div>
-                    <div style={{ flex: '1 1 0%', minWidth: WBS_NAME_MIN, padding: '0.3rem 0.55rem' }}>
+                    <div
+                      style={{
+                        flex: '1 1 0%',
+                        minWidth: WBS_NAME_MIN,
+                        padding: '0.3rem 0.55rem',
+                        paddingLeft: `${0.3 + ((t.outlineLevel ?? 1) - 1) * (WBS_LEVEL_INDENT_PX / 16)}rem`,
+                      }}
+                    >
                       <input
                         type="text"
                         value={t.name}
@@ -1463,10 +1611,13 @@ export function GanttWorkspace() {
                         placeholder="작업명"
                         style={{
                           width: '100%',
-                          padding: '0.15rem 0.3rem',
-                          border: '1px solid #d1d5db',
-                          borderRadius: 3,
-                          fontSize: '0.8rem',
+                          minHeight: WBS_ROW_CELL.minHeight,
+                          padding: WBS_ROW_CELL.padding,
+                          border: WBS_ROW_CELL.border,
+                          borderRadius: WBS_ROW_CELL.borderRadius,
+                          fontSize: WBS_ROW_CELL.fontSize,
+                          boxSizing: WBS_ROW_CELL.boxSizing,
+                          lineHeight: WBS_ROW_CELL.lineHeight,
                         }}
                       />
                     </div>
@@ -1484,49 +1635,63 @@ export function GanttWorkspace() {
                         placeholder="0~100"
                         style={{
                           width: '100%',
-                          padding: '0.15rem',
-                          border: '1px solid #d1d5db',
-                          borderRadius: 3,
-                          fontSize: '0.78rem',
+                          minHeight: WBS_ROW_CELL.minHeight,
+                          padding: WBS_ROW_CELL.padding,
+                          border: WBS_ROW_CELL.border,
+                          borderRadius: WBS_ROW_CELL.borderRadius,
+                          fontSize: WBS_ROW_CELL.fontSize,
+                          boxSizing: WBS_ROW_CELL.boxSizing,
                           textAlign: 'right',
                         }}
                       />
                     </div>
                     <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.date, minWidth: WBS_COLUMNS.date, padding: '0.3rem 0.55rem' }}>
                       <input
-                        type="date"
-                        value={toDateInputValue(t.startDate)}
-                        min="1900-01-01"
-                        max="2099-12-31"
+                        key={`start-${idx}-${t.startDate ?? ''}`}
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="yymmdd"
+                        defaultValue={formatDateYymmdd(t.startDate)}
                         readOnly={readOnlyWbs}
-                        onChange={(e) =>
-                          handleChangeTask(idx, 'startDate', e.target.value || null)
-                        }
+                        onBlur={(e) => {
+                          const raw = e.target.value.trim().replace(/-/g, '')
+                          const parsed = raw === '' ? null : parseDateToYyyyMmDd(e.target.value)
+                          if (raw === '' || parsed !== null) handleChangeTask(idx, 'startDate', parsed)
+                        }}
                         style={{
                           width: '100%',
-                          padding: '0.15rem',
-                          border: '1px solid #d1d5db',
-                          borderRadius: 3,
-                          fontSize: '0.78rem',
+                          minHeight: WBS_ROW_CELL.minHeight,
+                          padding: WBS_ROW_CELL.padding,
+                          border: WBS_ROW_CELL.border,
+                          borderRadius: WBS_ROW_CELL.borderRadius,
+                          fontSize: WBS_ROW_CELL.fontSize,
+                          boxSizing: WBS_ROW_CELL.boxSizing,
+                          textAlign: 'center',
                         }}
                       />
                     </div>
                     <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.date, minWidth: WBS_COLUMNS.date, padding: '0.3rem 0.55rem' }}>
                       <input
-                        type="date"
-                        value={toDateInputValue(t.finishDate)}
-                        min="1900-01-01"
-                        max="2099-12-31"
+                        key={`finish-${idx}-${t.finishDate ?? t.startDate ?? ''}`}
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="yymmdd"
+                        defaultValue={formatDateYymmdd(t.finishDate ?? t.startDate ?? null)}
                         readOnly={readOnlyWbs}
-                        onChange={(e) =>
-                          handleChangeTask(idx, 'finishDate', e.target.value || null)
-                        }
+                        onBlur={(e) => {
+                          const raw = e.target.value.trim().replace(/-/g, '')
+                          const parsed = raw === '' ? null : parseDateToYyyyMmDd(e.target.value)
+                          if (raw === '' || parsed !== null) handleChangeTask(idx, 'finishDate', parsed)
+                        }}
                         style={{
                           width: '100%',
-                          padding: '0.15rem',
-                          border: '1px solid #d1d5db',
-                          borderRadius: 3,
-                          fontSize: '0.78rem',
+                          minHeight: WBS_ROW_CELL.minHeight,
+                          padding: WBS_ROW_CELL.padding,
+                          border: WBS_ROW_CELL.border,
+                          borderRadius: WBS_ROW_CELL.borderRadius,
+                          fontSize: WBS_ROW_CELL.fontSize,
+                          boxSizing: WBS_ROW_CELL.boxSizing,
+                          textAlign: 'center',
                         }}
                       />
                     </div>
@@ -1547,10 +1712,12 @@ export function GanttWorkspace() {
                         }}
                         style={{
                           width: '100%',
-                          padding: '0.15rem',
-                          border: '1px solid #d1d5db',
-                          borderRadius: 3,
-                          fontSize: '0.78rem',
+                          minHeight: WBS_ROW_CELL.minHeight,
+                          padding: WBS_ROW_CELL.padding,
+                          border: WBS_ROW_CELL.border,
+                          borderRadius: WBS_ROW_CELL.borderRadius,
+                          fontSize: WBS_ROW_CELL.fontSize,
+                          boxSizing: WBS_ROW_CELL.boxSizing,
                           textAlign: 'right',
                         }}
                       />
@@ -1566,10 +1733,12 @@ export function GanttWorkspace() {
                         placeholder="예: 1FS;3FS;5FS"
                         style={{
                           width: '100%',
-                          padding: '0.15rem 0.3rem',
-                          border: '1px solid #d1d5db',
-                          borderRadius: 3,
-                          fontSize: '0.78rem',
+                          minHeight: WBS_ROW_CELL.minHeight,
+                          padding: WBS_ROW_CELL.padding,
+                          border: WBS_ROW_CELL.border,
+                          borderRadius: WBS_ROW_CELL.borderRadius,
+                          fontSize: WBS_ROW_CELL.fontSize,
+                          boxSizing: WBS_ROW_CELL.boxSizing,
                         }}
                       />
                     </div>
@@ -1581,13 +1750,21 @@ export function GanttWorkspace() {
                         onChange={(e) =>
                           handleChangeTask(idx, 'assignee', e.target.value)
                         }
+                        onBlur={() => {
+                          const assignee = (t.assignee ?? '').trim()
+                          if (assignee && registeredUserNames.size > 0 && !registeredUserNames.has(assignee)) {
+                            setAssigneeError(`담당자 "${assignee}"(은)는 등록된 사용자가 아닙니다. 사용자 관리에서 등록 후 선택해 주세요.`)
+                          }
+                        }}
                         placeholder="담당자"
                         style={{
                           width: '100%',
-                          padding: '0.15rem 0.3rem',
-                          border: '1px solid #d1d5db',
-                          borderRadius: 3,
-                          fontSize: '0.78rem',
+                          minHeight: WBS_ROW_CELL.minHeight,
+                          padding: WBS_ROW_CELL.padding,
+                          border: WBS_ROW_CELL.border,
+                          borderRadius: WBS_ROW_CELL.borderRadius,
+                          fontSize: WBS_ROW_CELL.fontSize,
+                          boxSizing: WBS_ROW_CELL.boxSizing,
                         }}
                       />
                     </div>
@@ -1600,6 +1777,7 @@ export function GanttWorkspace() {
                         textAlign: 'center',
                         display: 'flex',
                         justifyContent: 'center',
+                        alignItems: 'center',
                         gap: 4,
                       }}
                     >
@@ -1608,6 +1786,7 @@ export function GanttWorkspace() {
                         className="servicenow-button servicenow-button--secondary servicenow-button--sm"
                         onClick={() => handleIndent(idx, -1)}
                         disabled={readOnlyWbs}
+                        style={{ minHeight: WBS_ROW_CELL.minHeight, padding: WBS_ROW_CELL.padding, lineHeight: 1 }}
                       >
                         ◁
                       </button>
@@ -1616,28 +1795,31 @@ export function GanttWorkspace() {
                         className="servicenow-button servicenow-button--secondary servicenow-button--sm"
                         onClick={() => handleIndent(idx, 1)}
                         disabled={readOnlyWbs}
+                        style={{ minHeight: WBS_ROW_CELL.minHeight, padding: WBS_ROW_CELL.padding, lineHeight: 1 }}
                       >
                         ▷
                       </button>
                     </div>
-                    <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.addChild, minWidth: WBS_COLUMNS.addChild, padding: '0.3rem 0.55rem', textAlign: 'center' }}>
+                    <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.addChild, minWidth: WBS_COLUMNS.addChild, padding: '0.3rem 0.55rem', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <button
                         type="button"
                         className="servicenow-button servicenow-button--secondary servicenow-button--sm"
                         onClick={() => handleAddChildRow(idx)}
                         title="하위 레벨 행 추가"
                         disabled={readOnlyWbs}
+                        style={{ minHeight: WBS_ROW_CELL.minHeight, padding: WBS_ROW_CELL.padding, lineHeight: 1, whiteSpace: 'nowrap' }}
                       >
                         + 하위
                       </button>
                     </div>
-                    <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.delete, minWidth: WBS_COLUMNS.delete, padding: '0.3rem 0.55rem', textAlign: 'center' }}>
+                    <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.delete, minWidth: WBS_COLUMNS.delete, padding: '0.3rem 0.55rem', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <button
                         type="button"
                         className="servicenow-button servicenow-button--danger servicenow-button--sm"
                         onClick={() => handleDeleteRow(idx)}
                         disabled={readOnlyWbs}
                         title="행 삭제"
+                        style={{ minHeight: WBS_ROW_CELL.minHeight, padding: WBS_ROW_CELL.padding, lineHeight: 1 }}
                       >
                         ✕
                       </button>
@@ -1690,11 +1872,119 @@ export function GanttWorkspace() {
                   <p>에러: {tasksError}</p>
                 </div>
               ) : (
-                <GanttTasksChart tasks={displayTasks} />
+                <GanttTasksChart
+                  tasks={displayTasks}
+                  events={chartEvents}
+                  onDoubleClickDate={(date) => setAddEventModal({ date, name: '' })}
+                  onDeleteEvent={(ev) => {
+                    if (typeof window !== 'undefined' && window.confirm(`이벤트 "${ev.name || '(이벤트)'}"을(를) 삭제할까요?`)) {
+                      setChartEvents((prev) =>
+                      prev.filter(
+                        (e) => !((ev.id != null && e.id === ev.id) || (ev.id == null && e.date === ev.date && e.name === ev.name))
+                      )
+                    )
+                    }
+                  }}
+                />
               )}
             </div>
           )}
         </>
+      )}
+
+      {/* 이벤트 추가 팝업 (차트 날짜 더블클릭 시) */}
+      {addEventModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: 'rgba(0,0,0,0.4)',
+          }}
+          onClick={() => setAddEventModal(null)}
+        >
+          <div
+            style={{
+              backgroundColor: '#fff',
+              borderRadius: 8,
+              padding: '1.25rem 1.5rem',
+              minWidth: 320,
+              boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ margin: '0 0 1rem', fontSize: '1rem', fontWeight: 600 }}>이벤트 추가</h3>
+            <p style={{ margin: '0 0 0.5rem', fontSize: '0.8rem', color: '#64748b' }}>날짜</p>
+            <p style={{ margin: '0 0 0.75rem', fontSize: '0.9rem', fontWeight: 500 }}>
+              {(() => {
+                const [y, m, d] = addEventModal.date.split('-').map(Number)
+                const local = new Date(y, m - 1, d)
+                return `${addEventModal.date.replace(/-/g, '.')} (${local.toLocaleDateString('ko-KR', { weekday: 'short' })})`
+              })()}
+            </p>
+            <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.8rem', color: '#64748b' }}>
+              이벤트명
+            </label>
+            <input
+              type="text"
+              value={addEventModal.name}
+              onChange={(e) => setAddEventModal((prev) => (prev ? { ...prev, name: e.target.value } : null))}
+              placeholder="예: 출시 목표, 검토 회의"
+              autoFocus
+              style={{
+                width: '100%',
+                boxSizing: 'border-box',
+                padding: '0.5rem 0.6rem',
+                border: '1px solid #d1d5db',
+                borderRadius: 6,
+                fontSize: '0.9rem',
+                marginBottom: '1rem',
+              }}
+            />
+            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                onClick={() => setAddEventModal(null)}
+                style={{
+                  padding: '0.45rem 0.9rem',
+                  border: '1px solid #d1d5db',
+                  borderRadius: 6,
+                  backgroundColor: '#fff',
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                }}
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const name = (addEventModal?.name ?? '').trim() || '이벤트'
+                  setChartEvents((prev) => [
+                    ...prev,
+                    { id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `ev-${Date.now()}`, date: addEventModal!.date, name },
+                  ])
+                  setAddEventModal(null)
+                }}
+                style={{
+                  padding: '0.45rem 0.9rem',
+                  border: 'none',
+                  borderRadius: 6,
+                  backgroundColor: '#ea580c',
+                  color: '#fff',
+                  fontSize: '0.85rem',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                }}
+              >
+                저장
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

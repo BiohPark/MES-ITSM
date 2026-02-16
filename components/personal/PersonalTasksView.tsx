@@ -5,10 +5,22 @@ import type { Project, ProjectChild } from '@/types/project'
 import { StatusBadge } from '../common/StatusBadge'
 import { Progress } from '../common/Progress'
 
+export interface GanttMyTaskItem {
+  taskId: number
+  projectId: number
+  projectName: string
+  taskName: string
+  wbsCode?: string | null
+  startDate?: string | null
+  finishDate?: string | null
+  progressPercent?: number | null
+}
+
 export function PersonalTasksView({
   projects,
   gmpRecords = [],
   orphanTasks = [],
+  ganttMyTasks = [],
   loading,
   error,
   searchOwner,
@@ -16,11 +28,13 @@ export function PersonalTasksView({
   onRefresh,
   onTaskClick,
   onProjectClick,
+  onGanttTaskClick,
   currentUser,
 }: {
   projects: Project[]
   gmpRecords?: Array<ProjectChild & { projectId?: string | null; projectName?: string; kind?: string; kind_number?: string }>
   orphanTasks?: ProjectChild[]
+  ganttMyTasks?: GanttMyTaskItem[]
   loading: boolean
   error: string | null
   searchOwner: string
@@ -28,6 +42,7 @@ export function PersonalTasksView({
   onRefresh: () => void
   onTaskClick: (task: ProjectChild, projectId: string | null, projectName: string) => void
   onProjectClick: (project: Project) => void
+  onGanttTaskClick?: (projectId: number, projectName: string) => void
   currentUser?: { name: string; username: string }
 }) {
   const allOwners = useMemo(() => {
@@ -190,6 +205,13 @@ export function PersonalTasksView({
     fetchActionItems()
   }, [currentUser?.name])
 
+  /** Issued, In Progress, Planning 상태면 "My 진행 중 일감"에 포함 */
+  const isActiveStatus = (status: string | undefined) => {
+    if (!status) return false
+    const s = status.toLowerCase()
+    return s === 'issued' || s === 'in progress' || s === 'planning'
+  }
+
   const myTasksData = useMemo(() => {
     if (!currentUser?.name) return null
     
@@ -197,28 +219,16 @@ export function PersonalTasksView({
     const myTasks: Array<{ task: ProjectChild; projectId: string | null; projectName: string }> = []
 
     projects.forEach((project) => {
-      // 프로젝트는 진행 중인 것만 포함 (In Progress 상태)
-      const isProjectInProgress = project.status === 'In Progress' || project.status?.toLowerCase() === 'in progress'
-      if (project.owner === currentUser.name && isProjectInProgress) {
+      // 프로젝트: Issued, In Progress, Planning 포함
+      if (project.owner === currentUser.name && isActiveStatus(project.status)) {
         myProjects.push(project)
       }
       project.children?.forEach((child: ProjectChild) => {
-        // Dropped 일감은 제외
-        if (child.status === 'Dropped') {
-          return
-        }
-        
-        // 진행 중인 일감만 포함 (In Progress 상태)
-        const isInProgress = child.status === 'In Progress' || child.status?.toLowerCase() === 'in progress'
-        if (!isInProgress) {
-          return
-        }
-        
-        // 대표 담당자(PI) 또는 단계별 담당자 중 하나라도 일치하면 포함
+        if (child.status === 'Dropped') return
+        if (!isActiveStatus(child.status)) return
         const isOwner = child.owner === currentUser.name
         const isPiOwner = (child as any).phases?.pi?.owner === currentUser.name
         const isDevOwner = (child as any).phases?.development?.owner === currentUser.name
-        
         if (isOwner || isPiOwner || isDevOwner) {
           myTasks.push({
             task: child,
@@ -229,23 +239,12 @@ export function PersonalTasksView({
       })
     })
 
-    // Orphan tasks도 확인
     orphanTasks.forEach((task: ProjectChild) => {
-      // Dropped 일감은 제외
-      if (task.status === 'Dropped') {
-        return
-      }
-      
-      // 진행 중인 일감만 포함
-      const isInProgress = task.status === 'In Progress' || task.status?.toLowerCase() === 'in progress'
-      if (!isInProgress) {
-        return
-      }
-      
+      if (task.status === 'Dropped') return
+      if (!isActiveStatus(task.status)) return
       const isOwner = task.owner === currentUser.name
       const isPiOwner = (task as any).phases?.pi?.owner === currentUser.name
       const isDevOwner = (task as any).phases?.development?.owner === currentUser.name
-      
       if (isOwner || isPiOwner || isDevOwner) {
         myTasks.push({
           task,
@@ -255,10 +254,8 @@ export function PersonalTasksView({
       }
     })
 
-    // GMP Record 중 Deviation인 것들도 추가 (진행 중인 것만)
     gmpRecords.forEach((record) => {
-      const isInProgress = record.status === 'In Progress' || record.status?.toLowerCase() === 'in progress'
-      if (record.kind === 'Deviation' && record.owner === currentUser.name && isInProgress) {
+      if (record.kind === 'Deviation' && record.owner === currentUser.name && isActiveStatus(record.status)) {
         myTasks.push({
           task: record,
           projectId: record.projectId || null,
@@ -267,7 +264,6 @@ export function PersonalTasksView({
       }
     })
 
-    // 상태별 갯수 계산 (진행 중인 것만 표시하므로 In Progress만 카운트)
     const statusCounts = {
       Planning: 0,
       'In Progress': myTasks.length + myProjects.length,
@@ -331,21 +327,68 @@ export function PersonalTasksView({
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
           {/* My 진행 중 일감 섹션 */}
-          {myTasksData && (myTasksData.projects.length > 0 || myTasksData.tasks.length > 0 || myActionItems.length > 0) && (
+          {myTasksData && (myTasksData.projects.length > 0 || myTasksData.tasks.length > 0 || myActionItems.length > 0 || ganttMyTasks.length > 0) && (
             <div style={{ border: '2px solid #3b82f6', borderRadius: '0.75rem', padding: '1.5rem', backgroundColor: '#eff6ff' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                 <h3 style={{ fontSize: '1.25rem', fontWeight: 600, color: '#1e40af' }}>
                   My 진행 중 일감 ({currentUser?.name})
                 </h3>
-                {/* 진행 중인 일감만 표시되므로 In Progress만 표시 */}
                 <div style={{ display: 'flex', gap: '1rem', fontSize: '0.875rem' }}>
                   {myTasksData.statusCounts['In Progress'] > 0 && (
                     <span style={{ color: '#15803d' }}>
-                      진행 중: {myTasksData.statusCounts['In Progress']}
+                      일감: {myTasksData.statusCounts['In Progress']} (Planning / Issued / In Progress)
+                    </span>
+                  )}
+                  {ganttMyTasks.length > 0 && (
+                    <span style={{ color: '#1d4ed8' }}>
+                      간트 담당: {ganttMyTasks.length}
                     </span>
                   )}
                 </div>
               </div>
+
+              {/* 간트 차트 담당 작업: 클릭 시 해당 Gantt 프로젝트 WBS로 이동 */}
+              {ganttMyTasks.length > 0 && onGanttTaskClick && (
+                <div style={{ marginBottom: '1.5rem' }}>
+                  <h4 style={{ marginBottom: '0.75rem', fontSize: '1rem', fontWeight: 500, color: '#475569' }}>
+                    간트 차트 담당 작업 ({ganttMyTasks.length})
+                  </h4>
+                  <table style={{ width: '100%' }}>
+                    <thead>
+                      <tr>
+                        <th>작업명</th>
+                        <th>프로젝트</th>
+                        <th>WBS</th>
+                        <th>기간</th>
+                        <th>진척</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ganttMyTasks.map((item) => (
+                        <tr
+                          key={`gantt-${item.projectId}-${item.taskId}`}
+                          className="project-row"
+                          onClick={() => onGanttTaskClick(item.projectId, item.projectName)}
+                          style={{ cursor: 'pointer' }}
+                        >
+                          <td>
+                            <p className="project-name">{item.taskName}</p>
+                          </td>
+                          <td>
+                            <span className="project-name">{item.projectName}</span>
+                            <span className="project-id"> #{item.projectId}</span>
+                          </td>
+                          <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{item.wbsCode || '-'}</td>
+                          <td>
+                            {item.startDate || '-'} ~ {item.finishDate || '-'}
+                          </td>
+                          <td>{item.progressPercent != null ? `${item.progressPercent}%` : '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
 
               {myTasksData.projects.length > 0 && (
                 <div style={{ marginBottom: '1.5rem' }}>

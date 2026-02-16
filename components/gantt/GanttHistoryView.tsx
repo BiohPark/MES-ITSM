@@ -26,9 +26,13 @@ export function GanttHistoryView() {
         ? `/api/gantt/history?projectId=${encodeURIComponent(projectIdFilter)}`
         : '/api/gantt/history'
       const res = await fetch(url)
-      if (!res.ok) throw new Error('이력 조회 실패')
-      const data = await res.json()
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        const details = data.details ?? data.error ?? ''
+        throw new Error(details ? `이력 조회 실패: ${details}` : '이력 조회 실패')
+      }
       setHistory(data.history ?? [])
+      if (data.message) setError(null)
     } catch (e: any) {
       setError(e.message ?? '이력을 불러올 수 없습니다.')
     } finally {

@@ -1,3 +1,5 @@
+/** DB 설정(.env.local)을 적용하려면 반드시 가장 먼저 import */
+import './load-dotenv'
 import { createAccount } from '../lib/accounts'
 
 async function createAdminAccount() {

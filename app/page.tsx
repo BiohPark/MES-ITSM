@@ -20,7 +20,7 @@ import { ValPackageEditModal } from '@/components/val-packages/ValPackageEditMod
 import { TasksTable } from '@/components/tasks/TasksTable'
 import { TaskEditModal } from '@/components/tasks/TaskEditModal'
 import { ChildItemModal } from '@/components/tasks/ChildItemModal'
-import { PersonalTasksView } from '@/components/personal/PersonalTasksView'
+import { PersonalTasksView, type GanttMyTaskItem } from '@/components/personal/PersonalTasksView'
 import { GanttWorkspace } from '@/components/gantt/GanttWorkspace'
 import { GanttHistoryView } from '@/components/gantt/GanttHistoryView'
 import { SearchView } from '@/components/search/SearchView'
@@ -97,6 +97,9 @@ export default function Home() {
   const [user, setUser] = useState<{ id: string; username: string; name: string; role: 'admin' | 'user'; email?: string } | null>(null)
   const [isLoadingSession, setIsLoadingSession] = useState(true)
   const [appVersion, setAppVersion] = useState<string>('0.1.0')
+  // 간트 차트: 내 일감에서 클릭 시 해당 프로젝트로 열기
+  const [ganttMyTasks, setGanttMyTasks] = useState<GanttMyTaskItem[]>([])
+  const [pendingGanttProjectId, setPendingGanttProjectId] = useState<number | null>(null)
 
   const fetchVersion = useCallback(async (signal?: AbortSignal) => {
     try {
@@ -454,6 +457,17 @@ export default function Home() {
         await fetchProjects(abortController.signal)
         await fetchGmpRecords(abortController.signal)
         await fetchOrphanTasks(abortController.signal)
+        try {
+          const ganttRes = await fetch('/api/gantt/my-tasks', { cache: 'no-store', signal: abortController.signal })
+          if (ganttRes.ok && !abortController.signal?.aborted) {
+            const ganttData = await ganttRes.json()
+            setGanttMyTasks(ganttData.tasks ?? [])
+          } else {
+            setGanttMyTasks([])
+          }
+        } catch {
+          if (!abortController.signal?.aborted) setGanttMyTasks([])
+        }
       }
     }
 
@@ -1601,6 +1615,7 @@ export default function Home() {
             projects={projects}
             gmpRecords={gmpRecords}
             orphanTasks={orphanTasks}
+            ganttMyTasks={ganttMyTasks}
             loading={loading}
             error={error}
             searchOwner={searchOwner}
@@ -1609,6 +1624,19 @@ export default function Home() {
               await fetchProjects()
               await fetchGmpRecords()
               await fetchOrphanTasks()
+              try {
+                const ganttRes = await fetch('/api/gantt/my-tasks', { cache: 'no-store' })
+                if (ganttRes.ok) {
+                  const ganttData = await ganttRes.json()
+                  setGanttMyTasks(ganttData.tasks ?? [])
+                } else setGanttMyTasks([])
+              } catch {
+                setGanttMyTasks([])
+              }
+            }}
+            onGanttTaskClick={(projectId, _projectName) => {
+              setPendingGanttProjectId(projectId)
+              setActiveTab('gantt')
             }}
             onTaskClick={(task: ProjectChild, projectId: string | null, projectName: string) => {
               // 다른 모달들 닫기
@@ -1649,7 +1677,10 @@ export default function Home() {
         ) : activeTab === 'gantt-history' ? (
           <GanttHistoryView />
         ) : activeTab === 'gantt' ? (
-          <GanttWorkspace />
+          <GanttWorkspace
+            initialProjectId={pendingGanttProjectId ?? undefined}
+            onInitialProjectIdConsumed={() => setPendingGanttProjectId(null)}
+          />
         ) : activeTab === 'issues' ? (
           <>
             <IssuesTable

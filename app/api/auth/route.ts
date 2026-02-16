@@ -9,7 +9,8 @@ export async function POST(request: NextRequest) {
     const { action } = body
 
     if (action === 'login') {
-      const { username, password } = body
+      const username = typeof body.username === 'string' ? body.username.trim() : ''
+      const password = typeof body.password === 'string' ? body.password : ''
 
       if (!username || !password) {
         return NextResponse.json(
@@ -20,6 +21,11 @@ export async function POST(request: NextRequest) {
 
       const account = await verifyLogin(username, password)
       if (!account) {
+        if (process.env.NODE_ENV === 'development') {
+          const { getAccountByUsername } = await import('@/lib/accounts')
+          const exists = await getAccountByUsername(username)
+          console.warn('[auth] 로그인 실패:', exists ? '비밀번호 불일치' : '계정 없음', 'username=', username)
+        }
         return NextResponse.json(
           { error: 'ID 또는 비밀번호가 올바르지 않습니다.' },
           { status: 401 }
@@ -47,13 +53,13 @@ export async function POST(request: NextRequest) {
         },
       })
 
-      // 쿠키를 응답에 직접 설정
+      // 세션 쿠키 설정 (maxAge 필수: 없으면 일부 환경에서 쿠키가 설정되지 않아 로그인 실패)
       response.cookies.set('session', token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
-        maxAge: 60 * 60 * 24 * 7, // 7일
         path: '/',
+        maxAge: 60 * 60 * 24 * 7, // 7일
       })
 
       return response
@@ -111,13 +117,13 @@ export async function POST(request: NextRequest) {
             },
           })
 
-          // 쿠키를 응답에 직접 설정
+          // 세션 쿠키 설정
           response.cookies.set('session', token, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
             sameSite: 'lax',
-            maxAge: 60 * 60 * 24 * 7, // 7일
             path: '/',
+            maxAge: 60 * 60 * 24 * 7, // 7일
           })
 
           return response
