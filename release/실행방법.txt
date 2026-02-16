@@ -13,3 +13,24 @@
    node server.js
 
 기본 포트: 3000 (PORT 환경변수로 변경 가능)
+
+## 접속 모드 (Development / Production)
+
+- **상용(사내망)**: 기본값. 서버가 0.0.0.0 에서 수신하므로, 고정 IP 노트북에서 실행 시
+  다른 PC에서 http://<고정IP>:3000 으로 접속 가능합니다.
+- **개발(localhost만)**: 본 PC에서만 접속하려면 다음처럼 실행하세요.
+  set HOSTNAME=127.0.0.1
+  node server.js
+  (Linux/Mac: HOSTNAME=127.0.0.1 node server.js)
+
+## HTTPS (보안 강화)
+
+SSL 인증서와 키 파일을 준비한 뒤:
+
+  set SSL_CERT_PATH=./cert.pem
+  set SSL_KEY_PATH=./key.pem
+  node server-https.js
+
+(Linux/Mac: SSL_CERT_PATH=./cert.pem SSL_KEY_PATH=./key.pem node server-https.js)
+
+사내망 전체 수신: HOSTNAME=0.0.0.0 SSL_CERT_PATH=./cert.pem SSL_KEY_PATH=./key.pem node server-https.js

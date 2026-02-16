@@ -67,10 +67,54 @@ function addDaysToDate(dateStr: string, days: number): string {
   return formatLocalDate(d)
 }
 
+/** 날짜 문자열을 YYYY-MM-DD로 정규화 (비교용, 다양한 API 형식 대응) */
+function normalizeDateStr(s: string | null | undefined): string | null {
+  if (s == null || s === '') return null
+  const part = s.includes('T') ? s.split('T')[0]! : s
+  const digits = part.replace(/-/g, '')
+  if (digits.length === 8) {
+    return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}`
+  }
+  if (part.match(/^\d{4}-\d{2}-\d{2}$/)) return part
+  return null
+}
+
+/** 목록에서 해당 인덱스 행이 직접 자식(바로 다음 레벨)을 갖는지 여부 */
+function hasDirectChildrenInList(
+  list: { outlineLevel?: number }[],
+  index: number
+): boolean {
+  const level = list[index]?.outlineLevel ?? 1
+  for (let j = index + 1; j < list.length; j++) {
+    const nextLevel = list[j].outlineLevel ?? 1
+    if (nextLevel <= level) return false
+    if (nextLevel === level + 1) return true
+  }
+  return false
+}
+
+/** 이슈 작업 여부: 시작일 지났는데 실적 0% / 종료일 지났는데 실적 100% 아님 (todayStr = YYYY-MM-DD) */
+function isTaskIssue(
+  t: { startDate?: string | null; finishDate?: string | null; progressPercent?: number | null },
+  todayStr: string
+): boolean {
+  const start = normalizeDateStr(t.startDate ?? null)
+  const finish = normalizeDateStr(t.finishDate ?? null)
+  const p = Number(t.progressPercent ?? 0)
+  return (
+    (!!start && todayStr > start && p === 0) ||
+    (!!finish && todayStr > finish && p < 100)
+  )
+}
+
 /** 반응형 컬럼 스타일 - 고정 너비 컬럼 (flex: 0 0 auto), 레벨 컬럼 제거(작업명 들여쓰기로 대체) */
+/** WBS 최대 레벨 (이 레벨에서는 하위 조정·+하위 비활성화) */
+const WBS_MAX_LEVEL = 5
+
 const WBS_COLUMNS = {
   seq: 'clamp(2rem, 2.2vw, 2.5rem)',
   wbs: 'clamp(3rem, 4vw, 4.5rem)',
+  issue: '1.75rem',
   date: 'clamp(5.5rem, 7vw, 8rem)',
   duration: 'clamp(3rem, 3.5vw, 4rem)',
   progress: 'clamp(3.5rem, 4vw, 5rem)',
@@ -139,12 +183,11 @@ export function GanttWorkspace({
   const [projectNameInput, setProjectNameInput] = useState('')
   const [importing, setImporting] = useState(false)
   const [xmlFile, setXmlFile] = useState<File | null>(null)
-  const [showXmlSection, setShowXmlSection] = useState(false)
   const [activeSubTab, setActiveSubTab] = useState<SubTabKey>('wbs')
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [canEditWbs, setCanEditWbs] = useState<boolean | null>(null)
-  /** true면 레벨 1(최상위) 작업만 표시 */
-  const [filterLevel1Only, setFilterLevel1Only] = useState(false)
+  /** 레벨 1 필터: null = 전체, number = 해당 레벨 1 행 인덱스(그 하위만 표시) */
+  const [selectedLevel1Index, setSelectedLevel1Index] = useState<number | null>(null)
   /** 담당자 검증용 등록 사용자 목록 (name, username) */
   const [registeredUserNames, setRegisteredUserNames] = useState<Set<string>>(new Set())
   const [assigneeError, setAssigneeError] = useState<string | null>(null)
@@ -159,6 +202,7 @@ export function GanttWorkspace({
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const rowRefs = useRef<Map<number, HTMLDivElement>>(new Map())
   const autoSaveTimerRef = useRef<number | null>(null)
+  const xmlFileInputRef = useRef<HTMLInputElement>(null)
 
   const selectedProject = useMemo(
     () => projects.find((p) => p.id === selectedProjectId) || null,
@@ -319,14 +363,15 @@ export function GanttWorkspace({
       const parent = prev[parentIndex]
       if (!parent) return prev
       const parentLevel = parent.outlineLevel ?? 1
-      const childLevel = parentLevel + 1
+      if (parentLevel >= WBS_MAX_LEVEL) return prev
+      const childLevel = Math.min(parentLevel + 1, WBS_MAX_LEVEL)
 
-      // 부모의 마지막 직접 자식 다음 위치에 삽입 (맨 아래)
+      // 부모의 마지막 손자까지 포함한 전체 하위 트리 다음에 삽입 (기존 하위 작업 순서 유지)
       let insertAt = parentIndex + 1
       for (let i = parentIndex + 1; i < prev.length; i++) {
         const lv = prev[i].outlineLevel ?? 1
         if (lv <= parentLevel) break
-        if (lv === childLevel) insertAt = i + 1
+        insertAt = i + 1
       }
 
       const nextSort = prev.length === 0 ? 1 : Math.max(...prev.map((t) => t.sortOrder ?? 1)) + 1
@@ -375,19 +420,23 @@ export function GanttWorkspace({
         if (targetType === 'child') {
           const parent = copy[targetIndex]
           const parentLevel = parent.outlineLevel ?? 1
-          const newLevel = parentLevel + 1
+          if (parentLevel >= WBS_MAX_LEVEL) return prev
+          const newLevel = Math.min(parentLevel + 1, WBS_MAX_LEVEL)
 
+          // 부모의 마지막 손자까지 포함한 전체 하위 트리 다음에 삽입 (기존 하위 작업 순서 유지)
           let insertAt = targetIndex + 1
           for (let i = targetIndex + 1; i < copy.length; i++) {
             const lv = copy[i].outlineLevel ?? 1
             if (lv <= parentLevel) break
-            if (lv === newLevel) insertAt = i + 1
+            insertAt = i + 1
           }
 
           const extracted = indices.sort((a, b) => b - a).map((i) => copy.splice(i, 1)[0])
+          const removedBeforeInsert = indices.filter((i) => i < insertAt).length
+          insertAt -= removedBeforeInsert
           const adjusted = extracted.map((t) => ({
             ...t,
-            outlineLevel: Math.max(1, newLevel + ((t.outlineLevel ?? 1) - draggedLevel)),
+            outlineLevel: Math.max(1, Math.min(WBS_MAX_LEVEL, newLevel + ((t.outlineLevel ?? 1) - draggedLevel))),
           }))
           copy.splice(insertAt, 0, ...adjusted)
         } else {
@@ -639,9 +688,11 @@ export function GanttWorkspace({
 
   const handleIndent = (index: number, direction: 1 | -1) => {
     setTasks((prev) => {
+      const currentLevel = prev[index]?.outlineLevel ?? 1
+      if (direction === 1 && currentLevel >= WBS_MAX_LEVEL) return prev
       const copy = [...prev]
       const t = { ...copy[index] }
-      t.outlineLevel = Math.max(1, (t.outlineLevel || 1) + direction)
+      t.outlineLevel = Math.max(1, Math.min(WBS_MAX_LEVEL, (t.outlineLevel || 1) + direction))
       copy[index] = t
       return copy
     })
@@ -744,36 +795,33 @@ export function GanttWorkspace({
             current.durationDays = calcDurationFromDates(current.startDate, current.finishDate)
           }
 
-          // 상위 실적 %: 이미 입력된 값이 있으면 유지(리셋 방지), 없을 때만 하위 기준 자동 계산
-          const hasExistingProgress = current.progressPercent != null
-          if (!hasExistingProgress) {
-            const childrenWithProgress = childItems.filter(
-              (c) => c.progressPercent != null
+          // 상위 실적 %: 하위가 있으면 항상 하위 기준 가중 평균으로 자동 반영 (요약 작업은 항상 자식 실적 반영)
+          const childrenWithProgress = childItems.filter(
+            (c) => c.progressPercent != null
+          )
+          if (childrenWithProgress.length > 0) {
+            const weightedChildren = childrenWithProgress.filter(
+              (c) => (c.durationDays ?? 0) > 0
             )
-            if (childrenWithProgress.length > 0) {
-              const weightedChildren = childrenWithProgress.filter(
-                (c) => (c.durationDays ?? 0) > 0
+            let agg = 0
+            if (weightedChildren.length > 0) {
+              const totalWeight = weightedChildren.reduce(
+                (sum, c) => sum + (c.durationDays ?? 0),
+                0
               )
-              let agg = 0
-              if (weightedChildren.length > 0) {
-                const totalWeight = weightedChildren.reduce(
-                  (sum, c) => sum + (c.durationDays ?? 0),
+              const weightedSum = weightedChildren.reduce(
+                (sum, c) => sum + (c.progressPercent ?? 0) * (c.durationDays ?? 0),
+                0
+              )
+              agg = totalWeight > 0 ? weightedSum / totalWeight : 0
+            } else {
+              agg =
+                childrenWithProgress.reduce(
+                  (sum, c) => sum + (c.progressPercent ?? 0),
                   0
-                )
-                const weightedSum = weightedChildren.reduce(
-                  (sum, c) => sum + (c.progressPercent ?? 0) * (c.durationDays ?? 0),
-                  0
-                )
-                agg = totalWeight > 0 ? weightedSum / totalWeight : 0
-              } else {
-                agg =
-                  childrenWithProgress.reduce(
-                    (sum, c) => sum + (c.progressPercent ?? 0),
-                    0
-                  ) / childrenWithProgress.length
-              }
-              current.progressPercent = Math.round(agg * 100) / 100
+                ) / childrenWithProgress.length
             }
+            current.progressPercent = Math.round(agg * 100) / 100
           }
         }
       }
@@ -785,11 +833,39 @@ export function GanttWorkspace({
   /** 표시용: WBS·날짜·기간이 재계산된 태스크 목록 (필터는 행 표시 시 적용, 인덱스 일치 유지) */
   const displayTasks = useMemo(() => recomputeWbsCodes(tasks), [tasks])
 
-  /** 프로젝트 실적 요약: 계획 기간, 계획 실적 %, 전체 실적 % (가중 평균) */
+  /** 각 행이 속한 레벨 1의 displayTasks 인덱스 (행 순서대로) */
+  const rootLevel1IndexForRow = useMemo(() => {
+    const result: number[] = []
+    let lastL1 = -1
+    for (let i = 0; i < displayTasks.length; i++) {
+      if ((displayTasks[i].outlineLevel ?? 1) === 1) lastL1 = i
+      result[i] = lastL1
+    }
+    return result
+  }, [displayTasks])
+
+  /** 레벨 1 작업만의 목록 (드롭다운용): { index, label } */
+  const level1Options = useMemo(() => {
+    return displayTasks
+      .map((t, idx) => ({ index: idx, task: t }))
+      .filter(({ task }) => (task.outlineLevel ?? 1) === 1)
+      .map(({ index, task }) => ({
+        index,
+        label: `${task.wbsCode ?? ''} ${(task.name || '(이름 없음)').trim()}`.trim() || `레벨 1 #${index + 1}`,
+      }))
+  }, [displayTasks])
+
+  /** 필터 적용된 태스크 목록 (선택한 레벨 1 + 하위만, 차트/요약용) */
+  const filteredDisplayTasks = useMemo(() => {
+    if (selectedLevel1Index == null) return displayTasks
+    return displayTasks.filter((_, idx) => rootLevel1IndexForRow[idx] === selectedLevel1Index)
+  }, [displayTasks, selectedLevel1Index, rootLevel1IndexForRow])
+
+  /** 프로젝트 실적 요약: 계획 기간, 계획 실적 %, 전체 실적 % (가중 평균, 필터 적용 목록 기준) */
   const projectProgressSummary = useMemo(() => {
     const empty = { planDays: 0, plannedProgress: 0, overallProgress: 0, startDate: null as string | null, finishDate: null as string | null, plannedProgressReason: '' as string }
-    if (displayTasks.length === 0) return empty
-    const withDates = displayTasks.filter((t) => t.startDate && t.finishDate)
+    if (filteredDisplayTasks.length === 0) return empty
+    const withDates = filteredDisplayTasks.filter((t) => t.startDate && t.finishDate)
     if (withDates.length === 0) return { ...empty, plannedProgressReason: '시작/종료일이 있는 작업이 없습니다.' }
     const minStart = withDates.reduce((a, t) => {
       const s = t.startDate!.includes('T') ? t.startDate!.split('T')[0] : t.startDate!
@@ -827,9 +903,9 @@ export function GanttWorkspace({
       plannedProgressReason = '시작/종료일을 확인할 수 없습니다.'
     }
     // 리프 작업만 가중 평균 (기간 기준)
-    const leafTasks = displayTasks.filter((t, i) => {
+    const leafTasks = filteredDisplayTasks.filter((t, i) => {
       const currLevel = t.outlineLevel ?? 1
-      const nextLevel = i + 1 < displayTasks.length ? (displayTasks[i + 1].outlineLevel ?? 1) : 0
+      const nextLevel = i + 1 < filteredDisplayTasks.length ? (filteredDisplayTasks[i + 1].outlineLevel ?? 1) : 0
       return nextLevel <= currLevel
     })
     const withDuration = leafTasks.filter((t) => (t.durationDays ?? 0) > 0)
@@ -842,22 +918,38 @@ export function GanttWorkspace({
       overallProgress = leafTasks.reduce((s, t) => s + (t.progressPercent ?? 0), 0) / leafTasks.length
     }
     return { planDays, plannedProgress, overallProgress, startDate: minStart, finishDate: maxFinish, plannedProgressReason }
-  }, [displayTasks])
+  }, [filteredDisplayTasks])
 
-  /** 작업 지표: 전체 / 미시작 / 진행 중 / 완료 */
+  const todayStr = formatLocalDate(new Date())
+
+  /** 작업 지표: 전체 / 미시작 / 진행 중 / 완료 / 이슈 (필터 적용 목록 기준) */
   const taskStats = useMemo(() => {
-    const total = displayTasks.length
+    const total = filteredDisplayTasks.length
     let notStarted = 0
     let inProgress = 0
     let completed = 0
-    for (const t of displayTasks) {
+    let issues = 0
+    for (const t of filteredDisplayTasks) {
       const p = t.progressPercent ?? 0
       if (p >= 100) completed++
       else if (p > 0) inProgress++
       else notStarted++
+      if (isTaskIssue(t, todayStr)) issues++
     }
-    return { total, notStarted, inProgress, completed }
-  }, [displayTasks])
+    return { total, notStarted, inProgress, completed, issues }
+  }, [filteredDisplayTasks, todayStr])
+
+  /** 이슈 작업의 task.id 집합 (간트 차트 강조용) */
+  const issueTaskIds = useMemo(
+    () =>
+      new Set(
+        filteredDisplayTasks
+          .filter((t) => isTaskIssue(t, todayStr))
+          .map((t) => t.id)
+          .filter((id): id is number => typeof id === 'number')
+      ),
+    [filteredDisplayTasks, todayStr]
+  )
 
   const readOnlyWbs = canEditWbs === false
 
@@ -874,10 +966,12 @@ export function GanttWorkspace({
     autoSaveTimerRef.current = window.setTimeout(async () => {
       try {
         const normalized = recomputeWbsCodes(tasks)
-        // 저장 시 실적은 원본 tasks 기준 유지(하위 추가 등으로 리셋 방지)
+        // 부모(요약) 행은 재계산된 실적 저장, 리프는 원본 실적 유지
         const toSave = normalized.map((n, i) => ({
           ...n,
-          progressPercent: tasks[i]?.progressPercent ?? n.progressPercent,
+          progressPercent: hasDirectChildrenInList(normalized, i)
+            ? n.progressPercent
+            : (tasks[i]?.progressPercent ?? n.progressPercent),
         }))
         await fetch(`/api/gantt/tasks/${selectedProjectId}`, {
           method: 'POST',
@@ -914,10 +1008,12 @@ export function GanttWorkspace({
         return
       }
     }
-    // 저장 시 실적은 원본 tasks 기준 유지(하위 추가 등으로 리셋 방지)
+    // 부모(요약) 행은 재계산된 실적 저장, 리프는 원본 실적 유지
     const toSave = normalized.map((n, i) => ({
       ...n,
-      progressPercent: tasks[i]?.progressPercent ?? n.progressPercent,
+      progressPercent: hasDirectChildrenInList(normalized, i)
+        ? n.progressPercent
+        : (tasks[i]?.progressPercent ?? n.progressPercent),
     }))
     setHasUnsavedChanges(false)
     setTasks(normalized)
@@ -1003,15 +1099,16 @@ export function GanttWorkspace({
     }
   }
 
-  const handleImportXml = async () => {
-    if (!xmlFile) {
+  const handleImportXml = async (fileArg?: File | null) => {
+    const f = fileArg ?? xmlFile
+    if (!f) {
       alert('XML 파일을 선택하세요.')
       return
     }
     setImporting(true)
     try {
       const form = new FormData()
-      form.append('file', xmlFile)
+      form.append('file', f)
       if (projectNameInput.trim()) {
         form.append('projectName', projectNameInput.trim())
       }
@@ -1027,6 +1124,7 @@ export function GanttWorkspace({
       const data = await res.json()
       alert('MS Project XML Import가 완료되었습니다.')
       setXmlFile(null)
+      if (xmlFileInputRef.current) xmlFileInputRef.current.value = ''
       setProjectNameInput('')
       await loadProjects()
       if (data.projectId) {
@@ -1068,13 +1166,40 @@ export function GanttWorkspace({
 
   return (
     <div className="table-wrapper">
-      <div className="table-header">
-        <h2>Gantt 프로젝트 및 WBS 편집</h2>
+      <div className="table-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+        <h2 style={{ margin: 0 }}>Gantt 프로젝트 및 WBS 편집</h2>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          <input
+            ref={xmlFileInputRef}
+            type="file"
+            accept=".xml,application/xml,text/xml"
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (file) handleImportXml(file)
+              e.target.value = ''
+            }}
+            style={{ display: 'none' }}
+          />
+          <button
+            type="button"
+            className="servicenow-button servicenow-button--secondary"
+            onClick={() => xmlFileInputRef.current?.click()}
+            disabled={importing || readOnlyWbs}
+          >
+            XML Import
+          </button>
+          <button
+            type="button"
+            className="servicenow-button servicenow-button--secondary"
+            onClick={handleExportXml}
+          >
+            XML Export
+          </button>
+        </div>
       </div>
 
-      {/* 상단 툴바 영역 - 2개의 Row로 수평 배치 */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '1rem' }}>
-        {/* Row 1: Gantt 프로젝트 선택/생성 */}
+      {/* 상단 툴바 영역 - 프로젝트 선택/생성만 (XML은 헤더 우측으로 이동) */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '0.5rem' }}>
         <div className="servicenow-toolbar__section">
           <h3 className="servicenow-toolbar__title">Gantt 프로젝트</h3>
           <div className="servicenow-toolbar__row">
@@ -1132,48 +1257,6 @@ export function GanttWorkspace({
             </button>
           </div>
         </div>
-
-        {/* Row 2: XML Import / Export (접기/펼치기) */}
-        <div className="servicenow-toolbar__section" style={{ marginTop: '0.5rem' }}>
-          <button
-            type="button"
-            className="servicenow-button servicenow-button--secondary"
-            onClick={() => setShowXmlSection((v) => !v)}
-            style={{ fontSize: '0.85rem' }}
-          >
-            {showXmlSection ? '▼ MS Project XML 접기' : '▶ MS Project XML Import/Export'}
-          </button>
-          {showXmlSection && (
-            <div style={{ marginTop: '0.75rem', padding: '0.75rem', backgroundColor: '#f8fafc', borderRadius: 4, border: '1px solid #e2e8f0' }}>
-              <div className="servicenow-toolbar__row">
-                <input
-                  type="file"
-                  accept=".xml,application/xml,text/xml"
-                  onChange={(e) => setXmlFile(e.target.files?.[0] ?? null)}
-                  style={{ flex: 1 }}
-                />
-                <button
-                  type="button"
-                  className="servicenow-button servicenow-button--primary"
-                  onClick={handleImportXml}
-                  disabled={importing || readOnlyWbs}
-                >
-                  XML Import
-                </button>
-                <button
-                  type="button"
-                  className="servicenow-button servicenow-button--secondary"
-                  onClick={handleExportXml}
-                >
-                  XML Export
-                </button>
-              </div>
-              <p style={{ fontSize: '0.75rem', color: '#666', marginTop: '0.5rem', marginBottom: 0 }}>
-                Microsoft Project XML 형식 파일을 업로드하면 새 Gantt 프로젝트로 Import 됩니다. Export된 XML 파일은 Microsoft Project에서 열 수 있습니다.
-              </p>
-            </div>
-          )}
-        </div>
       </div>
 
       {loading ? (
@@ -1194,7 +1277,7 @@ export function GanttWorkspace({
           <div
             style={{
               borderBottom: '1px solid #EBECEE',
-              marginBottom: '1rem',
+              marginBottom: '0.5rem',
               display: 'flex',
               gap: '1rem',
             }}
@@ -1244,9 +1327,9 @@ export function GanttWorkspace({
             style={{
               display: 'flex',
               flexWrap: 'wrap',
-              gap: '1rem 1.5rem',
-              padding: '0.875rem 1.25rem',
-              marginBottom: '1rem',
+              gap: '0.75rem 1.25rem',
+              padding: '0.5rem 1rem',
+              marginBottom: '0.5rem',
               backgroundColor: '#f8fafc',
               borderRadius: 10,
               border: '1px solid #e2e8f0',
@@ -1267,6 +1350,10 @@ export function GanttWorkspace({
             <span style={{ color: '#64748b' }}>
               완료 <strong style={{ color: '#059669', marginLeft: '0.25rem' }}>{taskStats.completed}</strong>개
             </span>
+            <span style={{ color: '#cbd5e1' }}>|</span>
+            <span style={{ color: '#64748b' }}>
+              이슈 <strong style={{ color: '#dc2626', marginLeft: '0.25rem' }}>{taskStats.issues}</strong>개
+            </span>
           </div>
 
           {/* 계획 대비 실적 요약 (WBS·간트 차트 공통) */}
@@ -1275,8 +1362,8 @@ export function GanttWorkspace({
               style={{
                 display: 'flex',
                 gap: '1.5rem',
-                padding: '1rem 1.25rem',
-                marginBottom: '1.25rem',
+                padding: '0.5rem 1rem',
+                marginBottom: '0.5rem',
                 background: 'linear-gradient(135deg, rgba(248,250,252,0.9) 0%, rgba(241,245,249,0.95) 100%)',
                 borderRadius: 12,
                 border: '1px solid rgba(226,232,240,0.6)',
@@ -1428,13 +1515,30 @@ export function GanttWorkspace({
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.8rem', color: '#475569', cursor: 'pointer' }}>
-                    <input
-                      type="checkbox"
-                      checked={filterLevel1Only}
-                      onChange={(e) => setFilterLevel1Only(e.target.checked)}
-                    />
-                    레벨 1만 보기
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', color: '#475569' }}>
+                    <span style={{ whiteSpace: 'nowrap' }}>레벨 1 보기:</span>
+                    <select
+                      value={selectedLevel1Index == null ? '' : String(selectedLevel1Index)}
+                      onChange={(e) => {
+                        const v = e.target.value
+                        setSelectedLevel1Index(v === '' ? null : parseInt(v, 10))
+                      }}
+                      style={{
+                        minWidth: '12rem',
+                        padding: '0.35rem 0.5rem',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: 6,
+                        fontSize: '0.8rem',
+                        color: '#334155',
+                      }}
+                    >
+                      <option value="">전체</option>
+                      {level1Options.map((opt) => (
+                        <option key={opt.index} value={opt.index}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
                   </label>
                   <button
                     type="button"
@@ -1476,7 +1580,7 @@ export function GanttWorkspace({
                   boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
                 }}
               >
-              <div style={{ width: '100%', minWidth: 0, maxHeight: 'min(65vh, 600px)', overflow: 'auto' }}>
+              <div style={{ width: '100%', minWidth: 0, maxHeight: 'min(75vh, 720px)', overflow: 'auto' }}>
                 <div
                   style={{
                     display: 'flex',
@@ -1496,6 +1600,7 @@ export function GanttWorkspace({
                 >
                   <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.seq, minWidth: WBS_COLUMNS.seq, padding: '0.3rem 0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>#</div>
                   <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.wbs, minWidth: WBS_COLUMNS.wbs, padding: '0.3rem 0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>WBS</div>
+                  <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.issue, minWidth: WBS_COLUMNS.issue, padding: '0.3rem 0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }} />
                   <div style={{ flex: '1 1 0%', minWidth: WBS_NAME_MIN, padding: '0.3rem 0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>작업명</div>
                   <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.progress, minWidth: WBS_COLUMNS.progress, padding: '0.3rem 0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center', whiteSpace: 'nowrap' }}>실적(%)</div>
                   <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.date, minWidth: WBS_COLUMNS.date, padding: '0.3rem 0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>시작</div>
@@ -1508,7 +1613,7 @@ export function GanttWorkspace({
                   <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.delete, minWidth: WBS_COLUMNS.delete, padding: '0.3rem 0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>삭제</div>
                 </div>
                 {displayTasks.map((t, idx) => {
-                  if (filterLevel1Only && (t.outlineLevel ?? 1) !== 1) return null
+                  if (selectedLevel1Index != null && rootLevel1IndexForRow[idx] !== selectedLevel1Index) return null
                   const isDragging = draggingIndex != null && getDraggedSubtreeIndices(draggingIndex).includes(idx)
                   const isDropChild = dropTarget?.type === 'child' && dropTarget.index === idx
                   const isDropSiblingBefore = dropTarget?.type === 'sibling' && dropTarget.index === idx
@@ -1593,6 +1698,9 @@ export function GanttWorkspace({
                     <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.wbs, minWidth: WBS_COLUMNS.wbs, padding: '0.3rem 0.55rem', fontFamily: 'monospace' }}>
                       {t.wbsCode || '-'}
                     </div>
+                    <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.issue, minWidth: WBS_COLUMNS.issue, padding: '0.3rem 0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {isTaskIssue(t, todayStr) ? <span aria-hidden>❗</span> : null}
+                    </div>
                     <div
                       style={{
                         flex: '1 1 0%',
@@ -1618,6 +1726,9 @@ export function GanttWorkspace({
                           fontSize: WBS_ROW_CELL.fontSize,
                           boxSizing: WBS_ROW_CELL.boxSizing,
                           lineHeight: WBS_ROW_CELL.lineHeight,
+                          ...(isTaskIssue(t, todayStr)
+                            ? { color: '#dc2626', fontWeight: 700 }
+                            : {}),
                         }}
                       />
                     </div>
@@ -1794,7 +1905,8 @@ export function GanttWorkspace({
                         type="button"
                         className="servicenow-button servicenow-button--secondary servicenow-button--sm"
                         onClick={() => handleIndent(idx, 1)}
-                        disabled={readOnlyWbs}
+                        disabled={readOnlyWbs || (t.outlineLevel ?? 1) >= WBS_MAX_LEVEL}
+                        title={(t.outlineLevel ?? 1) >= WBS_MAX_LEVEL ? `레벨 ${WBS_MAX_LEVEL}까지만 허용됩니다` : '하위로'}
                         style={{ minHeight: WBS_ROW_CELL.minHeight, padding: WBS_ROW_CELL.padding, lineHeight: 1 }}
                       >
                         ▷
@@ -1805,8 +1917,8 @@ export function GanttWorkspace({
                         type="button"
                         className="servicenow-button servicenow-button--secondary servicenow-button--sm"
                         onClick={() => handleAddChildRow(idx)}
-                        title="하위 레벨 행 추가"
-                        disabled={readOnlyWbs}
+                        title={(t.outlineLevel ?? 1) >= WBS_MAX_LEVEL ? `레벨 ${WBS_MAX_LEVEL}까지만 허용됩니다` : '하위 레벨 행 추가'}
+                        disabled={readOnlyWbs || (t.outlineLevel ?? 1) >= WBS_MAX_LEVEL}
                         style={{ minHeight: WBS_ROW_CELL.minHeight, padding: WBS_ROW_CELL.padding, lineHeight: 1, whiteSpace: 'nowrap' }}
                       >
                         + 하위
@@ -1873,8 +1985,9 @@ export function GanttWorkspace({
                 </div>
               ) : (
                 <GanttTasksChart
-                  tasks={displayTasks}
+                  tasks={filteredDisplayTasks}
                   events={chartEvents}
+                  issueTaskIds={issueTaskIds}
                   onDoubleClickDate={(date) => setAddEventModal({ date, name: '' })}
                   onDeleteEvent={(ev) => {
                     if (typeof window !== 'undefined' && window.confirm(`이벤트 "${ev.name || '(이벤트)'}"을(를) 삭제할까요?`)) {

@@ -73,7 +73,13 @@ function main() {
     fs.copyFileSync(envExample, path.join(releaseDir, '.env.example'))
   }
 
-  // 실행 가이드 파일 생성
+  // HTTPS 서버 스크립트 복사 (SSL 사용 시 server-https.js 실행)
+  const releaseHttpsSrc = path.join(projectRoot, 'scripts', 'release-server-https.js')
+  if (fs.existsSync(releaseHttpsSrc)) {
+    fs.copyFileSync(releaseHttpsSrc, path.join(releaseDir, 'server-https.js'))
+  }
+
+  // 실행 가이드 파일 생성 (한국어)
   const readme = `# 오프라인/방화벽 환경 배포용 (npm 설치 불필요)
 
 이 폴더는 npm 접속 없이 실행 가능한 독립 패키지입니다.
@@ -89,8 +95,94 @@ function main() {
    node server.js
 
 기본 포트: 3000 (PORT 환경변수로 변경 가능)
+
+## 접속 모드 (Development / Production)
+
+- **상용(사내망)**: 기본값. 서버가 0.0.0.0 에서 수신하므로, 고정 IP 노트북에서 실행 시
+  다른 PC에서 http://<고정IP>:3000 으로 접속 가능합니다.
+- **개발(localhost만)**: 본 PC에서만 접속하려면 다음처럼 실행하세요.
+  set HOSTNAME=127.0.0.1
+  node server.js
+  (Linux/Mac: HOSTNAME=127.0.0.1 node server.js)
+
+## HTTPS (보안 강화)
+
+SSL 인증서와 키 파일을 준비한 뒤:
+
+  set SSL_CERT_PATH=./cert.pem
+  set SSL_KEY_PATH=./key.pem
+  node server-https.js
+
+(Linux/Mac: SSL_CERT_PATH=./cert.pem SSL_KEY_PATH=./key.pem node server-https.js)
+
+사내망 전체 수신: HOSTNAME=0.0.0.0 SSL_CERT_PATH=./cert.pem SSL_KEY_PATH=./key.pem node server-https.js
 `
   fs.writeFileSync(path.join(releaseDir, '실행방법.txt'), readme, 'utf8')
+
+  // English run guide for offline/firewall deployment
+  const readmeEn = `# Offline / Firewall-Friendly Deployment (No npm Required)
+
+This folder is a **standalone deployment package** that runs without any npm or network access.
+Suitable for environments where the firewall blocks npm registry or external connections.
+
+## Requirements
+
+- **Node.js** only (npm is not required to run the app).
+- MySQL database reachable from the deployment host.
+
+## Quick Start
+
+1. Copy \`.env.example\` to \`.env\` and set your database and app settings (e.g. \`DB_HOST\`, \`DB_USER\`, \`DB_PASSWORD\`, \`JWT_SECRET\`).
+2. Start the server:
+
+   \`\`\`bash
+   node server.js
+   \`\`\`
+
+3. Open in browser: \`http://localhost:3000\` (or \`http://<this-machine-IP>:3000\` when listening on all interfaces).
+
+Default port: **3000** (override with the \`PORT\` environment variable).
+
+## Listening Modes
+
+- **LAN / shared network**: By default the server binds to \`0.0.0.0\`, so other PCs can use \`http://<host-IP>:3000\`.
+- **Local only**: To accept connections only from this machine:
+
+  - Windows: \`set HOSTNAME=127.0.0.1\` then \`node server.js\`
+  - Linux/macOS: \`HOSTNAME=127.0.0.1 node server.js\`
+
+## HTTPS (Optional)
+
+If you have SSL certificate and key files:
+
+- Windows:
+  \`\`\`bat
+  set SSL_CERT_PATH=./cert.pem
+  set SSL_KEY_PATH=./key.pem
+  node server-https.js
+  \`\`\`
+- Linux/macOS:
+  \`\`\`bash
+  SSL_CERT_PATH=./cert.pem SSL_KEY_PATH=./key.pem node server-https.js
+  \`\`\`
+
+To listen on all interfaces with HTTPS:
+
+\`\`\`bash
+HOSTNAME=0.0.0.0 SSL_CERT_PATH=./cert.pem SSL_KEY_PATH=./key.pem node server-https.js
+\`\`\`
+
+## Contents of This Package
+
+- **server.js** – Main Next.js standalone server (HTTP).
+- **server-https.js** – HTTPS server wrapper when SSL is required.
+- **.next/** – Built application and static assets.
+- **public/** – Static files.
+- **.env.example** – Example environment variables (copy to \`.env\` and edit).
+
+No \`node_modules\` or \`npm install\` is needed to run this package.
+`
+  fs.writeFileSync(path.join(releaseDir, 'README-OFFLINE.md'), readmeEn, 'utf8')
 
   console.log('\n✅ release 폴더 생성 완료!')
   console.log('   npm 접속 없이 배포 가능합니다.')

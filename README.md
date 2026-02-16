@@ -61,6 +61,35 @@ npm run dev
 
 브라우저에서 [http://localhost:3000](http://localhost:3000)을 열어 결과를 확인하세요.
 
+### 실행 모드 (개발 / 상용)
+
+| 목적 | 명령 | 접속 대상 |
+|------|------|-----------|
+| **개발** (지속 개선, 로컬만) | `npm run dev` | 본인 PC만 (localhost:3000) |
+| **개발 + 사내망** | `npm run dev:lan` | 사내 다른 PC에서도 접속 가능 (0.0.0.0) |
+| **상용 로컬** | `npm run start` | 본인 PC만 (빌드 후 실행) |
+| **상용 사내망** | `npm run start:lan` | 고정 IP 노트북에서 실행 시, 사내 사용자들이 해당 IP:3000 으로 접속 |
+| **상용 HTTPS (로컬)** | `npm run start:https` | 본인 PC만, https://localhost:3000 (SSL 필요) |
+| **상용 HTTPS (사내망)** | `npm run start:https:lan` | 사내망 https 접속 (SSL 필요) |
+
+- **상용(사내망) 예**: 고정 IP가 있는 노트북에서 `npm run start:lan` 실행 후, 다른 노트북에서 `http://<고정IP>:3000` 으로 ITSM 접속.
+- **release 폴더**로 배포한 경우: 기본이 사내망(0.0.0.0) 수신. localhost만 쓰려면 `HOSTNAME=127.0.0.1 node server.js` 로 실행.
+
+### HTTPS (보안 강화)
+
+SSL 인증서와 키가 있으면 HTTPS로 서비스할 수 있습니다.
+
+1. **프로젝트에서 실행** (빌드 후):
+   - 로컬만: `SSL_CERT_PATH=./cert.pem SSL_KEY_PATH=./key.pem npm run start:https`
+   - 사내망: `SSL_CERT_PATH=./cert.pem SSL_KEY_PATH=./key.pem npm run start:https:lan`
+2. **release 폴더**: `SSL_CERT_PATH=./cert.pem SSL_KEY_PATH=./key.pem node server-https.js`  
+   (사내망 수신 시 앞에 `HOSTNAME=0.0.0.0` 추가)
+
+인증서 예시 (자체 서명, 테스트용):
+```bash
+openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem -days 365 -nodes -subj "/CN=localhost"
+```
+
 ## 프로젝트 구조
 
 - `app/` - Next.js App Router 디렉토리

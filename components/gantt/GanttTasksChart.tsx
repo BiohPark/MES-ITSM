@@ -47,11 +47,13 @@ export interface GanttChartEvent {
 interface Props {
   tasks: GanttTask[]
   events?: GanttChartEvent[]
+  /** 이슈 작업의 task.id 집합 (작업명 강조용) */
+  issueTaskIds?: Set<number>
   onDoubleClickDate?: (date: string) => void
   onDeleteEvent?: (event: GanttChartEvent) => void
 }
 
-export function GanttTasksChart({ tasks, events = [], onDoubleClickDate, onDeleteEvent }: Props) {
+export function GanttTasksChart({ tasks, events = [], issueTaskIds, onDoubleClickDate, onDeleteEvent }: Props) {
   const [dateRange, setDateRange] = useState<{ start: Date; end: Date}>(() => {
     const today = new Date()
     const start = new Date(today)
@@ -308,7 +310,7 @@ export function GanttTasksChart({ tasks, events = [], onDoubleClickDate, onDelet
       <div
         ref={scrollContainerRef}
         style={{
-          maxHeight: 'min(70vh, 560px)',
+          maxHeight: 'min(76vh, 680px)',
           overflowY: 'auto',
           overflowX: 'auto',
         }}
@@ -391,15 +393,16 @@ export function GanttTasksChart({ tasks, events = [], onDoubleClickDate, onDelet
                   <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                     <span
                       style={{
-                        fontWeight: isLevel1 ? 700 : 500,
+                        fontWeight: isLevel1 || (issueTaskIds && task.id != null && issueTaskIds.has(task.id)) ? 700 : 500,
                         fontFamily: isLevel1 ? '"Segoe UI", "Malgun Gothic", system-ui, sans-serif' : 'inherit',
-                        color: isLevel1 ? '#1e3a8a' : undefined,
+                        color: issueTaskIds && task.id != null && issueTaskIds.has(task.id) ? '#dc2626' : isLevel1 ? '#1e3a8a' : undefined,
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
                       }}
                       title={task.name || '(이름 없음)'}
                     >
+                      {issueTaskIds && task.id != null && issueTaskIds.has(task.id) && '❗ '}
                       {task.name || '(이름 없음)'}
                     </span>
                     {task.assignee && (

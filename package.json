@@ -4,9 +4,13 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:lan": "next dev -H 0.0.0.0",
     "build": "next build",
     "build:offline": "npm run build && node scripts/package-standalone.js",
     "start": "next start",
+    "start:lan": "next start -H 0.0.0.0",
+    "start:https": "node scripts/https-proxy.js",
+    "start:https:lan": "node scripts/https-proxy.js --lan",
     "lint": "next lint",
     "setup-db": "npm run init-db && npm run add-users-table && npm run add-auth-columns && npm run add-task-phases-column && npm run add-task-link-columns && npm run add-srb-ver-column && npm run add-comments-table && npm run add-issues-table && npm run add-resolved-sw-version-column && npm run add-workflow-tables && npm run add-development-workflow && npm run add-voc-table && npm run add-backup-table && npm run add-attachments-table && npm run add-predecessors-table && npm run add-gantt-tables && npm run fix-gantt-owner-id && npm run add-meetings-table && npm run add-project-cc-columns && npm run add-task-issue-reason-column && npm run create-admin",
     "postinstall": "node scripts/postinstall.js",

@@ -53,13 +53,12 @@ export async function POST(request: NextRequest) {
         },
       })
 
-      // 세션 쿠키 설정 (maxAge 필수: 없으면 일부 환경에서 쿠키가 설정되지 않아 로그인 실패)
+      // 세션 쿠키 (maxAge 없음 = 브라우저 종료 시 삭제, 로그아웃과 동일)
       response.cookies.set('session', token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
         path: '/',
-        maxAge: 60 * 60 * 24 * 7, // 7일
       })
 
       return response
@@ -117,13 +116,12 @@ export async function POST(request: NextRequest) {
             },
           })
 
-          // 세션 쿠키 설정
+          // 세션 쿠키 (브라우저 종료 시 삭제)
           response.cookies.set('session', token, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
             sameSite: 'lax',
             path: '/',
-            maxAge: 60 * 60 * 24 * 7, // 7일
           })
 
           return response
