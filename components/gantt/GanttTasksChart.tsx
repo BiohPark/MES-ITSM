@@ -4,8 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 /** 반응형 스타일 - 좁은 컬럼으로 더 많은 차트 표시 */
 const GANTT_CHART_SIZES = {
-  // 좌측 정보 패널: 작업명이 너무 짤리지 않도록 소폭 확대
-  leftPanel: 'clamp(13rem, 18vw, 17rem)',
+  // 좌측 정보 패널: 작업명이 너무 짤리지 않도록 더 넓게 확보
+  leftPanel: 'clamp(16rem, 24vw, 24rem)',
   index: 'clamp(2rem, 2.2vw, 2.5rem)',
   wbs: 'clamp(2.8rem, 3.5vw, 4rem)',
   duration: 'clamp(2.5rem, 3vw, 3.5rem)',
@@ -54,6 +54,7 @@ interface Props {
 }
 
 export function GanttTasksChart({ tasks, events = [], issueTaskIds, onDoubleClickDate, onDeleteEvent }: Props) {
+  const [timeScale, setTimeScale] = useState<'day' | 'week' | 'month'>('day')
   const [dateRange, setDateRange] = useState<{ start: Date; end: Date}>(() => {
     const today = new Date()
     const start = new Date(today)
@@ -267,6 +268,20 @@ export function GanttTasksChart({ tasks, events = [], issueTaskIds, onDoubleClic
     return rows
   }, [sortedTasks, predsByTask, dateRange, schedules])
 
+  const dayCellWidth = useMemo(() => {
+    switch (timeScale) {
+      case 'week':
+        // 주 단위: 한 화면에 더 많은 기간을 보기 위해 일 단위 폭 축소
+        return Math.max(8, GANTT_CHART_SIZES.dayCellWidth * 0.7)
+      case 'month':
+        // 월 단위: 한 화면에 아주 긴 기간을 보기 위해 더 축소
+        return Math.max(4, GANTT_CHART_SIZES.dayCellWidth * 0.4)
+      case 'day':
+      default:
+        return GANTT_CHART_SIZES.dayCellWidth
+    }
+  }, [timeScale])
+
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const dateHeaderRef = useRef<HTMLDivElement>(null)
   const handleDateHeaderDoubleClick = useCallback(
@@ -274,7 +289,6 @@ export function GanttTasksChart({ tasks, events = [], issueTaskIds, onDoubleClic
       const header = dateHeaderRef.current
       if (!header || !onDoubleClickDate) return
       const rect = header.getBoundingClientRect()
-      const dayCellWidth = GANTT_CHART_SIZES.dayCellWidth
       // 뷰포트 기준이므로 스크롤은 rect에 이미 반영됨. scrollLeft 추가 시 dayIndex 과대 계산(예: 3/31 → 5/24)
       const x = e.clientX - rect.left
       const dayIndex = Math.floor(x / dayCellWidth)
@@ -284,7 +298,7 @@ export function GanttTasksChart({ tasks, events = [], issueTaskIds, onDoubleClic
         onDoubleClickDate(dateStr)
       }
     },
-    [days, onDoubleClickDate]
+    [days, onDoubleClickDate, dayCellWidth]
   )
 
   if (sortedTasks.length === 0) {
@@ -295,7 +309,6 @@ export function GanttTasksChart({ tasks, events = [], issueTaskIds, onDoubleClic
     )
   }
 
-  const dayCellWidth = GANTT_CHART_SIZES.dayCellWidth
   const chartWidth = days.length * dayCellWidth
 
   return (
@@ -306,6 +319,45 @@ export function GanttTasksChart({ tasks, events = [], issueTaskIds, onDoubleClic
         overflow: 'hidden',
       }}
     >
+      {/* 확대/축소 (일/주/월 단위) 컨트롤 */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'flex-end',
+          gap: '0.25rem',
+          padding: '0.25rem 0.5rem 0.25rem 0.5rem',
+          borderBottom: '1px solid #e2e8f0',
+          fontSize: '0.75rem',
+          color: '#64748b',
+          backgroundColor: '#f9fafb',
+        }}
+      >
+        <span style={{ alignSelf: 'center', marginRight: '0.25rem' }}>시간 축:</span>
+        {(['day', 'week', 'month'] as const).map((scale) => {
+          const label = scale === 'day' ? '일' : scale === 'week' ? '주' : '월'
+          const active = timeScale === scale
+          return (
+            <button
+              key={scale}
+              type="button"
+              className="servicenow-button servicenow-button--sm"
+              onClick={() => setTimeScale(scale)}
+              style={{
+                padding: '0.15rem 0.5rem',
+                fontSize: '0.7rem',
+                lineHeight: 1.2,
+                borderRadius: 999,
+                borderColor: active ? '#1d4ed8' : '#cbd5e1',
+                backgroundColor: active ? '#1d4ed8' : '#f9fafb',
+                color: active ? '#ffffff' : '#0f172a',
+              }}
+            >
+              {label}
+            </button>
+          )
+        })}
+      </div>
+
       {/* 헤더 + 바디를 하나의 가로 스크롤 컨테이너로 */}
       <div
         ref={scrollContainerRef}
@@ -724,7 +776,7 @@ export function GanttTasksChart({ tasks, events = [], issueTaskIds, onDoubleClic
                         boxShadow: '0 1px 2px rgba(15, 23, 42, 0.25)',
                         overflow: 'hidden',
                       }}
-                      title={`${schedule.taskName} (${schedule.startDate} ~ ${new Date(new Date(schedule.startDate || '').getTime() + schedule.durationDays * 24 * 60 * 60 * 1000).toLocaleDateString('ko-KR')})${(task as any).progressPercent != null ? ` · 실적 ${(task as any).progressPercent}%` : ''}`}
+                      title={`${schedule.taskName} (${schedule.startDate} ~ ${new Date(new Date(schedule.startDate || '').getTime() + schedule.durationDays * 24 * 60 * 60 * 1000).toLocaleDateString('ko-KR')})${(task as any).progressPercent != null ? ` · 실적 ${Math.round((task as any).progressPercent)}%` : ''}`}
                     >
                       {(task as any).progressPercent != null && (task as any).progressPercent > 0 && (
                         <div
@@ -733,7 +785,7 @@ export function GanttTasksChart({ tasks, events = [], issueTaskIds, onDoubleClic
                             left: 0,
                             top: 0,
                             bottom: 0,
-                            width: `${Math.min(100, (task as any).progressPercent)}%`,
+                            width: `${Math.min(100, Math.max(0, Math.round((task as any).progressPercent)))}%`,
                             backgroundColor: 'rgba(255,255,255,0.35)',
                             borderRadius: '4px 0 0 4px',
                           }}
@@ -751,7 +803,7 @@ export function GanttTasksChart({ tasks, events = [], issueTaskIds, onDoubleClic
                         {schedule.taskName}
                         {(task as any).progressPercent != null && (
                           <span style={{ marginLeft: '0.35rem', opacity: 0.9 }}>
-                            {(task as any).progressPercent}%
+                            {Math.round((task as any).progressPercent)}%
                           </span>
                         )}
                       </span>

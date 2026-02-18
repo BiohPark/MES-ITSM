@@ -100,7 +100,7 @@ function isTaskIssue(
 ): boolean {
   const start = normalizeDateStr(t.startDate ?? null)
   const finish = normalizeDateStr(t.finishDate ?? null)
-  const p = Number(t.progressPercent ?? 0)
+  const p = Math.round(Number(t.progressPercent ?? 0))
   return (
     (!!start && todayStr > start && p === 0) ||
     (!!finish && todayStr > finish && p < 100)
@@ -538,6 +538,21 @@ export function GanttWorkspace({
         }
       }
 
+      // 시작일 직접 변경 시: 기간(일)을 유지하면서 종료일 자동 업데이트
+      if (field === 'startDate') {
+        const curr = copy[index]
+        const dur =
+          curr.durationDays != null && Number(curr.durationDays) > 0
+            ? Math.max(1, Number(curr.durationDays))
+            : null
+        if (curr.startDate && dur != null) {
+          copy[index] = {
+            ...curr,
+            finishDate: addDaysToDate(curr.startDate, dur - 1),
+          }
+        }
+      }
+
       // 선행 작업 지정 시: 시작일 = (모든 선행 작업의 종료일 중 가장 늦은 날) + 1일
       if (field === 'predecessors') {
         const parsed = parsePredecessorString(value || '')
@@ -577,8 +592,8 @@ export function GanttWorkspace({
           curr.durationDays = Math.max(1, diffDays + 1) // inclusive
         }
 
-        // 종료일 변경 시(직접 수정 또는 기간 입력): 후속 작업들 업데이트
-        if (field === 'finishDate' || field === 'durationDays') {
+        // 종료일/기간/시작일 변경 시: 후속 작업들 업데이트
+        if (field === 'finishDate' || field === 'durationDays' || field === 'startDate') {
           for (let i = 0; i < copy.length; i++) {
             if (i === index) continue // 사용자가 직접 수정한 작업은 덮어쓰지 않음
             const parsed = parsePredecessorString(copy[i].predecessors || '')
@@ -795,7 +810,7 @@ export function GanttWorkspace({
             current.durationDays = calcDurationFromDates(current.startDate, current.finishDate)
           }
 
-          // 상위 실적 %: 하위가 있으면 항상 하위 기준 가중 평균으로 자동 반영 (요약 작업은 항상 자식 실적 반영)
+          // 상위 실적 %: 하위가 있으면 항상 하위 기준 가중 평균(정수 반올림)으로 자동 반영 (요약 작업은 항상 자식 실적 반영)
           const childrenWithProgress = childItems.filter(
             (c) => c.progressPercent != null
           )
@@ -821,7 +836,8 @@ export function GanttWorkspace({
                   0
                 ) / childrenWithProgress.length
             }
-            current.progressPercent = Math.round(agg * 100) / 100
+            // 실적은 소수점 없이, 0~100 범위의 정수로 저장
+            current.progressPercent = Math.min(100, Math.max(0, Math.round(agg)))
           }
         }
       }
@@ -913,11 +929,19 @@ export function GanttWorkspace({
     if (withDuration.length > 0) {
       const totalWeight = withDuration.reduce((s, t) => s + (t.durationDays ?? 0), 0)
       const weightedSum = withDuration.reduce((s, t) => s + (t.progressPercent ?? 0) * (t.durationDays ?? 0), 0)
-      overallProgress = totalWeight > 0 ? Math.round((weightedSum / totalWeight) * 100) / 100 : 0
+      overallProgress = totalWeight > 0 ? (weightedSum / totalWeight) : 0
     } else if (leafTasks.length > 0) {
       overallProgress = leafTasks.reduce((s, t) => s + (t.progressPercent ?? 0), 0) / leafTasks.length
     }
-    return { planDays, plannedProgress, overallProgress, startDate: minStart, finishDate: maxFinish, plannedProgressReason }
+    // 요약 출력 시에는 toFixed(1)로 표시하지만, 내부 값도 0~100 범위로 정규화
+    return {
+      planDays,
+      plannedProgress: Math.min(100, Math.max(0, plannedProgress)),
+      overallProgress: Math.min(100, Math.max(0, overallProgress)),
+      startDate: minStart,
+      finishDate: maxFinish,
+      plannedProgressReason,
+    }
   }, [filteredDisplayTasks])
 
   const todayStr = formatLocalDate(new Date())
@@ -985,7 +1009,7 @@ export function GanttWorkspace({
         console.error('자동 저장 실패', err)
         // 조용히 로그만 남기고, 사용자는 필요 시 수동 저장 버튼을 다시 눌러 복구할 수 있도록 둔다.
       }
-    }, 1500)
+    }, 800)
 
     return () => {
       if (autoSaveTimerRef.current != null) {
@@ -1389,12 +1413,12 @@ export function GanttWorkspace({
                   style={{ fontSize: '1.05rem', color: '#64748b', cursor: projectProgressSummary.plannedProgressReason ? 'help' : undefined }}
                   title={projectProgressSummary.plannedProgressReason || undefined}
                 >
-                  {Number.isFinite(projectProgressSummary.plannedProgress) ? projectProgressSummary.plannedProgress.toFixed(1) : '0.0'}%
+                  {Number.isFinite(projectProgressSummary.plannedProgress) ? Math.round(projectProgressSummary.plannedProgress) : 0}%
                 </strong>
                 <span style={{ color: '#cbd5e1', margin: '0 0.25rem' }}>{' | '}</span>
                 <span style={{ color: '#64748b', fontSize: '0.85rem' }}>전체 실적</span>
                 <strong style={{ fontSize: '1.1rem', color: '#2A84D5' }}>
-                  {Number.isFinite(projectProgressSummary.overallProgress) ? projectProgressSummary.overallProgress.toFixed(1) : '0.0'}%
+                  {Number.isFinite(projectProgressSummary.overallProgress) ? Math.round(projectProgressSummary.overallProgress) : 0}%
                 </strong>
               </div>
               <div
@@ -1410,7 +1434,7 @@ export function GanttWorkspace({
               >
                 <div
                   style={{
-                    width: `${Math.min(100, Math.max(0, Number.isFinite(projectProgressSummary.overallProgress) ? projectProgressSummary.overallProgress : 0))}%`,
+                    width: `${Math.min(100, Math.max(0, Number.isFinite(projectProgressSummary.overallProgress) ? Math.round(projectProgressSummary.overallProgress) : 0))}%`,
                     height: '100%',
                     backgroundColor: '#2A84D5',
                     transition: 'width 0.2s',
@@ -1614,10 +1638,25 @@ export function GanttWorkspace({
                 </div>
                 {displayTasks.map((t, idx) => {
                   if (selectedLevel1Index != null && rootLevel1IndexForRow[idx] !== selectedLevel1Index) return null
+
                   const isDragging = draggingIndex != null && getDraggedSubtreeIndices(draggingIndex).includes(idx)
                   const isDropChild = dropTarget?.type === 'child' && dropTarget.index === idx
                   const isDropSiblingBefore = dropTarget?.type === 'sibling' && dropTarget.index === idx
                   const isDropSiblingAfter = dropTarget?.type === 'sibling' && dropTarget.index === idx + 1
+
+                  // 요약(부모) 행 여부: 바로 아래에 더 높은 레벨(=자식)이 존재하면 요약 행으로 간주
+                  const currentLevel = t.outlineLevel ?? 1
+                  let hasChildren = false
+                  for (let j = idx + 1; j < displayTasks.length; j++) {
+                    const nextLevel = displayTasks[j].outlineLevel ?? 1
+                    if (nextLevel <= currentLevel) break
+                    if (nextLevel === currentLevel + 1) {
+                      hasChildren = true
+                      break
+                    }
+                  }
+                  const isSummaryRow = hasChildren
+
                   return (
                   <div
                     key={idx}
@@ -1716,6 +1755,14 @@ export function GanttWorkspace({
                         onChange={(e) =>
                           handleChangeTask(idx, 'name', e.target.value)
                         }
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            if (!readOnlyWbs) {
+                              void handleSaveTasks()
+                            }
+                          }
+                        }}
                         placeholder="작업명"
                         style={{
                           width: '100%',
@@ -1736,12 +1783,22 @@ export function GanttWorkspace({
                       <input
                         type="text"
                         inputMode="numeric"
-                        value={t.progressPercent != null ? t.progressPercent : ''}
-                        readOnly={readOnlyWbs}
+                        value={t.progressPercent != null ? Math.round(t.progressPercent) : ''}
+                        readOnly={readOnlyWbs || isSummaryRow}
                         onChange={(e) => {
                           const raw = e.target.value.trim()
-                          const num = raw === '' ? null : Math.min(100, Math.max(0, Number(raw) || 0))
+                          const parsed = raw === '' ? null : Number(raw)
+                          const rounded = parsed == null || Number.isNaN(parsed) ? null : Math.round(parsed)
+                          const num = rounded === null ? null : Math.min(100, Math.max(0, rounded))
                           handleChangeTask(idx, 'progressPercent', num)
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            if (!readOnlyWbs) {
+                              void handleSaveTasks()
+                            }
+                          }
                         }}
                         placeholder="0~100"
                         style={{
@@ -1763,11 +1820,19 @@ export function GanttWorkspace({
                         inputMode="numeric"
                         placeholder="yymmdd"
                         defaultValue={formatDateYymmdd(t.startDate)}
-                        readOnly={readOnlyWbs}
+                        readOnly={readOnlyWbs || isSummaryRow}
                         onBlur={(e) => {
                           const raw = e.target.value.trim().replace(/-/g, '')
                           const parsed = raw === '' ? null : parseDateToYyyyMmDd(e.target.value)
                           if (raw === '' || parsed !== null) handleChangeTask(idx, 'startDate', parsed)
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            if (!readOnlyWbs) {
+                              void handleSaveTasks()
+                            }
+                          }
                         }}
                         style={{
                           width: '100%',
@@ -1788,11 +1853,19 @@ export function GanttWorkspace({
                         inputMode="numeric"
                         placeholder="yymmdd"
                         defaultValue={formatDateYymmdd(t.finishDate ?? t.startDate ?? null)}
-                        readOnly={readOnlyWbs}
+                        readOnly={readOnlyWbs || isSummaryRow}
                         onBlur={(e) => {
                           const raw = e.target.value.trim().replace(/-/g, '')
                           const parsed = raw === '' ? null : parseDateToYyyyMmDd(e.target.value)
                           if (raw === '' || parsed !== null) handleChangeTask(idx, 'finishDate', parsed)
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            if (!readOnlyWbs) {
+                              void handleSaveTasks()
+                            }
+                          }
                         }}
                         style={{
                           width: '100%',
@@ -1812,7 +1885,7 @@ export function GanttWorkspace({
                         inputMode="numeric"
                         pattern="[0-9]*"
                         value={t.durationDays ?? ''}
-                        readOnly={readOnlyWbs}
+                        readOnly={readOnlyWbs || isSummaryRow}
                         onChange={(e) => {
                           const raw = e.target.value.trim()
                           handleChangeTask(
@@ -1820,6 +1893,14 @@ export function GanttWorkspace({
                             'durationDays',
                             raw === '' ? null : (Number(raw) || null)
                           )
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            if (!readOnlyWbs) {
+                              void handleSaveTasks()
+                            }
+                          }
                         }}
                         style={{
                           width: '100%',
@@ -1841,6 +1922,14 @@ export function GanttWorkspace({
                         onChange={(e) =>
                           handleChangeTask(idx, 'predecessors', e.target.value)
                         }
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            if (!readOnlyWbs) {
+                              void handleSaveTasks()
+                            }
+                          }
+                        }}
                         placeholder="예: 1FS;3FS;5FS"
                         style={{
                           width: '100%',
@@ -1865,6 +1954,14 @@ export function GanttWorkspace({
                           const assignee = (t.assignee ?? '').trim()
                           if (assignee && registeredUserNames.size > 0 && !registeredUserNames.has(assignee)) {
                             setAssigneeError(`담당자 "${assignee}"(은)는 등록된 사용자가 아닙니다. 사용자 관리에서 등록 후 선택해 주세요.`)
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            if (!readOnlyWbs) {
+                              void handleSaveTasks()
+                            }
                           }
                         }}
                         placeholder="담당자"

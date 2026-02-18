@@ -382,7 +382,7 @@ export function PersonalTasksView({
                           <td>
                             {item.startDate || '-'} ~ {item.finishDate || '-'}
                           </td>
-                          <td>{item.progressPercent != null ? `${item.progressPercent}%` : '-'}</td>
+                <td>{item.progressPercent != null ? `${Math.round(item.progressPercent)}%` : '-'}</td>
                         </tr>
                       ))}
                     </tbody>

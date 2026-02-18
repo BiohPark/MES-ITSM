@@ -5,6 +5,30 @@ import { getAccountById } from '@/lib/accounts'
 
 // 특정 Gantt 프로젝트의 태스크 목록 조회 및 저장
 
+// DB DATE/TIMESTAMP → YYYY-MM-DD (로컬 기준)로 변환
+function normalizeDbDate(value: unknown): string | null {
+  if (value == null) return null
+
+  // JS Date 인스턴스인 경우: 로컬 기준으로 연-월-일 추출
+  if (value instanceof Date) {
+    const y = value.getFullYear()
+    const m = String(value.getMonth() + 1).padStart(2, '0')
+    const d = String(value.getDate()).padStart(2, '0')
+    return `${y}-${m}-${d}`
+  }
+
+  if (typeof value === 'string') {
+    // ISO 문자열 등에서 앞부분 YYYY-MM-DD만 사용
+    const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/)
+    if (match) {
+      const [, y, m, d] = match
+      return `${y}-${m}-${d}`
+    }
+  }
+
+  return null
+}
+
 export async function GET(
   _req: NextRequest,
   { params }: { params: { projectId: string } }
@@ -34,7 +58,14 @@ export async function GET(
       [params.projectId]
     )
 
-    return NextResponse.json({ tasks: rows })
+    // 날짜 필드는 모두 YYYY-MM-DD로 정규화하여 프론트로 전달 (빌드/저장 반복 시 하루씩 밀리는 현상 방지)
+    const tasks = rows.map((row) => ({
+      ...row,
+      startDate: normalizeDbDate(row.startDate),
+      finishDate: normalizeDbDate(row.finishDate),
+    }))
+
+    return NextResponse.json({ tasks })
   } catch (error: any) {
     console.error('[gantt/tasks][GET] 오류:', error)
     return NextResponse.json(
@@ -119,7 +150,10 @@ export async function POST(
         const startDate = toDateStr(t.startDate)
         const finishDate = toDateStr(t.finishDate)
 
-        const progressPercent = t.progressPercent != null ? Math.min(100, Math.max(0, Number(t.progressPercent))) : null
+        const progressPercent =
+          t.progressPercent != null
+            ? Math.min(100, Math.max(0, Math.round(Number(t.progressPercent))))
+            : null
         await conn.query(
           `
           INSERT INTO gantt_tasks
