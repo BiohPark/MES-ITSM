@@ -1,6 +1,6 @@
 # Offline / Firewall-Friendly Deployment (No npm Required)
 
-This folder is a **standalone deployment package** that runs without any npm or network access.  
+This folder is a **standalone deployment package** that runs without any npm or network access.
 Suitable for environments where the firewall blocks npm registry or external connections.
 
 ## Requirements

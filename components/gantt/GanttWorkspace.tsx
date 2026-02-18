@@ -592,18 +592,16 @@ export function GanttWorkspace({
           curr.durationDays = Math.max(1, diffDays + 1) // inclusive
         }
 
-        // 종료일/기간/시작일 변경 시: 후속 작업들 업데이트
+        // 종료일/기간/시작일 변경 시: 후속 작업들(선행 관계로 연결된 작업들) 전체를 다시 계산
         if (field === 'finishDate' || field === 'durationDays' || field === 'startDate') {
           for (let i = 0; i < copy.length; i++) {
             if (i === index) continue // 사용자가 직접 수정한 작업은 덮어쓰지 않음
             const parsed = parsePredecessorString(copy[i].predecessors || '')
             if (parsed.length === 0) continue
 
-            // 이 작업(i)의 선행 작업들 중, 현재 변경된 작업(index)이 포함될 때만 재계산
             const predIndices = parsed
               .map((p) => p.index - 1)
               .filter((pi) => pi >= 0 && pi < copy.length)
-            if (!predIndices.includes(index)) continue
 
             const finishTimes = predIndices
               .map((pi) => copy[pi].finishDate)
