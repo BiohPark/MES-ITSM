@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { parsePredecessorString } from '@/lib/predecessor-parser'
+import { parsePredecessorString, formatPredecessorString } from '@/lib/predecessor-parser'
 import { GanttTasksChart, type GanttChartEvent } from './GanttTasksChart'
 
 const LONG_PRESS_MS = 450
@@ -91,6 +91,39 @@ function hasDirectChildrenInList(
     if (nextLevel === level + 1) return true
   }
   return false
+}
+
+/** 행 순서가 바뀐 경우(드래그 드롭 등), 기존 순서 기준 선행 인덱스를 새 순서 기준으로 재매핑 */
+function remapPredecessorIndicesAfterReorder(
+  original: GanttTask[],
+  reordered: GanttTask[]
+): GanttTask[] {
+  if (original.length !== reordered.length) {
+    return reordered
+  }
+
+  const result = reordered.map((t) => ({ ...t }))
+
+  for (let i = 0; i < result.length; i++) {
+    const raw = result[i].predecessors || ''
+    if (!raw.trim()) continue
+    const parsed = parsePredecessorString(raw)
+    if (parsed.length === 0) continue
+
+    const remapped = parsed.map((p) => {
+      const oldIdx = p.index - 1
+      const source = original[oldIdx]
+      if (!source) return p
+      // 동일 객체(참조) 기준으로 새 인덱스 찾기
+      const newIdx = reordered.indexOf(source)
+      if (newIdx === -1) return p
+      return { ...p, index: newIdx + 1 }
+    })
+
+    result[i].predecessors = formatPredecessorString(remapped)
+  }
+
+  return result
 }
 
 /** 이슈 작업 여부: 시작일 지났는데 실적 0% / 종료일 지났는데 실적 100% 아님 (todayStr = YYYY-MM-DD) */
@@ -191,7 +224,7 @@ export function GanttWorkspace({
   /** 담당자 검증용 등록 사용자 목록 (name, username) */
   const [registeredUserNames, setRegisteredUserNames] = useState<Set<string>>(new Set())
   const [assigneeError, setAssigneeError] = useState<string | null>(null)
-  /** 차트 이벤트 (특정 날짜 목표/마일스톤) - 프로젝트별 localStorage 저장 */
+  /** 차트 이벤트 (특정 날짜 목표/마일스톤) - 프로젝트별 서버 저장 */
   const [chartEvents, setChartEvents] = useState<GanttChartEvent[]>([])
   /** 이벤트 추가 팝업: { date, name } */
   const [addEventModal, setAddEventModal] = useState<{ date: string; name: string } | null>(null)
@@ -302,30 +335,38 @@ export function GanttWorkspace({
     }
   }
 
+  // 프로젝트 선택 시: 태스크 + 이벤트를 함께 로드 (이벤트는 서버에서 공유)
   useEffect(() => {
-    if (selectedProjectId) {
-      loadTasks(selectedProjectId)
+    let cancelled = false
+    async function loadForProject(projectId: number) {
+      await loadTasks(projectId)
       try {
-        const raw = localStorage.getItem(`gantt-events-${selectedProjectId}`)
-        setChartEvents(raw ? JSON.parse(raw) : [])
+        const res = await fetch(`/api/gantt/events?projectId=${projectId}`)
+        if (!res.ok) throw new Error('이벤트를 불러오지 못했습니다.')
+        const data = await res.json()
+        if (!cancelled) {
+          setChartEvents((data.events || []).map((e: any) => ({
+            id: e.id,
+            date: e.date,
+            name: e.name,
+          })))
+        }
       } catch {
-        setChartEvents([])
+        if (!cancelled) setChartEvents([])
       }
+    }
+
+    if (selectedProjectId) {
+      loadForProject(selectedProjectId)
     } else {
       setTasks([])
       setChartEvents([])
     }
-  }, [selectedProjectId])
 
-  useEffect(() => {
-    if (selectedProjectId != null && chartEvents.length >= 0) {
-      try {
-        localStorage.setItem(`gantt-events-${selectedProjectId}`, JSON.stringify(chartEvents))
-      } catch {
-        // ignore
-      }
+    return () => {
+      cancelled = true
     }
-  }, [selectedProjectId, chartEvents])
+  }, [selectedProjectId])
 
   const handleAddRow = () => {
     if (!selectedProjectId) {
@@ -374,7 +415,8 @@ export function GanttWorkspace({
         insertAt = i + 1
       }
 
-      const nextSort = prev.length === 0 ? 1 : Math.max(...prev.map((t) => t.sortOrder ?? 1)) + 1
+      const nextSort =
+        prev.length === 0 ? 1 : Math.max(...prev.map((t) => t.sortOrder ?? 1)) + 1
       const newTask: GanttTask = {
         projectId: selectedProjectId,
         outlineLevel: childLevel,
@@ -386,8 +428,32 @@ export function GanttWorkspace({
         assignee: '',
         isMilestone: false,
       }
+
       const copy = [...prev]
+      // prev 기준 insertAt 위치에 새 행 삽입
       copy.splice(insertAt, 0, newTask)
+
+      // 선행 작업 인덱스 보정:
+      // prev 기준으로 insertAt 이후에 있던 행들은 모두 +1만큼 뒤로 밀렸으므로,
+      // 해당 행들을 가리키던 모든 predecessor index도 +1 해준다.
+      const insertedRowNumber = insertAt + 1 // 1-based
+      for (let i = 0; i < copy.length; i++) {
+        const raw = copy[i].predecessors || ''
+        if (!raw.trim()) continue
+        const parsed = parsePredecessorString(raw)
+        if (parsed.length === 0) continue
+        const adjusted = parsed.map((p) => {
+          if (p.index >= insertedRowNumber) {
+            return { ...p, index: p.index + 1 }
+          }
+          return p
+        })
+        copy[i] = {
+          ...copy[i],
+          predecessors: formatPredecessorString(adjusted),
+        }
+      }
+
       return copy
     })
     setHasUnsavedChanges(true)
@@ -413,6 +479,7 @@ export function GanttWorkspace({
       if (indices.length === 0) return
 
       setTasks((prev) => {
+        const original = [...prev]
         const copy = [...prev]
         const [dragged] = indices.map((i) => copy[i])
         const draggedLevel = dragged.outlineLevel ?? 1
@@ -450,7 +517,8 @@ export function GanttWorkspace({
           copy.splice(insertAt, 0, ...extracted)
         }
 
-        return copy
+        // 행 순서가 바뀐 뒤, 기존 순서 대비 선행 인덱스를 재매핑
+        return remapPredecessorIndicesAfterReorder(original, copy)
       })
       setDraggingIndex(null)
       setDropTarget(null)
@@ -553,9 +621,45 @@ export function GanttWorkspace({
         }
       }
 
-      // 선행 작업 지정 시: 시작일 = (모든 선행 작업의 종료일 중 가장 늦은 날) + 1일
+      // 선행 작업 지정 시: 유효성 검증 + 시작일 = (모든 선행 작업의 종료일 중 가장 늦은 날) + 1일
       if (field === 'predecessors') {
         const parsed = parsePredecessorString(value || '')
+
+        // 선행 유효성 검증: 자기 자신/상위 작업/존재하지 않는 행은 허용하지 않음
+        if (parsed.length > 0) {
+          const selfRow = index + 1
+          const selfLevel = prev[index]?.outlineLevel ?? 1
+          // 상위(조상) 행 인덱스 수집
+          const ancestorIndices: number[] = []
+          let currentLevel = selfLevel
+          for (let i = index - 1; i >= 0; i--) {
+            const lv = prev[i]?.outlineLevel ?? 1
+            if (lv < currentLevel) {
+              ancestorIndices.push(i)
+              currentLevel = lv
+              if (currentLevel === 1) break
+            }
+          }
+
+          for (const p of parsed) {
+            // 존재하지 않는 행
+            if (p.index < 1 || p.index > prev.length) {
+              alert(`존재하지 않는 행(#${p.index})을 선행 작업으로 지정할 수 없습니다.`)
+              return prev
+            }
+            // 자기 자신
+            if (p.index === selfRow) {
+              alert('자기 자신을 선행 작업으로 지정할 수 없습니다.')
+              return prev
+            }
+            // 상위(조상) 작업
+            if (ancestorIndices.includes(p.index - 1)) {
+              alert('상위(조상) 작업을 선행 작업으로 지정할 수 없습니다.')
+              return prev
+            }
+          }
+        }
+
         if (parsed.length > 0) {
           const predIndices = parsed
             .map((p) => p.index - 1) // 1-based → 0-based
@@ -695,7 +799,30 @@ export function GanttWorkspace({
   }
 
   const handleDeleteRow = (index: number) => {
-    setTasks((prev) => prev.filter((_, i) => i !== index))
+    setTasks((prev) => {
+      const deletedRowNumber = index + 1 // 1-based
+      const remaining = prev.filter((_, i) => i !== index)
+
+      // 삭제된 행 이후를 가리키던 선행 인덱스들은 -1, 삭제된 행 자체를 가리키던 인덱스는 제거
+      const adjusted = remaining.map((t) => {
+        const raw = t.predecessors || ''
+        if (!raw.trim()) return t
+        const parsed = parsePredecessorString(raw)
+        if (parsed.length === 0) return t
+        const fixed = parsed
+          .filter((p) => p.index !== deletedRowNumber)
+          .map((p) => ({
+            ...p,
+            index: p.index > deletedRowNumber ? p.index - 1 : p.index,
+          }))
+        return {
+          ...t,
+          predecessors: formatPredecessorString(fixed),
+        }
+      })
+
+      return adjusted
+    })
     setHasUnsavedChanges(true)
   }
 
@@ -2083,16 +2210,34 @@ export function GanttWorkspace({
                   tasks={filteredDisplayTasks}
                   events={chartEvents}
                   issueTaskIds={issueTaskIds}
-                  onDoubleClickDate={(date) => setAddEventModal({ date, name: '' })}
-                  onDeleteEvent={(ev) => {
-                    if (typeof window !== 'undefined' && window.confirm(`이벤트 "${ev.name || '(이벤트)'}"을(를) 삭제할까요?`)) {
-                      setChartEvents((prev) =>
-                      prev.filter(
-                        (e) => !((ev.id != null && e.id === ev.id) || (ev.id == null && e.date === ev.date && e.name === ev.name))
-                      )
+                onDoubleClickDate={(date) => setAddEventModal({ date, name: '' })}
+                onDeleteEvent={async (ev) => {
+                  if (typeof window !== 'undefined' && window.confirm(`이벤트 "${ev.name || '(이벤트)'}"을(를) 삭제할까요?`)) {
+                    const next = chartEvents.filter(
+                      (e) =>
+                        !(
+                          (ev.id != null && e.id === ev.id) ||
+                          (ev.id == null && e.date === e.date && e.name === ev.name)
+                        )
                     )
+                    setChartEvents(next)
+                    if (selectedProjectId) {
+                      try {
+                        const payload = {
+                          projectId: selectedProjectId,
+                          events: next.map((e) => ({ date: e.date, name: e.name })),
+                        }
+                        await fetch('/api/gantt/events', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify(payload),
+                        })
+                      } catch (err) {
+                        console.error('Failed to delete gantt event', err)
+                      }
                     }
-                  }}
+                  }
+                }}
                 />
               )}
             </div>
@@ -2169,13 +2314,34 @@ export function GanttWorkspace({
               </button>
               <button
                 type="button"
-                onClick={() => {
+                onClick={async () => {
                   const name = (addEventModal?.name ?? '').trim() || '이벤트'
-                  setChartEvents((prev) => [
-                    ...prev,
-                    { id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `ev-${Date.now()}`, date: addEventModal!.date, name },
-                  ])
+                  const newEvent: GanttChartEvent = {
+                    id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `ev-${Date.now()}`,
+                    date: addEventModal!.date,
+                    name,
+                  }
+                  setChartEvents((prev) => [...prev, newEvent])
                   setAddEventModal(null)
+
+                  if (selectedProjectId) {
+                    try {
+                      const payload = {
+                        projectId: selectedProjectId,
+                        events: [...chartEvents, newEvent].map((e) => ({
+                          date: e.date,
+                          name: e.name,
+                        })),
+                      }
+                      await fetch('/api/gantt/events', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload),
+                      })
+                    } catch (err) {
+                      console.error('Failed to save gantt events', err)
+                    }
+                  }
                 }}
                 style={{
                   padding: '0.45rem 0.9rem',
