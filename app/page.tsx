@@ -10,6 +10,7 @@ import { IssuesTable } from '@/components/issues/IssuesTable'
 import { IssueEditModal } from '@/components/issues/IssueEditModal'
 import { MeetingNotesView } from '@/components/meetings/MeetingNotesView'
 import { MeetingNoteEditModal } from '@/components/meetings/MeetingNoteEditModal'
+import { MeetingNoteTemplateModal } from '@/components/meetings/MeetingNoteTemplateModal'
 import { ActionItemsView } from '@/components/action-items/ActionItemsView'
 import type { MeetingNote } from '@/types/meeting'
 import { DashboardView } from '@/components/dashboard/DashboardView'
@@ -91,6 +92,7 @@ export default function Home() {
   const [selectedMeetingNote, setSelectedMeetingNote] = useState<MeetingNote | null>(null)
   const [isMeetingNoteEditing, setIsMeetingNoteEditing] = useState(false)
   const [meetingNoteEditMode, setMeetingNoteEditMode] = useState<'create' | 'edit'>('edit')
+  const [templateMeetingNote, setTemplateMeetingNote] = useState<MeetingNote | null>(null)
   const [selectedMeetingNoteIds, setSelectedMeetingNoteIds] = useState<Set<string>>(new Set())
   const [meetingNoteSearchKeyword, setMeetingNoteSearchKeyword] = useState<string>('')
   // 인증 관련 상태
@@ -390,7 +392,7 @@ export default function Home() {
   }, [])
 
   // 회의록 관련 함수들
-  const fetchMeetingNotes = useCallback(async (signal?: AbortSignal) => {
+  const fetchMeetingNotes = useCallback(async (signal?: AbortSignal): Promise<MeetingNote[] | undefined> => {
     try {
       setMeetingNotesLoading(true)
       setMeetingNotesError(null)
@@ -401,21 +403,23 @@ export default function Home() {
         cache: 'no-store',
         signal,
       })
-      if (signal?.aborted) return
+      if (signal?.aborted) return undefined
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
         throw new Error(errorData.error || `HTTP ${response.status}: Failed to fetch meeting notes`)
       }
       const data = (await response.json()) as MeetingNote[]
-      if (signal?.aborted) return
+      if (signal?.aborted) return undefined
       setMeetingNotes(data)
+      return data
     } catch (err) {
-      if (signal?.aborted) return
+      if (signal?.aborted) return undefined
       const errorMessage = err instanceof Error ? err.message : 'Unknown error'
       setMeetingNotesError(errorMessage)
       if (process.env.NODE_ENV === 'development') {
         console.error('Error fetching meeting notes:', err)
       }
+      return undefined
     } finally {
       if (!signal?.aborted) {
         setMeetingNotesLoading(false)
@@ -1217,6 +1221,7 @@ export default function Home() {
         action_items: [],
         next_meeting_date: null,
         created_by: user?.name || '',
+        status: 'draft',
       }
 
       setSelectedMeetingNote(newMeetingNote)
@@ -1782,6 +1787,10 @@ export default function Home() {
               setTaskEditMode('edit')
               setIsTaskEditing(true)
             }}
+            onGanttTaskClick={(projectId) => {
+              setPendingGanttProjectId(projectId)
+              setActiveTab('gantt')
+            }}
           />
         ) : activeTab === 'voc' ? (
           <VocView
@@ -1944,6 +1953,15 @@ export default function Home() {
             onBatchDelete={handleBatchDeleteMeetingNotes}
             searchKeyword={meetingNoteSearchKeyword}
             onSearchChange={setMeetingNoteSearchKeyword}
+            onViewTemplate={(meetingNote) => setTemplateMeetingNote(meetingNote)}
+          />
+        )}
+
+        {/* 회의록 템플릿 보기 모달 */}
+        {activeTab === 'meetings' && templateMeetingNote && (
+          <MeetingNoteTemplateModal
+            meetingNote={templateMeetingNote}
+            onClose={() => setTemplateMeetingNote(null)}
           />
         )}
 
@@ -1982,12 +2000,23 @@ export default function Home() {
               setSelectedMeetingNote(null)
               setMeetingNoteEditMode('edit')
             }}
-            onSave={async (updatedMeetingNote: MeetingNote) => {
+            onSave={async (updatedMeetingNote: MeetingNote, options?: { autoSave?: boolean }) => {
               try {
                 if (meetingNoteEditMode === 'create') {
                   await handleAddMeetingNote(updatedMeetingNote)
                 } else {
                   await handleUpdateMeetingNote(updatedMeetingNote)
+                }
+                const list = await fetchMeetingNotes()
+                if (options?.autoSave) {
+                  if (meetingNoteEditMode === 'create' && list) {
+                    const created = list.find((m) => m.id === updatedMeetingNote.id)
+                    if (created) {
+                      setSelectedMeetingNote(created)
+                      setMeetingNoteEditMode('edit')
+                    }
+                  }
+                  return
                 }
                 setIsMeetingNoteEditing(false)
                 setSelectedMeetingNote(null)

@@ -136,8 +136,13 @@ export function BackupView() {
       </div>
 
       <div style={{ marginBottom: '1rem', padding: '1rem', background: '#eff6ff', borderRadius: '0.5rem', fontSize: '0.875rem' }}>
+        <p style={{ margin: 0, marginBottom: '0.5rem' }}>
+          <strong>안내:</strong> 시스템은 1시간마다 자동으로 백업을 생성합니다.
+        </p>
+        <p style={{ margin: 0, marginBottom: '0.5rem' }}>
+          <strong>10일이 지난 백업 파일은 자동으로 삭제</strong>됩니다.
+        </p>
         <p style={{ margin: 0 }}>
-          <strong>안내:</strong> 시스템은 1시간마다 자동으로 백업을 생성합니다. 
           복구 시 현재 데이터는 모두 삭제되고 선택한 백업 데이터로 대체됩니다.
         </p>
       </div>

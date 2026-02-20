@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import type { Project, ProjectChild } from '@/types/project'
+import type { GanttTaskSearchHit } from '@/lib/db'
 import { StatusBadge } from '../common/StatusBadge'
 import { Progress } from '../common/Progress'
 import { SearchIcon } from '../common/Icons'
@@ -10,26 +11,29 @@ interface SearchResult {
   projects: Array<Project & { type: 'project' }>
   tasks: Array<ProjectChild & { type: 'task'; projectId: string | null; projectName: string }>
   gmpRecords: Array<ProjectChild & { type: 'gmp-record'; projectId: string | null; projectName: string; kind_number?: string }>
+  ganttTasks?: GanttTaskSearchHit[]
 }
 
 interface SearchViewProps {
   onProjectClick: (project: Project) => void
   onTaskClick: (task: ProjectChild, projectId: string | null, projectName: string) => void
+  onGanttTaskClick?: (projectId: number) => void
 }
 
-export function SearchView({ onProjectClick, onTaskClick }: SearchViewProps) {
+export function SearchView({ onProjectClick, onTaskClick, onGanttTaskClick }: SearchViewProps) {
   const [keyword, setKeyword] = useState('')
   const [results, setResults] = useState<SearchResult>({
     projects: [],
     tasks: [],
     gmpRecords: [],
+    ganttTasks: [],
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const handleSearch = useCallback(async (searchKeyword: string, signal?: AbortSignal) => {
     if (!searchKeyword.trim()) {
-      setResults({ projects: [], tasks: [], gmpRecords: [] })
+      setResults({ projects: [], tasks: [], gmpRecords: [], ganttTasks: [] })
       return
     }
 
@@ -64,7 +68,7 @@ export function SearchView({ onProjectClick, onTaskClick }: SearchViewProps) {
       if (keyword.trim()) {
         handleSearch(keyword, abortController.signal)
       } else {
-        setResults({ projects: [], tasks: [], gmpRecords: [] })
+        setResults({ projects: [], tasks: [], gmpRecords: [], ganttTasks: [] })
       }
     }, 300) // 디바운스: 300ms 후 검색
 
@@ -74,7 +78,8 @@ export function SearchView({ onProjectClick, onTaskClick }: SearchViewProps) {
     }
   }, [keyword, handleSearch])
 
-  const totalResults = results.projects.length + results.tasks.length + results.gmpRecords.length
+  const ganttTasks = results.ganttTasks ?? []
+  const totalResults = results.projects.length + results.tasks.length + results.gmpRecords.length + ganttTasks.length
 
   return (
     <div className="table-wrapper">
@@ -100,7 +105,7 @@ export function SearchView({ onProjectClick, onTaskClick }: SearchViewProps) {
               type="text"
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
-              placeholder="키워드를 입력하세요 (프로젝트, 일감, GMP Record 검색)"
+              placeholder="키워드를 입력하세요 (프로젝트, 일감, GMP Record, 간트 작업 검색)"
               className="form-input"
               style={{ flex: 1, padding: '0.75rem', fontSize: '1rem' }}
               onKeyPress={(e) => {
@@ -124,6 +129,7 @@ export function SearchView({ onProjectClick, onTaskClick }: SearchViewProps) {
               {results.projects.length > 0 && ` (프로젝트: ${results.projects.length}건`}
               {results.tasks.length > 0 && `, 일감: ${results.tasks.length}건`}
               {results.gmpRecords.length > 0 && `, GMP Record: ${results.gmpRecords.length}건`}
+              {ganttTasks.length > 0 && `, 간트: ${ganttTasks.length}건`}
               {totalResults > 0 && ')'}
             </div>
           )}
@@ -148,7 +154,7 @@ export function SearchView({ onProjectClick, onTaskClick }: SearchViewProps) {
         </div>
       )}
 
-      {(results.projects.length > 0 || results.tasks.length > 0 || results.gmpRecords.length > 0) && (
+      {(results.projects.length > 0 || results.tasks.length > 0 || results.gmpRecords.length > 0 || ganttTasks.length > 0) && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
           {/* 프로젝트 결과 */}
           {results.projects.length > 0 && (
@@ -312,6 +318,46 @@ export function SearchView({ onProjectClick, onTaskClick }: SearchViewProps) {
                       </td>
                       <td>{(record as any).start || '-'}</td>
                       <td>{record.due}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* 간트 차트 작업 결과 */}
+          {ganttTasks.length > 0 && onGanttTaskClick && (
+            <div>
+              <h3 style={{ marginBottom: '1rem', fontSize: '1.25rem', fontWeight: 600 }}>
+                간트 차트 작업 ({ganttTasks.length}건)
+              </h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>작업명</th>
+                    <th>WBS</th>
+                    <th>프로젝트</th>
+                    <th>담당자</th>
+                    <th>시작일</th>
+                    <th>종료일</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ganttTasks.map((row) => (
+                    <tr
+                      key={`gantt-${row.projectId}-${row.id}`}
+                      className="project-row"
+                      onClick={() => onGanttTaskClick(row.projectId)}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <td>
+                        <p className="project-name">{row.name}</p>
+                      </td>
+                      <td><span className="project-id">{row.wbsCode || '-'}</span></td>
+                      <td><span className="project-name">{row.projectName}</span></td>
+                      <td>{row.assignee || '-'}</td>
+                      <td>{row.startDate || '-'}</td>
+                      <td>{row.finishDate || '-'}</td>
                     </tr>
                   ))}
                 </tbody>

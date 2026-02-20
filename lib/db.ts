@@ -1665,10 +1665,23 @@ export async function getRelatedIssues(issueId: string): Promise<Issue[]> {
 }
 
 // 전체 데이터베이스 검색
+export interface GanttTaskSearchHit {
+  type: 'gantt-task'
+  id: number
+  projectId: number
+  projectName: string
+  name: string
+  wbsCode: string | null
+  assignee: string | null
+  startDate: string | null
+  finishDate: string | null
+}
+
 export interface SearchResult {
   projects: Array<Project & { type: 'project' }>
   tasks: Array<ProjectChild & { type: 'task'; projectId: string | null; projectName: string }>
   gmpRecords: Array<ProjectChild & { type: 'gmp-record'; projectId: string | null; projectName: string; kind_number?: string }>
+  ganttTasks: GanttTaskSearchHit[]
 }
 
 export async function searchAll(keyword: string): Promise<SearchResult> {
@@ -1767,10 +1780,39 @@ export async function searchAll(keyword: string): Promise<SearchResult> {
       }
     })
 
+    // 간트 차트 작업 검색 (작업명, 담당자, WBS 코드)
+    let ganttTasks: GanttTaskSearchHit[] = []
+    try {
+      const [ganttRows] = await pool.query<any[]>(
+        `SELECT t.id, t.project_id, t.name, t.wbs_code, t.assignee, t.start_date, t.finish_date, p.name as project_name
+         FROM gantt_tasks t
+         INNER JOIN gantt_projects p ON t.project_id = p.id
+         WHERE t.name LIKE ? OR t.assignee LIKE ? OR (t.wbs_code IS NOT NULL AND t.wbs_code LIKE ?)
+         ORDER BY p.name, t.sort_order`,
+        [searchPattern, searchPattern, searchPattern]
+      )
+      ganttTasks = ganttRows.map((row) => ({
+        type: 'gantt-task' as const,
+        id: row.id,
+        projectId: row.project_id,
+        projectName: row.project_name || 'N/A',
+        name: row.name || '',
+        wbsCode: row.wbs_code || null,
+        assignee: row.assignee || null,
+        startDate: row.start_date ? (typeof row.start_date === 'string' ? row.start_date : new Date(row.start_date).toISOString().slice(0, 10)) : null,
+        finishDate: row.finish_date ? (typeof row.finish_date === 'string' ? row.finish_date : new Date(row.finish_date).toISOString().slice(0, 10)) : null,
+      }))
+    } catch (e) {
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('Gantt search skipped (table may not exist):', e)
+      }
+    }
+
     return {
       projects: projectsWithType,
       tasks: tasksWithType,
       gmpRecords: gmpRecordsWithType,
+      ganttTasks,
     }
   } catch (error) {
     if (process.env.NODE_ENV === 'development') {
@@ -2180,6 +2222,27 @@ export async function unlinkAllTasksFromValPackage(valPackageId: string): Promis
 // ==================== 회의록 관련 함수 ====================
 
 // 모든 회의록 조회
+function normalizeMeetingDate(value: unknown): string | null {
+  if (value == null) return null
+
+  if (value instanceof Date) {
+    const y = value.getFullYear()
+    const m = String(value.getMonth() + 1).padStart(2, '0')
+    const d = String(value.getDate()).toString().padStart(2, '0')
+    return `${y}-${m}-${d}`
+  }
+
+  if (typeof value === 'string') {
+    const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/)
+    if (match) {
+      const [, y, m, d] = match
+      return `${y}-${m}-${d}`
+    }
+  }
+
+  return null
+}
+
 export async function getAllMeetingNotes(): Promise<MeetingNote[]> {
   const pool = getPool()
   const [rows] = await pool.query<any[]>(
@@ -2189,16 +2252,17 @@ export async function getAllMeetingNotes(): Promise<MeetingNote[]> {
   return rows.map((row) => ({
     id: row.id,
     title: row.title,
-    meeting_date: row.meeting_date ? (typeof row.meeting_date === 'string' ? row.meeting_date : new Date(row.meeting_date).toISOString().slice(0, 10)) : '',
+    meeting_date: normalizeMeetingDate(row.meeting_date) ?? '',
     attendees: row.attendees ? (typeof row.attendees === 'string' ? JSON.parse(row.attendees) : row.attendees) : [],
     agenda: row.agenda ? (typeof row.agenda === 'string' ? JSON.parse(row.agenda) : row.agenda) : [],
     discussion: row.discussion || '',
     decisions: row.decisions || '',
     action_items: row.action_items ? (typeof row.action_items === 'string' ? JSON.parse(row.action_items) : row.action_items) : [],
-    next_meeting_date: row.next_meeting_date ? (typeof row.next_meeting_date === 'string' ? row.next_meeting_date : new Date(row.next_meeting_date).toISOString().slice(0, 10)) : null,
+    next_meeting_date: normalizeMeetingDate(row.next_meeting_date),
     created_by: row.created_by,
     created_at: row.created_at ? new Date(row.created_at).toISOString() : undefined,
     updated_at: row.updated_at ? new Date(row.updated_at).toISOString() : undefined,
+    status: (row.status as 'draft' | 'final') ?? 'final',
   }))
 }
 
@@ -2218,16 +2282,17 @@ export async function getMeetingNoteById(id: string): Promise<MeetingNote | null
   return {
     id: row.id,
     title: row.title,
-    meeting_date: row.meeting_date ? (typeof row.meeting_date === 'string' ? row.meeting_date : new Date(row.meeting_date).toISOString().slice(0, 10)) : '',
+    meeting_date: normalizeMeetingDate(row.meeting_date) ?? '',
     attendees: row.attendees ? (typeof row.attendees === 'string' ? JSON.parse(row.attendees) : row.attendees) : [],
     agenda: row.agenda ? (typeof row.agenda === 'string' ? JSON.parse(row.agenda) : row.agenda) : [],
     discussion: row.discussion || '',
     decisions: row.decisions || '',
     action_items: row.action_items ? (typeof row.action_items === 'string' ? JSON.parse(row.action_items) : row.action_items) : [],
-    next_meeting_date: row.next_meeting_date ? (typeof row.next_meeting_date === 'string' ? row.next_meeting_date : new Date(row.next_meeting_date).toISOString().slice(0, 10)) : null,
+    next_meeting_date: normalizeMeetingDate(row.next_meeting_date),
     created_by: row.created_by,
     created_at: row.created_at ? new Date(row.created_at).toISOString() : undefined,
     updated_at: row.updated_at ? new Date(row.updated_at).toISOString() : undefined,
+    status: (row.status as 'draft' | 'final') ?? 'final',
   }
 }
 
@@ -2236,8 +2301,8 @@ export async function addMeetingNote(meetingNote: MeetingNote): Promise<void> {
   const pool = getPool()
   await pool.query(
     `INSERT INTO meeting_notes 
-     (id, title, meeting_date, attendees, agenda, discussion, decisions, action_items, next_meeting_date, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     (id, title, meeting_date, attendees, agenda, discussion, decisions, status, action_items, next_meeting_date, created_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       meetingNote.id,
       meetingNote.title,
@@ -2246,6 +2311,7 @@ export async function addMeetingNote(meetingNote: MeetingNote): Promise<void> {
       JSON.stringify(meetingNote.agenda || []),
       meetingNote.discussion || null,
       meetingNote.decisions || null,
+      meetingNote.status ?? 'final',
       JSON.stringify(meetingNote.action_items || []),
       meetingNote.next_meeting_date || null,
       meetingNote.created_by,
@@ -2259,7 +2325,7 @@ export async function updateMeetingNote(meetingNote: MeetingNote): Promise<void>
   await pool.query(
     `UPDATE meeting_notes 
      SET title = ?, meeting_date = ?, attendees = ?, agenda = ?, discussion = ?, 
-         decisions = ?, action_items = ?, next_meeting_date = ?
+         decisions = ?, status = ?, action_items = ?, next_meeting_date = ?
      WHERE id = ?`,
     [
       meetingNote.title,
@@ -2268,6 +2334,7 @@ export async function updateMeetingNote(meetingNote: MeetingNote): Promise<void>
       JSON.stringify(meetingNote.agenda || []),
       meetingNote.discussion || null,
       meetingNote.decisions || null,
+      meetingNote.status ?? 'final',
       JSON.stringify(meetingNote.action_items || []),
       meetingNote.next_meeting_date || null,
       meetingNote.id,
@@ -2295,16 +2362,17 @@ export async function searchMeetingNotes(keyword: string): Promise<MeetingNote[]
   return rows.map((row) => ({
     id: row.id,
     title: row.title,
-    meeting_date: row.meeting_date ? (typeof row.meeting_date === 'string' ? row.meeting_date : new Date(row.meeting_date).toISOString().slice(0, 10)) : '',
+    meeting_date: normalizeMeetingDate(row.meeting_date) ?? '',
     attendees: row.attendees ? (typeof row.attendees === 'string' ? JSON.parse(row.attendees) : row.attendees) : [],
     agenda: row.agenda ? (typeof row.agenda === 'string' ? JSON.parse(row.agenda) : row.agenda) : [],
     discussion: row.discussion || '',
     decisions: row.decisions || '',
     action_items: row.action_items ? (typeof row.action_items === 'string' ? JSON.parse(row.action_items) : row.action_items) : [],
-    next_meeting_date: row.next_meeting_date ? (typeof row.next_meeting_date === 'string' ? row.next_meeting_date : new Date(row.next_meeting_date).toISOString().slice(0, 10)) : null,
+    next_meeting_date: normalizeMeetingDate(row.next_meeting_date),
     created_by: row.created_by,
     created_at: row.created_at ? new Date(row.created_at).toISOString() : undefined,
     updated_at: row.updated_at ? new Date(row.updated_at).toISOString() : undefined,
+    status: (row.status as 'draft' | 'final') ?? 'final',
   }))
 }
 
@@ -2397,7 +2465,7 @@ export async function getAllActionItems(): Promise<Array<{
         status: item.status || 'pending',
         meeting_note_id: row.meeting_note_id,
         meeting_title: row.meeting_title,
-        meeting_date: row.meeting_date ? (typeof row.meeting_date === 'string' ? row.meeting_date : new Date(row.meeting_date).toISOString().slice(0, 10)) : '',
+        meeting_date: normalizeMeetingDate(row.meeting_date) ?? '',
         created_at: row.created_at ? new Date(row.created_at).toISOString() : '',
       })
     })

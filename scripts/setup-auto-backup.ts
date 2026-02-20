@@ -24,8 +24,8 @@ async function main() {
     const filename = await createBackup('auto')
     console.log(`[${new Date().toISOString()}] 자동 백업 완료: ${filename}`)
 
-    // 30일 이상 된 백업 정리
-    const deletedCount = await cleanupOldBackups(30)
+    // 10일 초과된 백업 정리
+    const deletedCount = await cleanupOldBackups(10)
     if (deletedCount > 0) {
       console.log(`[${new Date().toISOString()}] 오래된 백업 ${deletedCount}개 삭제 완료`)
     }

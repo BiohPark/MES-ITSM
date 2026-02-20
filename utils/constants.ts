@@ -10,9 +10,9 @@ export const TABS: { key: TabKey; label: string }[] = [
   { key: 'gantt', label: 'Gantt Chart' },
   { key: 'issues', label: '이슈 관리' },
   { key: 'meetings', label: '회의록' },
+  { key: 'search', label: 'search' },
   { key: 'voc', label: 'VOC 관리' },
   { key: 'backup', label: '백업' },
-  { key: 'search', label: 'search' },
 ]
 
 /**

@@ -13,6 +13,7 @@ export async function GET(request: NextRequest) {
         projects: [],
         tasks: [],
         gmpRecords: [],
+        ganttTasks: [],
       })
     }
 

@@ -19,6 +19,8 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const limit = parseInt(searchParams.get('limit') || '50', 10)
 
+    // 10일 초과된 백업 자동 삭제 후 목록 반환
+    await cleanupOldBackups(10)
     const backups = await getBackups(limit)
     return NextResponse.json(backups)
   } catch (error) {
@@ -58,7 +60,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'cleanup') {
-      const daysToKeep = parseInt(body.daysToKeep || '30', 10)
+      const daysToKeep = parseInt(body.daysToKeep || '10', 10)
       const deletedCount = await cleanupOldBackups(daysToKeep)
       return NextResponse.json({ success: true, deletedCount })
     }

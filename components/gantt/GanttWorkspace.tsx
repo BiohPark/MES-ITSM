@@ -217,6 +217,8 @@ export function GanttWorkspace({
   const [importing, setImporting] = useState(false)
   const [xmlFile, setXmlFile] = useState<File | null>(null)
   const [activeSubTab, setActiveSubTab] = useState<SubTabKey>('wbs')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'notStarted' | 'inProgress' | 'completed' | 'issue'>('all')
+  const [assigneeFilter, setAssigneeFilter] = useState<string>('')
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [canEditWbs, setCanEditWbs] = useState<boolean | null>(null)
   /** 레벨 1 필터: null = 전체, number = 해당 레벨 1 행 인덱스(그 하위만 표시) */
@@ -996,11 +998,51 @@ export function GanttWorkspace({
       }))
   }, [displayTasks])
 
-  /** 필터 적용된 태스크 목록 (선택한 레벨 1 + 하위만, 차트/요약용) */
+  /** 담당자 필터용 옵션 (현재 표시 중인 WBS 기준) */
+  const assigneeOptions = useMemo(() => {
+    const names = new Set<string>()
+    displayTasks.forEach((t) => {
+      const a = (t.assignee ?? '').trim()
+      if (a) names.add(a)
+    })
+    return Array.from(names).sort((a, b) => a.localeCompare(b, 'ko-KR'))
+  }, [displayTasks])
+
+  const todayStr = formatLocalDate(new Date())
+
+  /** 필터 적용된 태스크 목록 (레벨1 + 상태 + 담당자 + 이슈, 차트/요약용) */
   const filteredDisplayTasks = useMemo(() => {
-    if (selectedLevel1Index == null) return displayTasks
-    return displayTasks.filter((_, idx) => rootLevel1IndexForRow[idx] === selectedLevel1Index)
-  }, [displayTasks, selectedLevel1Index, rootLevel1IndexForRow])
+    return displayTasks.filter((t, idx) => {
+      if (selectedLevel1Index != null && rootLevel1IndexForRow[idx] !== selectedLevel1Index) return false
+      if (statusFilter !== 'all') {
+        const p = Math.round(Number(t.progressPercent ?? 0))
+        if (statusFilter === 'notStarted' && p !== 0) return false
+        if (statusFilter === 'inProgress' && (p <= 0 || p >= 100)) return false
+        if (statusFilter === 'completed' && p < 100) return false
+        if (statusFilter === 'issue' && !isTaskIssue(t, todayStr)) return false
+      }
+      if (assigneeFilter !== '' && (t.assignee ?? '').trim() !== assigneeFilter) return false
+      return true
+    })
+  }, [displayTasks, selectedLevel1Index, rootLevel1IndexForRow, statusFilter, assigneeFilter, todayStr])
+
+  /** 필터 통과한 displayTasks 인덱스 집합 (WBS 테이블 행 표시/숨김용) */
+  const filteredRowIndices = useMemo(() => {
+    const set = new Set<number>()
+    displayTasks.forEach((t, idx) => {
+      if (selectedLevel1Index != null && rootLevel1IndexForRow[idx] !== selectedLevel1Index) return
+      if (statusFilter !== 'all') {
+        const p = Math.round(Number(t.progressPercent ?? 0))
+        if (statusFilter === 'notStarted' && p !== 0) return
+        if (statusFilter === 'inProgress' && (p <= 0 || p >= 100)) return
+        if (statusFilter === 'completed' && p < 100) return
+        if (statusFilter === 'issue' && !isTaskIssue(t, todayStr)) return
+      }
+      if (assigneeFilter !== '' && (t.assignee ?? '').trim() !== assigneeFilter) return
+      set.add(idx)
+    })
+    return set
+  }, [displayTasks, selectedLevel1Index, rootLevel1IndexForRow, statusFilter, assigneeFilter, todayStr])
 
   /** 프로젝트 실적 요약: 계획 기간, 계획 실적 %, 전체 실적 % (가중 평균, 필터 적용 목록 기준) */
   const projectProgressSummary = useMemo(() => {
@@ -1068,8 +1110,6 @@ export function GanttWorkspace({
       plannedProgressReason,
     }
   }, [filteredDisplayTasks])
-
-  const todayStr = formatLocalDate(new Date())
 
   /** 작업 지표: 전체 / 미시작 / 진행 중 / 완료 / 이슈 (필터 적용 목록 기준) */
   const taskStats = useMemo(() => {
@@ -1663,7 +1703,7 @@ export function GanttWorkspace({
                     </div>
                   </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', color: '#475569' }}>
                     <span style={{ whiteSpace: 'nowrap' }}>레벨 1 보기:</span>
                     <select
@@ -1685,6 +1725,49 @@ export function GanttWorkspace({
                       {level1Options.map((opt) => (
                         <option key={opt.index} value={opt.index}>
                           {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.8rem', color: '#475569' }}>
+                    <span style={{ whiteSpace: 'nowrap' }}>상태</span>
+                    <select
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+                      style={{
+                        minWidth: 90,
+                        padding: '0.35rem 0.5rem',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: 6,
+                        fontSize: '0.8rem',
+                        color: '#334155',
+                      }}
+                    >
+                      <option value="all">전체</option>
+                      <option value="notStarted">미시작</option>
+                      <option value="inProgress">진행 중</option>
+                      <option value="completed">완료</option>
+                      <option value="issue">이슈 ❗</option>
+                    </select>
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.8rem', color: '#475569' }}>
+                    <span style={{ whiteSpace: 'nowrap' }}>담당자</span>
+                    <select
+                      value={assigneeFilter}
+                      onChange={(e) => setAssigneeFilter(e.target.value)}
+                      style={{
+                        minWidth: 100,
+                        padding: '0.35rem 0.5rem',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: 6,
+                        fontSize: '0.8rem',
+                        color: '#334155',
+                      }}
+                    >
+                      <option value="">전체</option>
+                      {assigneeOptions.map((name) => (
+                        <option key={name} value={name}>
+                          {name}
                         </option>
                       ))}
                     </select>
@@ -1762,7 +1845,7 @@ export function GanttWorkspace({
                   <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.delete, minWidth: WBS_COLUMNS.delete, padding: '0.3rem 0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>삭제</div>
                 </div>
                 {displayTasks.map((t, idx) => {
-                  if (selectedLevel1Index != null && rootLevel1IndexForRow[idx] !== selectedLevel1Index) return null
+                  if (!filteredRowIndices.has(idx)) return null
 
                   const isDragging = draggingIndex != null && getDraggedSubtreeIndices(draggingIndex).includes(idx)
                   const isDropChild = dropTarget?.type === 'child' && dropTarget.index === idx

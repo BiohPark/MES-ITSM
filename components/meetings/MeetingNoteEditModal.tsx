@@ -1,14 +1,16 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import type { MeetingNote, ActionItem } from '@/types/meeting'
+
+export type MeetingNoteSaveOptions = { autoSave?: boolean }
 
 interface MeetingNoteEditModalProps {
   meetingNote: MeetingNote
   mode: 'create' | 'edit'
   onClose: () => void
-  onSave: (meetingNote: MeetingNote) => Promise<void> | void
+  onSave: (meetingNote: MeetingNote, options?: MeetingNoteSaveOptions) => Promise<void> | void
 }
 
 export function MeetingNoteEditModal({
@@ -24,6 +26,7 @@ export function MeetingNoteEditModal({
     action_items: meetingNote.action_items || [],
     discussion: meetingNote.discussion || '',
     decisions: meetingNote.decisions || '',
+    status: meetingNote.status ?? 'draft',
   })
   const [saving, setSaving] = useState(false)
   const [users, setUsers] = useState<Array<{ id: string; name: string }>>([])
@@ -35,6 +38,20 @@ export function MeetingNoteEditModal({
     due_date: '',
     status: 'pending',
   })
+
+  const formDataRef = useRef(formData)
+  formDataRef.current = formData
+
+  // 1분 주기 자동 저장 (임시 저장과 동일하게 draft로 저장, 모달은 유지)
+  useEffect(() => {
+    const intervalMs = 60 * 1000
+    const timer = setInterval(() => {
+      const current = formDataRef.current
+      if (!current.title?.trim() || !current.meeting_date) return
+      void onSave({ ...current, status: 'draft' }, { autoSave: true })
+    }, intervalMs)
+    return () => clearInterval(timer)
+  }, [onSave])
 
   useEffect(() => {
     const abortController = new AbortController()
@@ -69,7 +86,31 @@ export function MeetingNoteEditModal({
     e.preventDefault()
     setSaving(true)
     try {
-      await onSave(formData)
+      await onSave({
+        ...formData,
+        status: 'final',
+      })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleSaveAndClose = async () => {
+    if (!formData.title?.trim()) {
+      alert('회의 제목을 입력하세요.')
+      return
+    }
+    if (!formData.meeting_date) {
+      alert('회의 일시를 선택하세요.')
+      return
+    }
+    setSaving(true)
+    try {
+      await onSave({
+        ...formData,
+        status: 'final',
+      })
+      // 실제 모달 닫힘은 부모 onSave에서 처리 (성공 시에만 닫힘)
     } finally {
       setSaving(false)
     }
@@ -162,15 +203,11 @@ export function MeetingNoteEditModal({
           <h2>{mode === 'edit' ? '회의록 수정' : '새 회의록 작성'}</h2>
           <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
             <button
-              type="submit"
-              form="meeting-note-form"
+              type="button"
               disabled={saving}
-              className="btn btn-primary"
-              style={{ margin: 0 }}
+              className="modal-close"
+              onClick={handleSaveAndClose}
             >
-              {saving ? '저장 중...' : 'Save'}
-            </button>
-            <button className="modal-close" onClick={onClose}>
               ×
             </button>
           </div>

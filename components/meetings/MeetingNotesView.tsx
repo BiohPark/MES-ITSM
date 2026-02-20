@@ -11,6 +11,7 @@ export function MeetingNotesView({
   onRefresh,
   onMeetingNoteClick,
   onNewMeetingNote,
+  onViewTemplate,
   isDeleteMode,
   selectedMeetingNoteIds,
   onToggleMeetingNoteSelection,
@@ -25,6 +26,7 @@ export function MeetingNotesView({
   onRefresh: () => void | Promise<void>
   onMeetingNoteClick: (meetingNote: MeetingNote) => void
   onNewMeetingNote: () => void
+  onViewTemplate: (meetingNote: MeetingNote) => void
   isDeleteMode: boolean
   selectedMeetingNoteIds: Set<string>
   onToggleMeetingNoteSelection: (meetingNoteId: string) => void
@@ -123,6 +125,7 @@ export function MeetingNotesView({
               <th style={{ width: '150px' }}>참석자</th>
               <th style={{ width: '120px' }}>작성자</th>
               <th style={{ width: '120px' }}>작성일</th>
+              <th style={{ width: '90px' }}>템플릿</th>
             </tr>
           </thead>
           <tbody>
@@ -142,7 +145,14 @@ export function MeetingNotesView({
                   </td>
                 )}
                 <td>{meetingNote.meeting_date}</td>
-                <td style={{ fontWeight: 500 }}>{meetingNote.title}</td>
+                <td style={{ fontWeight: 500 }}>
+                  {meetingNote.title}
+                  {meetingNote.status === 'draft' && (
+                    <span style={{ marginLeft: '0.4rem', fontSize: '0.75rem', color: '#888' }}>
+                      [임시]
+                    </span>
+                  )}
+                </td>
                 <td>
                   {meetingNote.attendees && meetingNote.attendees.length > 0
                     ? meetingNote.attendees.slice(0, 3).join(', ') + (meetingNote.attendees.length > 3 ? '...' : '')
@@ -153,6 +163,18 @@ export function MeetingNotesView({
                   {meetingNote.created_at
                     ? new Date(meetingNote.created_at).toLocaleDateString('ko-KR')
                     : '-'}
+                </td>
+                <td>
+                  <button
+                    type="button"
+                    className="refresh-button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onViewTemplate(meetingNote)
+                    }}
+                  >
+                    View
+                  </button>
                 </td>
               </tr>
             ))}

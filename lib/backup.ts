@@ -202,8 +202,8 @@ export async function restoreFromBackup(backupId: number): Promise<void> {
   }
 }
 
-// 오래된 백업 파일 삭제 (30일 이상)
-export async function cleanupOldBackups(daysToKeep: number = 30): Promise<number> {
+// 오래된 백업 파일 삭제 (기본 10일 초과분)
+export async function cleanupOldBackups(daysToKeep: number = 10): Promise<number> {
   const pool = getPool()
   const cutoffDate = new Date()
   cutoffDate.setDate(cutoffDate.getDate() - daysToKeep)

@@ -11,6 +11,7 @@ export interface MeetingNote {
   created_by: string // 작성자
   created_at?: string
   updated_at?: string
+  status?: 'draft' | 'final'
 }
 
 export interface ActionItem {

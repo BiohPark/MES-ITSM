@@ -59,11 +59,6 @@ export function Sidebar({ activeTab, onTabChange, user, isCollapsed = false, onT
       ],
     },
     {
-      key: 'voc',
-      label: 'VOC 관리',
-    },
-    ...(user?.role === 'admin' ? [{ key: 'backup' as TabKey, label: '백업' }] : []),
-    {
       key: 'personal',
       label: '내 일감',
     },
@@ -78,6 +73,11 @@ export function Sidebar({ activeTab, onTabChange, user, isCollapsed = false, onT
       key: 'search',
       label: '검색',
     },
+    {
+      key: 'voc',
+      label: 'VOC 관리',
+    },
+    ...(user?.role === 'admin' ? [{ key: 'backup' as TabKey, label: '백업' }] : []),
   ]
 
   const toggleSection = (section: string) => {
