@@ -23,7 +23,7 @@ export function BackupView() {
     try {
       setLoading(true)
       setError(null)
-      const response = await fetch('/api/backup?limit=100')
+      const response = await fetch('/api/backup')
       if (!response.ok) {
         throw new Error('백업 목록 조회에 실패했습니다.')
       }
@@ -140,7 +140,7 @@ export function BackupView() {
           <strong>안내:</strong> 시스템은 1시간마다 자동으로 백업을 생성합니다.
         </p>
         <p style={{ margin: 0, marginBottom: '0.5rem' }}>
-          <strong>10일이 지난 백업 파일은 자동으로 삭제</strong>됩니다.
+          <strong>설정한 보관 기간이 지난 백업 파일은 자동으로 삭제</strong>됩니다. (설정 → 시스템 설정에서 보관 일수 변경 가능)
         </p>
         <p style={{ margin: 0 }}>
           복구 시 현재 데이터는 모두 삭제되고 선택한 백업 데이터로 대체됩니다.

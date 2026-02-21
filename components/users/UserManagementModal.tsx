@@ -5,9 +5,13 @@ import { useState, useEffect } from 'react'
 interface UserManagementModalProps {
   onClose: () => void
   currentUser?: { id: string; username: string; name: string; role: string; email?: string } | null
+  /** 설정 모달 내 패널로 삽입 시 true (오버레이 없음, 뒤로가기 버튼 표시) */
+  embedInPanel?: boolean
+  /** embedInPanel일 때 '설정 목록'으로 돌아가기 콜백 */
+  onBack?: () => void
 }
 
-export function UserManagementModal({ onClose, currentUser }: UserManagementModalProps) {
+export function UserManagementModal({ onClose, currentUser, embedInPanel, onBack }: UserManagementModalProps) {
   const [users, setUsers] = useState<Array<{ id: string; name: string; username?: string; email?: string; role?: string; can_edit_wbs?: boolean }>>([])
   const [loading, setLoading] = useState(true)
   const [newUserUsername, setNewUserUsername] = useState('')
@@ -237,17 +241,28 @@ export function UserManagementModal({ onClose, currentUser }: UserManagementModa
     }
   }
 
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '800px', maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        <div className="modal-header" style={{ flexShrink: 0 }}>
-          <h2>사용자 관리</h2>
-          <button className="modal-close" onClick={onClose}>
-            ×
-          </button>
-        </div>
+  const header = (
+    <div className="modal-header" style={{ flexShrink: 0 }}>
+      {embedInPanel && onBack ? (
+        <button
+          type="button"
+          onClick={onBack}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#3b82f6', fontSize: '0.875rem', padding: '0.25rem 0' }}
+        >
+          ← 설정 목록
+        </button>
+      ) : null}
+      <h2>사용자 관리</h2>
+      {!embedInPanel && (
+        <button className="modal-close" onClick={onClose}>
+          ×
+        </button>
+      )}
+    </div>
+  )
 
-        <div className="project-form" style={{ overflowY: 'auto', flex: 1, minHeight: 0 }}>
+  const content = (
+    <div className="project-form" style={{ overflowY: 'auto', flex: 1, minHeight: 0 }}>
           <div className="form-group">
             <label htmlFor="new-user-username">ID *</label>
             <input
@@ -502,6 +517,17 @@ export function UserManagementModal({ onClose, currentUser }: UserManagementModa
             )}
           </div>
         </div>
+    );
+  return embedInPanel ? (
+    <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', flex: 1, minHeight: 0 }}>
+      {header}
+      {content}
+    </div>
+  ) : (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '800px', maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        {header}
+        {content}
       </div>
     </div>
   )

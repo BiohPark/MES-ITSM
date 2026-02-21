@@ -1,28 +1,28 @@
 import { createBackup, cleanupOldBackups } from './backup'
+import { getSystemSettingFloat } from './settings'
 
 let backupInterval: NodeJS.Timeout | null = null
 let isRunning = false
 
 /**
  * 자동 백업 스케줄러 시작
- * 1시간마다 자동으로 백업을 생성합니다.
+ * system_settings.backup_schedule_interval_hours 주기로 백업 생성 (기본 1시간).
  */
-export function startBackupScheduler() {
-  // 이미 실행 중이면 중복 실행 방지
+export async function startBackupScheduler() {
   if (backupInterval) {
     console.log('[Backup Scheduler] 이미 실행 중입니다.')
     return
   }
 
-  console.log('[Backup Scheduler] 자동 백업 스케줄러를 시작합니다. (1시간마다 실행)')
+  const hours = await getSystemSettingFloat('backup_schedule_interval_hours', 1)
+  const intervalMs = Math.max(5 * 60 * 1000, Math.round(hours * 60 * 60 * 1000)) // 최소 5분
+  console.log(`[Backup Scheduler] 자동 백업 스케줄러를 시작합니다. (${hours}시간마다 실행)`)
 
-  // 즉시 한 번 실행 (서버 시작 시)
   runBackup()
 
-  // 1시간마다 실행 (3600000ms = 1시간)
   backupInterval = setInterval(() => {
     runBackup()
-  }, 60 * 60 * 1000) // 1시간
+  }, intervalMs)
 }
 
 /**
@@ -55,8 +55,8 @@ async function runBackup() {
     
     console.log(`[Backup Scheduler] [${timestamp}] 자동 백업 완료: ${filename}`)
 
-    // 10일 초과된 백업 자동 정리
-    const deletedCount = await cleanupOldBackups(10)
+    // system_settings.backup_retention_days 기준 오래된 백업 자동 정리
+    const deletedCount = await cleanupOldBackups()
     if (deletedCount > 0) {
       console.log(`[Backup Scheduler] [${timestamp}] 오래된 백업 ${deletedCount}개 삭제 완료`)
     }

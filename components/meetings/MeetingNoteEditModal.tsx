@@ -42,15 +42,37 @@ export function MeetingNoteEditModal({
   const formDataRef = useRef(formData)
   formDataRef.current = formData
 
-  // 1분 주기 자동 저장 (임시 저장과 동일하게 draft로 저장, 모달은 유지)
+  // system_settings.meeting_autosave_interval_sec 주기 자동 저장 (기본 60초)
+  const autosaveTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   useEffect(() => {
-    const intervalMs = 60 * 1000
-    const timer = setInterval(() => {
-      const current = formDataRef.current
-      if (!current.title?.trim() || !current.meeting_date) return
-      void onSave({ ...current, status: 'draft' }, { autoSave: true })
-    }, intervalMs)
-    return () => clearInterval(timer)
+    const setup = async () => {
+      try {
+        const res = await fetch('/api/settings')
+        const data = res.ok ? await res.json() : {}
+        const sec = typeof data.meeting_autosave_interval_sec === 'number'
+          ? data.meeting_autosave_interval_sec
+          : 60
+        const intervalMs = Math.max(30, Math.min(600, sec)) * 1000
+        autosaveTimerRef.current = setInterval(() => {
+          const current = formDataRef.current
+          if (!current.title?.trim() || !current.meeting_date) return
+          void onSave({ ...current, status: 'draft' }, { autoSave: true })
+        }, intervalMs)
+      } catch {
+        autosaveTimerRef.current = setInterval(() => {
+          const current = formDataRef.current
+          if (!current.title?.trim() || !current.meeting_date) return
+          void onSave({ ...current, status: 'draft' }, { autoSave: true })
+        }, 60 * 1000)
+      }
+    }
+    void setup()
+    return () => {
+      if (autosaveTimerRef.current) {
+        clearInterval(autosaveTimerRef.current)
+        autosaveTimerRef.current = null
+      }
+    }
   }, [onSave])
 
   useEffect(() => {

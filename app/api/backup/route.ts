@@ -7,6 +7,7 @@ import {
   restoreFromBackup,
   cleanupOldBackups,
 } from '@/lib/backup'
+import { getSystemSettingNumber } from '@/lib/settings'
 
 // 백업 목록 조회
 export async function GET(request: NextRequest) {
@@ -17,11 +18,15 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url)
-    const limit = parseInt(searchParams.get('limit') || '50', 10)
+    const limitParam = searchParams.get('limit')
+    const limit = limitParam != null && limitParam !== ''
+      ? parseInt(limitParam, 10)
+      : await getSystemSettingNumber('backup_list_limit', 50)
+    const safeLimit = Number.isFinite(limit) && limit >= 1 && limit <= 500 ? limit : 50
 
-    // 10일 초과된 백업 자동 삭제 후 목록 반환
-    await cleanupOldBackups(10)
-    const backups = await getBackups(limit)
+    // system_settings.backup_retention_days 기준 오래된 백업 자동 삭제 후 목록 반환
+    await cleanupOldBackups()
+    const backups = await getBackups(safeLimit)
     return NextResponse.json(backups)
   } catch (error) {
     console.error('Backup API error:', error)
@@ -60,8 +65,10 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'cleanup') {
-      const daysToKeep = parseInt(body.daysToKeep || '10', 10)
-      const deletedCount = await cleanupOldBackups(daysToKeep)
+      const daysToKeep = body.daysToKeep != null
+        ? parseInt(String(body.daysToKeep), 10)
+        : undefined
+      const deletedCount = await cleanupOldBackups(Number.isFinite(daysToKeep) ? daysToKeep : undefined)
       return NextResponse.json({ success: true, deletedCount })
     }
 

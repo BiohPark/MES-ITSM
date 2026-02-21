@@ -1,3 +1,5 @@
+/** DB 설정(.env.local) 적용 - getPool() 호출 전에 로드 */
+import './load-dotenv'
 /**
  * 자동 백업 스케줄러 설정 스크립트
  * 
@@ -24,8 +26,8 @@ async function main() {
     const filename = await createBackup('auto')
     console.log(`[${new Date().toISOString()}] 자동 백업 완료: ${filename}`)
 
-    // 10일 초과된 백업 정리
-    const deletedCount = await cleanupOldBackups(10)
+    // system_settings.backup_retention_days 기준 오래된 백업 정리
+    const deletedCount = await cleanupOldBackups()
     if (deletedCount > 0) {
       console.log(`[${new Date().toISOString()}] 오래된 백업 ${deletedCount}개 삭제 완료`)
     }

@@ -5,7 +5,7 @@ import { verifySession } from './lib/auth'
 // 인증이 필요하지 않은 경로
 const publicPaths = ['/login', '/register', '/reset-password', '/api/auth']
 // Admin 권한이 필요한 경로 (POST, PUT, DELETE만 제한, GET은 모든 인증된 사용자 허용)
-const adminPaths = ['/api/users'] // 설정 관련 API는 나중에 확장 가능
+const adminPaths = ['/api/users', '/api/settings']
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl

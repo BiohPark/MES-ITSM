@@ -1,4 +1,5 @@
 import { getPool } from './db'
+import { getSystemSettingNumber } from './settings'
 import * as fs from 'fs/promises'
 import * as path from 'path'
 
@@ -50,7 +51,7 @@ export async function createBackup(backupType: 'auto' | 'manual' = 'auto', creat
     tables: {},
   }
 
-  // 주요 테이블 목록
+  // 백업 대상 테이블 (최근 추가 테이블 포함)
   const tables = [
     'projects',
     'project_children',
@@ -62,6 +63,17 @@ export async function createBackup(backupType: 'auto' | 'manual' = 'auto', creat
     'voc_feedbacks',
     'comments',
     'attachments',
+    'predecessors',
+    'workflows',
+    'workflow_statuses',
+    'workflow_transitions',
+    'workflow_schemes',
+    'gantt_projects',
+    'gantt_tasks',
+    'gantt_events',
+    'gantt_wbs_history',
+    'meeting_notes',
+    'system_settings',
     'backup_metadata',
   ]
 
@@ -165,6 +177,17 @@ export async function restoreFromBackup(backupId: number): Promise<void> {
       'voc_feedbacks',
       'comments',
       'attachments',
+      'predecessors',
+      'workflows',
+      'workflow_statuses',
+      'workflow_transitions',
+      'workflow_schemes',
+      'gantt_projects',
+      'gantt_tasks',
+      'gantt_events',
+      'gantt_wbs_history',
+      'meeting_notes',
+      'system_settings',
       'backup_metadata',
     ]
 
@@ -202,8 +225,11 @@ export async function restoreFromBackup(backupId: number): Promise<void> {
   }
 }
 
-// 오래된 백업 파일 삭제 (기본 10일 초과분)
-export async function cleanupOldBackups(daysToKeep: number = 10): Promise<number> {
+// 오래된 백업 파일 삭제 (daysToKeep 미지정 시 system_settings.backup_retention_days 사용)
+export async function cleanupOldBackups(daysToKeep?: number): Promise<number> {
+  if (daysToKeep === undefined) {
+    daysToKeep = await getSystemSettingNumber('backup_retention_days', 10)
+  }
   const pool = getPool()
   const cutoffDate = new Date()
   cutoffDate.setDate(cutoffDate.getDate() - daysToKeep)

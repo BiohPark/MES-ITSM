@@ -27,7 +27,7 @@ import { GanttHistoryView } from '@/components/gantt/GanttHistoryView'
 import { SearchView } from '@/components/search/SearchView'
 import { VocView } from '@/components/voc/VocView'
 import { BackupView } from '@/components/backup/BackupView'
-import { UserManagementModal } from '@/components/users/UserManagementModal'
+import { SettingsModal } from '@/components/settings/SettingsModal'
 import { ContextMenu } from '@/components/common/ContextMenu'
 import { Placeholder } from '@/components/common/Placeholder'
 import { SettingsIcon, SearchIcon } from '@/components/common/Icons'
@@ -2096,8 +2096,8 @@ export default function Home() {
       </div>
 
       {/* Settings Modal */}
-      {isSettingsOpen && user?.role === 'admin' && (
-        <UserManagementModal
+      {isSettingsOpen && user?.role === 'admin' && user && (
+        <SettingsModal
           onClose={() => setIsSettingsOpen(false)}
           currentUser={user}
         />
