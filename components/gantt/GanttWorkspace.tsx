@@ -234,6 +234,8 @@ export function GanttWorkspace({
   // 드래그 앤 드롭 상태
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null)
   const [dropTarget, setDropTarget] = useState<{ type: 'child'; index: number } | { type: 'sibling'; index: number } | null>(null)
+  /** 형제(sibling) 드롭 후 한 번만 WBS 코드를 재할당하지 않고 기존 코드 유지 (2.1/2.2 뒤바뀜 방지) */
+  const [preserveWbsCodeAfterReorder, setPreserveWbsCodeAfterReorder] = useState(false)
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const rowRefs = useRef<Map<number, HTMLDivElement>>(new Map())
   const autoSaveTimerRef = useRef<number | null>(null)
@@ -316,6 +318,7 @@ export function GanttWorkspace({
   const loadTasks = async (projectId: number) => {
     setTasksLoading(true)
     setTasksError(null)
+    setPreserveWbsCodeAfterReorder(false)
     try {
       const res = await fetch(`/api/gantt/tasks/${projectId}`)
       if (!res.ok) {
@@ -361,6 +364,7 @@ export function GanttWorkspace({
     if (selectedProjectId) {
       loadForProject(selectedProjectId)
     } else {
+      setPreserveWbsCodeAfterReorder(false)
       setTasks([])
       setChartEvents([])
     }
@@ -375,6 +379,7 @@ export function GanttWorkspace({
       alert('먼저 Gantt 프로젝트를 선택하거나 생성하세요.')
       return
     }
+    setPreserveWbsCodeAfterReorder(false)
     const nextSort =
       tasks.length === 0
         ? 1
@@ -402,6 +407,7 @@ export function GanttWorkspace({
       alert('먼저 Gantt 프로젝트를 선택하거나 생성하세요.')
       return
     }
+    setPreserveWbsCodeAfterReorder(false)
     setTasks((prev) => {
       const parent = prev[parentIndex]
       if (!parent) return prev
@@ -479,6 +485,12 @@ export function GanttWorkspace({
       if (draggingIndex == null) return
       const indices = getDraggedSubtreeIndices(draggingIndex)
       if (indices.length === 0) return
+
+      // 형제 순서만 바꾼 경우: WBS 코드를 위치로 재할당하지 않고 기존 코드 유지 (2.1/2.2 뒤바뀜 방지)
+      if (targetType === 'sibling') {
+        setPreserveWbsCodeAfterReorder(true)
+        setTimeout(() => setPreserveWbsCodeAfterReorder(false), 0)
+      }
 
       setTasks((prev) => {
         const original = [...prev]
@@ -596,15 +608,15 @@ export function GanttWorkspace({
       const copy = [...prev]
       copy[index] = { ...copy[index], [field]: value }
 
-      // 기간(일) 수동 입력 시: 시작일이 있으면 종료일 자동 업데이트
+      // 기간(일) 수동 입력 시: 종료일 자동 설정 (시작일 있으면 시작+기간, 없으면 오늘 기준)
       if (field === 'durationDays' && value != null && Number(value) > 0) {
         const curr = copy[index]
-        if (curr.startDate) {
-          const dur = Math.max(1, Number(value))
-          copy[index] = {
-            ...copy[index],
-            finishDate: addDaysToDate(curr.startDate, dur - 1),
-          }
+        const dur = Math.max(1, Number(value))
+        const start = curr.startDate ? curr.startDate : formatLocalDate(new Date())
+        copy[index] = {
+          ...copy[index],
+          startDate: curr.startDate || start,
+          finishDate: addDaysToDate(start, dur - 1),
         }
       }
 
@@ -829,6 +841,7 @@ export function GanttWorkspace({
   }
 
   const handleIndent = (index: number, direction: 1 | -1) => {
+    setPreserveWbsCodeAfterReorder(false)
     setTasks((prev) => {
       const currentLevel = prev[index]?.outlineLevel ?? 1
       if (direction === 1 && currentLevel >= WBS_MAX_LEVEL) return prev
@@ -841,7 +854,7 @@ export function GanttWorkspace({
     setHasUnsavedChanges(true)
   }
 
-  const recomputeWbsCodes = (items: GanttTask[]): GanttTask[] => {
+  const recomputeWbsCodes = (items: GanttTask[], preserveWbsCode = false): GanttTask[] => {
     const counters: number[] = []
     const result: GanttTask[] = []
     // 화면 표시 순서(배열 순서)를 기준으로 WBS 계산 (sortOrder 무시)
@@ -855,13 +868,18 @@ export function GanttWorkspace({
       return Math.max(1, diffDays + 1) // inclusive: 동일일=1일
     }
 
-    // 1단계: WBS 코드 계산 (배열 순서 기준)
+    // 1단계: WBS 코드 계산 (배열 순서 기준). 형제 드롭 후에는 기존 wbsCode 유지해 2.1/2.2 뒤바뀜 방지
     for (let i = 0; i < ordered.length; i++) {
       const t = ordered[i]
       const level = Math.max(1, t.outlineLevel || 1)
-      counters.length = level
-      counters[level - 1] = (counters[level - 1] || 0) + 1
-      const wbs = counters.slice(0, level).join('.')
+      let wbs: string
+      if (preserveWbsCode && (t.wbsCode ?? '').trim()) {
+        wbs = (t.wbsCode ?? '').trim()
+      } else {
+        counters.length = level
+        counters[level - 1] = (counters[level - 1] || 0) + 1
+        wbs = counters.slice(0, level).join('.')
+      }
       result.push({
         ...t,
         outlineLevel: level,
@@ -974,7 +992,10 @@ export function GanttWorkspace({
   }
 
   /** 표시용: WBS·날짜·기간이 재계산된 태스크 목록 (필터는 행 표시 시 적용, 인덱스 일치 유지) */
-  const displayTasks = useMemo(() => recomputeWbsCodes(tasks), [tasks])
+  const displayTasks = useMemo(
+    () => recomputeWbsCodes(tasks, preserveWbsCodeAfterReorder),
+    [tasks, preserveWbsCodeAfterReorder]
+  )
 
   /** 각 행이 속한 레벨 1의 displayTasks 인덱스 (행 순서대로) */
   const rootLevel1IndexForRow = useMemo(() => {

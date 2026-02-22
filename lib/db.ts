@@ -8,7 +8,7 @@ import { getUsers, createUser, getNextUserId } from '@/lib/users'
 // MariaDB 연결 설정 (mysql2는 MariaDB와 호환됨)
 const dbConfig = {
   host: process.env.DB_HOST || '127.0.0.1',
-  port: parseInt(process.env.DB_PORT || '3306', 10),
+  port: parseInt(process.env.DB_PORT || '3307', 10),
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || '',
   database: process.env.DB_NAME || 'project_management',
@@ -47,23 +47,50 @@ function recreatePool(): mysql.Pool {
   return pool
 }
 
+/** "Pool is closed" 발생 시 풀 재생성 후 한 번 재시도하도록 래핑 */
+function wrapPoolWithAutoRecreate(p: mysql.Pool): mysql.Pool {
+  const isPoolClosed = (err: unknown) =>
+    err && typeof (err as Error).message === 'string' && String((err as Error).message).includes('Pool is closed')
+
+  return new Proxy(p, {
+    get(target, prop: string) {
+      const v = (target as any)[prop]
+      if (prop === 'query' && typeof v === 'function') {
+        return function (...args: unknown[]) {
+          return v.apply(target, args).catch((err: unknown) => {
+            if (isPoolClosed(err)) {
+              console.warn('[DB] Pool is closed, recreating pool...')
+              pool = null
+              const newPool = recreatePool()
+              return newPool.query.apply(newPool, args)
+            }
+            throw err
+          })
+        }
+      }
+      if (prop === 'getConnection' && typeof v === 'function') {
+        return function (...args: unknown[]) {
+          return v.apply(target, args).catch((err: unknown) => {
+            if (isPoolClosed(err)) {
+              console.warn('[DB] Pool is closed, recreating pool...')
+              pool = null
+              const newPool = recreatePool()
+              return newPool.getConnection.apply(newPool, args)
+            }
+            throw err
+          })
+        }
+      }
+      return typeof v === 'function' ? v.bind(target) : v
+    },
+  }) as mysql.Pool
+}
+
 export function getPool(): mysql.Pool {
   if (!pool) {
     pool = recreatePool()
   }
-  
-  // 연결 상태 확인 및 재연결
-  try {
-    // 풀 상태 확인 (비동기이므로 실제 연결은 쿼리 시 확인)
-    if (pool && (pool as any).config) {
-      return pool
-    }
-  } catch (error) {
-    console.warn('Pool check failed, recreating:', error)
-    pool = recreatePool()
-  }
-  
-  return pool
+  return wrapPoolWithAutoRecreate(pool)
 }
 
 // 연결 테스트 함수

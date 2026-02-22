@@ -44,6 +44,19 @@ export async function createBackup(backupType: 'auto' | 'manual' = 'auto', creat
 
   await ensureBackupDir()
 
+  // DB 연결 가능 여부 먼저 확인 (연결 실패 시 테이블마다 에러 로그 반복 방지)
+  try {
+    await pool.query('SELECT 1')
+  } catch (err: unknown) {
+    const e = err as { code?: string; errno?: number }
+    if (e?.code === 'ECONNREFUSED' || e?.errno === -4078) {
+      throw new Error(
+        'Database is not available (connection refused). Start MariaDB/MySQL and check DB_HOST/DB_PORT in .env.local.'
+      )
+    }
+    throw err
+  }
+
   // 모든 테이블 데이터 수집
   const backupData: any = {
     version: '1.0',

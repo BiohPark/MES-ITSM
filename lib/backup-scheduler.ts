@@ -62,7 +62,14 @@ async function runBackup() {
     }
   } catch (error) {
     const timestamp = new Date().toISOString()
-    console.error(`[Backup Scheduler] [${timestamp}] 자동 백업 실패:`, error)
+    const err = error as { message?: string; code?: string }
+    if (err?.code === 'ECONNREFUSED' || err?.message?.includes('connection refused')) {
+      console.warn(
+        `[Backup Scheduler] [${timestamp}] DB 연결 불가로 백업 건너뜀. MariaDB/MySQL 실행 후 .env.local 설정을 확인하세요.`
+      )
+    } else {
+      console.error(`[Backup Scheduler] [${timestamp}] 자동 백업 실패:`, error)
+    }
   } finally {
     isRunning = false
   }
