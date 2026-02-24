@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
       }
 
       try {
-        const allowedRoles = ['admin', 'user', 'Deviation 매니저', '개발 매니저', 'PIM 매니저', '총괄 매니저'] as const
+        const allowedRoles = ['admin', 'user', 'Viewonly', 'Deviation 매니저', '개발 매니저', 'PIM 매니저', '총괄 매니저'] as const
         const requestedRole: any = role
         const finalRole =
           allowedRoles.includes(requestedRole) && requestedRole !== 'admin'

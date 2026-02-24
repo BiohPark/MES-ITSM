@@ -67,6 +67,15 @@ export async function middleware(request: NextRequest) {
       }
     }
 
+    // Viewonly 권한: 모든 쓰기 요청(POST/PUT/PATCH/DELETE) 전역 차단
+    const method = request.method
+    if (session.role === 'Viewonly' && method !== 'GET') {
+      return NextResponse.json(
+        { error: 'Viewonly 권한은 데이터를 수정할 수 없습니다.' },
+        { status: 403 }
+      )
+    }
+
     // API 요청에 세션 정보 추가 (필요한 경우)
     // Edge Runtime에서는 헤더 값이 ByteString이어야 하므로 한글을 URL 인코딩
     const requestHeaders = new Headers(request.headers)

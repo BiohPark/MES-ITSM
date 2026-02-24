@@ -325,6 +325,7 @@ export function UserManagementModal({ onClose, currentUser, embedInPanel, onBack
               required
             >
               <option value="user">일반 사용자</option>
+              <option value="Viewonly">Viewonly (읽기 전용)</option>
               <option value="admin">관리자</option>
               <option value="Deviation 매니저">Deviation 매니저</option>
               <option value="개발 매니저">개발 매니저</option>
@@ -410,6 +411,7 @@ export function UserManagementModal({ onClose, currentUser, embedInPanel, onBack
                   required
                 >
                   <option value="user">일반 사용자</option>
+                  <option value="Viewonly">Viewonly (읽기 전용)</option>
                   <option value="admin">관리자</option>
                   <option value="Deviation 매니저">Deviation 매니저</option>
                   <option value="개발 매니저">개발 매니저</option>

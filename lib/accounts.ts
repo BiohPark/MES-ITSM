@@ -5,6 +5,7 @@ import { hashPassword, verifyPassword } from './password'
 export type UserRole =
   | 'admin'
   | 'user'
+  | 'Viewonly'
   | 'Deviation 매니저'
   | '개발 매니저'
   | 'PIM 매니저'

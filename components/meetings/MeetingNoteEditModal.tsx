@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import type { MeetingNote, ActionItem } from '@/types/meeting'
+import { RichTextEditor } from './RichTextEditor'
 
 export type MeetingNoteSaveOptions = { autoSave?: boolean }
 
@@ -38,42 +39,6 @@ export function MeetingNoteEditModal({
     due_date: '',
     status: 'pending',
   })
-
-  const formDataRef = useRef(formData)
-  formDataRef.current = formData
-
-  // system_settings.meeting_autosave_interval_sec 주기 자동 저장 (기본 60초)
-  const autosaveTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  useEffect(() => {
-    const setup = async () => {
-      try {
-        const res = await fetch('/api/settings')
-        const data = res.ok ? await res.json() : {}
-        const sec = typeof data.meeting_autosave_interval_sec === 'number'
-          ? data.meeting_autosave_interval_sec
-          : 60
-        const intervalMs = Math.max(30, Math.min(600, sec)) * 1000
-        autosaveTimerRef.current = setInterval(() => {
-          const current = formDataRef.current
-          if (!current.title?.trim() || !current.meeting_date) return
-          void onSave({ ...current, status: 'draft' }, { autoSave: true })
-        }, intervalMs)
-      } catch {
-        autosaveTimerRef.current = setInterval(() => {
-          const current = formDataRef.current
-          if (!current.title?.trim() || !current.meeting_date) return
-          void onSave({ ...current, status: 'draft' }, { autoSave: true })
-        }, 60 * 1000)
-      }
-    }
-    void setup()
-    return () => {
-      if (autosaveTimerRef.current) {
-        clearInterval(autosaveTimerRef.current)
-        autosaveTimerRef.current = null
-      }
-    }
-  }, [onSave])
 
   useEffect(() => {
     const abortController = new AbortController()
@@ -385,14 +350,15 @@ export function MeetingNoteEditModal({
 
           <div className="form-group">
             <label htmlFor="discussion">논의 내용</label>
-            <textarea
-              id="discussion"
-              name="discussion"
+            <RichTextEditor
               value={formData.discussion}
-              onChange={handleChange}
-              className="form-input"
-              rows={8}
-              placeholder="회의 중 논의된 내용을 상세히 기록하세요..."
+              onChange={(html) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  discussion: html,
+                }))
+              }
+              placeholder="회의 중 논의된 내용을 자유롭게 기록하세요. (굵게, 리스트 등 서식 지원)"
             />
           </div>
 

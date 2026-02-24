@@ -1924,7 +1924,7 @@ export default function Home() {
             meetingNotes={meetingNotes}
             loading={meetingNotesLoading}
             error={meetingNotesError}
-            onRefresh={fetchMeetingNotes}
+            onRefresh={() => { void fetchMeetingNotes(); }}
             onMeetingNoteClick={(meetingNote: MeetingNote) => {
               if (!isDeleteMode) {
                 setSelectedMeetingNote(meetingNote)

@@ -8,7 +8,7 @@ import { getUsers, createUser, getNextUserId } from '@/lib/users'
 // MariaDB 연결 설정 (mysql2는 MariaDB와 호환됨)
 const dbConfig = {
   host: process.env.DB_HOST || '127.0.0.1',
-  port: parseInt(process.env.DB_PORT || '3307', 10),
+  port: parseInt(process.env.DB_PORT || '3306', 10),
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || '',
   database: process.env.DB_NAME || 'project_management',
@@ -57,12 +57,12 @@ function wrapPoolWithAutoRecreate(p: mysql.Pool): mysql.Pool {
       const v = (target as any)[prop]
       if (prop === 'query' && typeof v === 'function') {
         return function (...args: unknown[]) {
-          return v.apply(target, args).catch((err: unknown) => {
+          return (v as any).apply(target, args as any[]).catch((err: unknown) => {
             if (isPoolClosed(err)) {
               console.warn('[DB] Pool is closed, recreating pool...')
               pool = null
               const newPool = recreatePool()
-              return newPool.query.apply(newPool, args)
+              return (newPool as any).query(...(args as any[]))
             }
             throw err
           })
@@ -70,12 +70,12 @@ function wrapPoolWithAutoRecreate(p: mysql.Pool): mysql.Pool {
       }
       if (prop === 'getConnection' && typeof v === 'function') {
         return function (...args: unknown[]) {
-          return v.apply(target, args).catch((err: unknown) => {
+          return (v as any).apply(target, args as any[]).catch((err: unknown) => {
             if (isPoolClosed(err)) {
               console.warn('[DB] Pool is closed, recreating pool...')
               pool = null
               const newPool = recreatePool()
-              return newPool.getConnection.apply(newPool, args)
+              return (newPool as any).getConnection(...(args as any[]))
             }
             throw err
           })

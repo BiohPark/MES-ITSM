@@ -5,12 +5,12 @@ import { getPool } from './db'
  */
 export async function getSystemSetting(key: string): Promise<string | null> {
   const pool = getPool()
-  const [rows] = await pool.query<{ setting_value: string }[]>(
+  const [rows] = await pool.query<any[]>(
     'SELECT setting_value FROM system_settings WHERE setting_key = ?',
     [key]
   )
   if (!rows || rows.length === 0) return null
-  return rows[0].setting_value ?? null
+  return (rows[0] as any).setting_value ?? null
 }
 
 /**

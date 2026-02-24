@@ -205,6 +205,29 @@ body {
   background: #2A84D5;
 }
 
+/* Tiptap 회의록 에디터 */
+.tiptap-editor {
+  min-height: 140px;
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.tiptap-editor p {
+  margin: 0 0 0.25rem 0;
+}
+
+.tiptap-editor ul,
+.tiptap-editor ol {
+  margin: 0 0 0.25rem 0;
+  padding-left: 1.75rem;
+  list-style-position: outside;
+}
+
+.tiptap-editor li {
+  margin: 0 0 0.1rem 0;
+}
+
 .primary-button {
   background: #2A84D5;
   color: #ffffff;
