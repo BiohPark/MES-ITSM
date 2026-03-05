@@ -1241,7 +1241,6 @@ export function GanttWorkspace({
         const msg = data.details ? `${data.error || '태스크 저장 실패'}: ${data.details}` : (data.error || '태스크 저장 실패')
         throw new Error(msg)
       }
-      alert('Gantt 태스크를 저장했습니다.')
       await loadTasks(selectedProjectId)
     } catch (err: any) {
       console.error('Failed to save gantt tasks', err)
@@ -1374,6 +1373,32 @@ export function GanttWorkspace({
     }
   }
 
+  const handleExportExcel = async () => {
+    if (!selectedProjectId) {
+      alert('먼저 Gantt 프로젝트를 선택하세요.')
+      return
+    }
+    try {
+      const res = await fetch(`/api/gantt/export-excel/${selectedProjectId}`)
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || 'Excel Export 실패')
+      }
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `gantt_project_${selectedProjectId}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch (err: any) {
+      console.error('Failed to export excel', err)
+      alert(err.message || 'Excel Export 실패')
+    }
+  }
+
   return (
     <div className="table-wrapper">
       <div className="table-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
@@ -1404,6 +1429,13 @@ export function GanttWorkspace({
             onClick={handleExportXml}
           >
             XML Export
+          </button>
+          <button
+            type="button"
+            className="servicenow-button servicenow-button--secondary"
+            onClick={handleExportExcel}
+          >
+            Excel Export
           </button>
         </div>
       </div>
@@ -2058,8 +2090,13 @@ export function GanttWorkspace({
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
                             e.preventDefault()
-                            if (!readOnlyWbs) {
-                              void handleSaveTasks()
+                            const raw = e.currentTarget.value.trim().replace(/-/g, '')
+                            const parsed = raw === '' ? null : parseDateToYyyyMmDd(e.currentTarget.value)
+                            if (raw === '' || parsed !== null) {
+                              handleChangeTask(idx, 'startDate', parsed)
+                              if (!readOnlyWbs) {
+                                void handleSaveTasks()
+                              }
                             }
                           }
                         }}
@@ -2091,8 +2128,13 @@ export function GanttWorkspace({
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
                             e.preventDefault()
-                            if (!readOnlyWbs) {
-                              void handleSaveTasks()
+                            const raw = e.currentTarget.value.trim().replace(/-/g, '')
+                            const parsed = raw === '' ? null : parseDateToYyyyMmDd(e.currentTarget.value)
+                            if (raw === '' || parsed !== null) {
+                              handleChangeTask(idx, 'finishDate', parsed)
+                              if (!readOnlyWbs) {
+                                void handleSaveTasks()
+                              }
                             }
                           }
                         }}
