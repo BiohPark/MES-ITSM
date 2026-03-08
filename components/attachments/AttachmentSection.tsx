@@ -20,6 +20,8 @@ interface AttachmentSectionProps {
   recordType?: string
   currentUser?: { id: string; name: string; role: string }
   onUploadComplete?: () => void
+  /** 제목 옆 안내 (예: 이슈에서는 "화면 캡처·로그 등") */
+  titleHint?: string
 }
 
 export function AttachmentSection({
@@ -27,6 +29,7 @@ export function AttachmentSection({
   recordType = 'task',
   currentUser,
   onUploadComplete,
+  titleHint,
 }: AttachmentSectionProps) {
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [loading, setLoading] = useState(true)
@@ -194,12 +197,15 @@ export function AttachmentSection({
 
   const canDelete = (attachment: Attachment) => {
     if (!currentUser) return false
-    return currentUser.id === attachment.uploaded_by || currentUser.role === 'admin'
+    return currentUser.id === attachment.uploaded_by || currentUser.role === 'admin' || !!currentUser.isAdmin
   }
 
   return (
     <div className="servicenow-attachment-section">
-      <h3 className="servicenow-attachment-section__title">첨부파일</h3>
+      <h3 className="servicenow-attachment-section__title">
+        첨부파일
+        {titleHint && <span style={{ fontWeight: 400, color: '#64748b', fontSize: '0.9em' }}> — {titleHint}</span>}
+      </h3>
 
       {/* 업로드 영역 */}
       <div
@@ -262,6 +268,7 @@ export function AttachmentSection({
           <table className="servicenow-table">
             <thead>
               <tr>
+                <th style={{ width: '72px' }}>미리보기</th>
                 <th>파일명</th>
                 <th>크기</th>
                 <th>업로더</th>
@@ -270,48 +277,77 @@ export function AttachmentSection({
               </tr>
             </thead>
             <tbody>
-              {attachments.map((attachment) => (
-                <tr key={attachment.id}>
-                  <td>
-                    <span className="servicenow-attachment-list__filename">
-                      {attachment.file_name}
-                    </span>
-                  </td>
-                  <td>{formatFileSize(attachment.file_size)}</td>
-                  <td>{attachment.uploader_name || 'Unknown'}</td>
-                  <td>
-                    {new Date(attachment.upload_date).toLocaleString('ko-KR', {
-                      year: 'numeric',
-                      month: '2-digit',
-                      day: '2-digit',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </td>
-                  <td>
-                    <div className="servicenow-attachment-list__actions">
-                      <button
-                        type="button"
-                        className="servicenow-button servicenow-button--link"
-                        onClick={() => handleDownload(attachment.id, attachment.file_name)}
-                        title="다운로드"
-                      >
-                        다운로드
-                      </button>
-                      {canDelete(attachment) && (
+              {attachments.map((attachment) => {
+                const isImage = (attachment.mime_type || '').startsWith('image/')
+                return (
+                  <tr key={attachment.id}>
+                    <td style={{ verticalAlign: 'middle' }}>
+                      {isImage ? (
+                        <a
+                          href={`/api/attachments/${attachment.id}/download`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="크게 보기"
+                          style={{ display: 'inline-block', lineHeight: 0 }}
+                        >
+                          <img
+                            src={`/api/attachments/${attachment.id}/download`}
+                            alt={attachment.file_name}
+                            style={{
+                              maxWidth: 56,
+                              maxHeight: 56,
+                              objectFit: 'contain',
+                              border: '1px solid #e2e8f0',
+                              borderRadius: 4,
+                              backgroundColor: '#f8fafc',
+                            }}
+                          />
+                        </a>
+                      ) : (
+                        <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>—</span>
+                      )}
+                    </td>
+                    <td>
+                      <span className="servicenow-attachment-list__filename">
+                        {attachment.file_name}
+                      </span>
+                    </td>
+                    <td>{formatFileSize(attachment.file_size)}</td>
+                    <td>{attachment.uploader_name || 'Unknown'}</td>
+                    <td>
+                      {new Date(attachment.upload_date).toLocaleString('ko-KR', {
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </td>
+                    <td>
+                      <div className="servicenow-attachment-list__actions">
                         <button
                           type="button"
-                          className="servicenow-button servicenow-button--link servicenow-button--danger"
-                          onClick={() => handleDelete(attachment.id)}
-                          title="삭제"
+                          className="servicenow-button servicenow-button--link"
+                          onClick={() => handleDownload(attachment.id, attachment.file_name)}
+                          title="다운로드"
                         >
-                          삭제
+                          다운로드
                         </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                        {canDelete(attachment) && (
+                          <button
+                            type="button"
+                            className="servicenow-button servicenow-button--link servicenow-button--danger"
+                            onClick={() => handleDelete(attachment.id)}
+                            title="삭제"
+                          >
+                            삭제
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>

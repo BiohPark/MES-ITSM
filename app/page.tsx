@@ -493,6 +493,21 @@ export default function Home() {
     }
   }, [])
 
+  /** 이슈 모달에서 연결 일감 선택용 옵션 (프로젝트별 일감 + 미배정 일감, GMP 제외) — 훅은 조건부 return 이전에 호출 */
+  const issueTaskLinkOptions = useMemo(() => {
+    const opts: { value: string; label: string }[] = []
+    projects.forEach((project) => {
+      (project.children || []).forEach((child) => {
+        if ((child as any).kind_number || (child as any).isGmpRecord) return
+        opts.push({ value: child.id, label: `${project.name} — ${child.title}` })
+      })
+    })
+    orphanTasks.forEach((t) => {
+      opts.push({ value: t.id, label: `(미배정) ${t.title}` })
+    })
+    return opts
+  }, [projects, orphanTasks])
+
   const handleProjectSave = async (project: Project, mode: 'create' | 'edit') => {
     try {
       const sanitizedProject: Project = {
@@ -1268,7 +1283,7 @@ export default function Home() {
       activeTab={activeTab}
       onTabChange={setActiveTab}
       onSearch={handleGlobalSearch}
-      onSettingsClick={user?.role === 'admin' ? () => setIsSettingsOpen(true) : undefined}
+      onSettingsClick={(user?.role === 'admin' || user?.isAdmin) ? () => setIsSettingsOpen(true) : undefined}
       onLogout={handleLogout}
       user={user}
     >
@@ -1797,7 +1812,7 @@ export default function Home() {
             currentUser={user ? { name: user.name, username: user.username, role: user.role } : undefined}
           />
         ) : activeTab === 'backup' ? (
-          user && user.role === 'admin' ? (
+          user && (user.role === 'admin' || user.isAdmin) ? (
             <BackupView />
           ) : (
             <Placeholder label="접근 권한이 없습니다." />
@@ -1816,6 +1831,15 @@ export default function Home() {
             mode={taskEditMode}
             isGmpRecord={activeTab === 'gmp-record' || activeTab === 'search' && ((selectedTask.task as any).type === 'gmp-record') || !!(selectedTask.task as any).kind_number || !!(selectedTask.task as any).isGmpRecord}
             currentUser={user ? { name: user.name, username: user.username } : undefined}
+            onOpenIssue={(issueId) => {
+              const issue = issues.find((i) => i.id === issueId)
+              if (!issue) return
+              setIsTaskEditing(false)
+              setSelectedTask(null)
+              setSelectedIssue(issue)
+              setActiveTab('issues')
+              setIsIssueEditing(true)
+            }}
             onClose={() => {
               setIsTaskEditing(false)
               setSelectedTask(null)
@@ -1893,6 +1917,85 @@ export default function Home() {
             issue={selectedIssue}
             mode={issueEditMode}
             allIssues={issues}
+            currentUser={user ? { id: user.id, name: user.name, role: user.role } : undefined}
+            taskLinkOptions={issueTaskLinkOptions}
+            projectOptions={projects.map((p) => ({ id: p.id, name: p.name }))}
+            onCreateTask={async (projectId, title, issueId) => {
+              try {
+                const res = await fetch('/api/projects', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    action: 'addChild',
+                    projectId,
+                    child: {
+                      title,
+                      owner: selectedIssue?.owner || '',
+                      status: 'Planning',
+                      progress: 0,
+                      start: new Date().toISOString().slice(0, 10),
+                      due: '',
+                      linked_issue_id: issueId,
+                    },
+                  }),
+                })
+                if (!res.ok) {
+                  const err = await res.json().catch(() => ({}))
+                  throw new Error(err.error || '일감 생성 실패')
+                }
+                const data = await res.json()
+                return data.newTaskId || null
+              } catch (e) {
+                if (process.env.NODE_ENV === 'development') console.error(e)
+                alert(e instanceof Error ? e.message : '일감 생성에 실패했습니다.')
+                return null
+              }
+            }}
+            onTaskCreated={async () => {
+              await fetchProjects()
+              await fetchOrphanTasks()
+            }}
+            onOpenGmpRecord={(gmpRecordId) => {
+              const record = gmpRecords.find((r: any) => r.id === gmpRecordId)
+              if (!record) return
+              setIsIssueEditing(false)
+              setSelectedIssue(null)
+              setSelectedTask({
+                task: record,
+                projectId: (record as any).projectId ?? null,
+                projectName: (record as any).projectName || 'N/A',
+              })
+              setActiveTab('gmp-record')
+              setIsTaskEditing(true)
+            }}
+            onOpenTask={(taskId) => {
+              let projectId: string | null = null
+              let projectName = 'N/A'
+              let task: ProjectChild | null = null
+              for (const project of projects) {
+                const child = (project.children || []).find((c) => c.id === taskId)
+                if (child) {
+                  task = child
+                  projectId = project.id
+                  projectName = project.name
+                  break
+                }
+              }
+              if (!task) {
+                const orphan = orphanTasks.find((t) => t.id === taskId)
+                if (orphan) {
+                  task = orphan
+                  projectId = null
+                  projectName = 'N/A'
+                }
+              }
+              if (!task) return
+              setIsIssueEditing(false)
+              setSelectedIssue(null)
+              setSelectedTask({ task, projectId, projectName })
+              setActiveTab('list')
+              setIsTaskEditing(true)
+            }}
             onClose={() => {
               setIsIssueEditing(false)
               setSelectedIssue(null)
@@ -2096,7 +2199,7 @@ export default function Home() {
       </div>
 
       {/* Settings Modal */}
-      {isSettingsOpen && user?.role === 'admin' && user && (
+      {isSettingsOpen && (user?.role === 'admin' || user?.isAdmin) && user && (
         <SettingsModal
           onClose={() => setIsSettingsOpen(false)}
           currentUser={user}

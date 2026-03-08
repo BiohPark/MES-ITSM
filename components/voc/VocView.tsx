@@ -33,7 +33,7 @@ export function VocView({ currentUser }: VocViewProps) {
     priority: 'Medium',
   })
   const [adminResponse, setAdminResponse] = useState('')
-  const [isAdmin] = useState(currentUser?.role === 'admin')
+  const [isAdmin] = useState(currentUser?.role === 'admin' || !!currentUser?.isAdmin)
 
   const fetchFeedbacks = useCallback(async () => {
     try {

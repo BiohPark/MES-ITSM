@@ -360,6 +360,7 @@ export async function getProjects(): Promise<Project[]> {
             issue_reason: child.issue_reason || null,
             phases: phases,
             linked_gmp_record_id: child.linked_gmp_record_id || null,
+            linked_issue_id: child.linked_issue_id || null,
             linked_val_packages: valPackageLinks.get(child.id) || [],
           }
         })
@@ -384,6 +385,7 @@ export async function getProjects(): Promise<Project[]> {
           kind_number: kindNumber,
           isGmpRecord: true, // GMP Record 구분용 플래그
           linked_task_id: record.linked_task_id || null,
+          linked_issue_id: record.linked_issue_id || null,
         }
       })
 
@@ -765,11 +767,12 @@ export async function addChildToProject(
   const pool = getPool()
   const phasesJson = (child as any).phases ? JSON.stringify((child as any).phases) : null
   const linkedGmpRecordId = (child as any).linked_gmp_record_id || null
+  const linkedIssueId = (child as any).linked_issue_id || null
   const issueReason = (child as any).issue_reason || null
   await pool.query(
-    `INSERT INTO project_children (id, project_id, title, owner, status, progress, start, due, description, phases, linked_gmp_record_id, issue_reason)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [child.id, projectId, child.title, child.owner, child.status, child.progress || 0, child.start || null, child.due || null, child.description || null, phasesJson, linkedGmpRecordId, issueReason]
+    `INSERT INTO project_children (id, project_id, title, owner, status, progress, start, due, description, phases, linked_gmp_record_id, linked_issue_id, issue_reason)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [child.id, projectId, child.title, child.owner, child.status, child.progress || 0, child.start || null, child.due || null, child.description || null, phasesJson, linkedGmpRecordId, linkedIssueId, issueReason]
   )
   
   // 프로젝트가 있는 경우 마감일 자동 업데이트
@@ -904,11 +907,12 @@ export async function updateChild(
   
   const phasesJson = (child as any).phases ? JSON.stringify((child as any).phases) : null
   const linkedGmpRecordId = (child as any).linked_gmp_record_id || null
+  const linkedIssueId = (child as any).linked_issue_id || null
   await pool.query(
     `UPDATE project_children 
-     SET project_id = ?, title = ?, owner = ?, status = ?, progress = ?, start = ?, due = ?, description = ?, phases = ?, linked_gmp_record_id = ?, issue_reason = ?
+     SET project_id = ?, title = ?, owner = ?, status = ?, progress = ?, start = ?, due = ?, description = ?, phases = ?, linked_gmp_record_id = ?, linked_issue_id = ?, issue_reason = ?
      WHERE id = ?`,
-    [projectId, child.title, child.owner, finalStatus, child.progress || 0, child.start || null, child.due || null, child.description || null, phasesJson, linkedGmpRecordId, issueReason, child.id]
+    [projectId, child.title, child.owner, finalStatus, child.progress || 0, child.start || null, child.due || null, child.description || null, phasesJson, linkedGmpRecordId, linkedIssueId, issueReason, child.id]
   )
   
   // 프로젝트가 변경되었거나 업데이트된 경우 마감일 자동 업데이트
@@ -920,6 +924,24 @@ export async function updateChild(
     // 새 프로젝트의 마감일 업데이트
     await updateProjectDueDate(projectId)
   }
+}
+
+/** 일감(project_children)의 연결 이슈 ID만 설정 (이슈 ↔ 일감 링크) */
+export async function setTaskLinkedIssueId(taskId: string, issueId: string | null): Promise<void> {
+  const pool = getPool()
+  await pool.query(
+    'UPDATE project_children SET linked_issue_id = ? WHERE id = ?',
+    [issueId, taskId]
+  )
+}
+
+/** 해당 이슈에 연결된 모든 일감의 linked_issue_id 해제 */
+export async function clearTaskLinksByIssueId(issueId: string): Promise<void> {
+  const pool = getPool()
+  await pool.query(
+    'UPDATE project_children SET linked_issue_id = NULL WHERE linked_issue_id = ?',
+    [issueId]
+  )
 }
 
 // 하위 아이템 삭제
@@ -1061,6 +1083,7 @@ export async function getAllGmpRecords(): Promise<Array<ProjectChild & { project
           projectName: record.project_name || 'N/A',
           phases: phases,
           linked_task_id: record.linked_task_id || null,
+          linked_issue_id: record.linked_issue_id || null,
         }
       })
     } catch (error: any) {
@@ -1096,25 +1119,27 @@ export async function addGmpRecord(
   
   const phasesJson = (record as any).phases ? JSON.stringify((record as any).phases) : null
   const linkedTaskId = recordAny.linked_task_id || null
-  
+  const linkedIssueId = recordAny.linked_issue_id || null
+
   await pool.query(
-    `INSERT INTO gmp_records (id, project_id, title, kind, number, kind_number, owner, status, progress, start, due, description, phases, linked_task_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO gmp_records (id, project_id, title, kind, number, kind_number, owner, status, progress, start, due, description, phases, linked_task_id, linked_issue_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
-      record.id, 
-      projectId, 
-      record.title, 
+      record.id,
+      projectId,
+      record.title,
       kind,
       number,
       kindNumber,
-      record.owner, 
-      record.status, 
-      record.progress || 0, 
-      record.start || null, 
-      record.due || null, 
+      record.owner,
+      record.status,
+      record.progress || 0,
+      record.start || null,
+      record.due || null,
       record.description || null,
       phasesJson,
-      linkedTaskId
+      linkedTaskId,
+      linkedIssueId,
     ]
   )
   
@@ -1125,47 +1150,32 @@ export async function addGmpRecord(
       const taskId = await getNextTaskId()
       const phases = (record as any).phases || {}
       
-      // PIM 매니저와 개발 매니저 확인/생성 (역할 기반 + 총괄 매니저 허용)
+      // 그룹 매니저 확인/생성 (일감·PI 담당은 그룹 매니저에서 시작)
       const users = await getUsers()
-      const findManagerByRole = (role: string) =>
-        users.find(u => u.role === role || u.role === '총괄 매니저')
-
-      let pimManager = findManagerByRole('PIM 매니저')
-      let devManager = findManagerByRole('개발 매니저')
+      let groupManager = users.find(u => u.role === '그룹 매니저')
       
-      if (!pimManager) {
+      if (!groupManager) {
         const userId = await getNextUserId()
         await createUser({
           id: userId,
-          name: 'PIM 매니저',
+          name: '그룹 매니저',
           email: undefined,
-          role: 'PIM 매니저',
+          role: '그룹 매니저',
         })
-        pimManager = { id: userId, name: 'PIM 매니저', role: 'PIM 매니저' }
+        groupManager = { id: userId, name: '그룹 매니저', role: '그룹 매니저' }
       }
       
-      if (!devManager) {
-        const userId = await getNextUserId()
-        await createUser({
-          id: userId,
-          name: '개발 매니저',
-          email: undefined,
-          role: '개발 매니저',
-        })
-        devManager = { id: userId, name: '개발 매니저', role: '개발 매니저' }
-      }
-      
-      // 일감 phases 설정 (PI는 PIM 매니저, 개발은 개발 매니저)
+      // 일감 phases 설정 (PI·개발 모두 그룹 매니저에서 시작, 이후 파트 매니저→파트원으로 재할당 가능)
       const taskPhases = {
         pi: {
-          owner: pimManager!.name,
+          owner: groupManager!.name,
           status: phases.pi?.status || 'Planning',
           progress: phases.pi?.progress || 0,
           start: phases.pi?.start || phases.start || new Date().toISOString().slice(0, 10),
           due: phases.pi?.due || phases.due || '',
         },
         development: {
-          owner: devManager!.name,
+          owner: groupManager!.name,
           status: phases.development?.status || 'Planning',
           progress: phases.development?.progress || 0,
           start: phases.development?.start || phases.start || new Date().toISOString().slice(0, 10),
@@ -1177,7 +1187,7 @@ export async function addGmpRecord(
       const linkedTask: ProjectChild = {
         id: taskId,
         title: record.title,
-        owner: pimManager!.name, // PI 단계 담당자가 대표 담당자
+        owner: groupManager!.name, // 대표 담당자: 그룹 매니저에서 시작
         status: record.status,
         progress: record.progress || 0,
         start: record.start,
@@ -1239,47 +1249,32 @@ export async function updateGmpRecord(
       const taskId = await getNextTaskId()
       const phases = (record as any).phases || {}
       
-      // PIM 매니저와 개발 매니저 확인/생성 (역할 기반 + 총괄 매니저 허용)
+      // 그룹 매니저 확인/생성 (일감·PI 담당은 그룹 매니저에서 시작)
       const users = await getUsers()
-      const findManagerByRole = (role: string) =>
-        users.find(u => u.role === role || u.role === '총괄 매니저')
-
-      let pimManager = findManagerByRole('PIM 매니저')
-      let devManager = findManagerByRole('개발 매니저')
+      let groupManager = users.find(u => u.role === '그룹 매니저')
       
-      if (!pimManager) {
+      if (!groupManager) {
         const userId = await getNextUserId()
         await createUser({
           id: userId,
-          name: 'PIM 매니저',
+          name: '그룹 매니저',
           email: undefined,
-          role: 'PIM 매니저',
+          role: '그룹 매니저',
         })
-        pimManager = { id: userId, name: 'PIM 매니저', role: 'PIM 매니저' }
+        groupManager = { id: userId, name: '그룹 매니저', role: '그룹 매니저' }
       }
       
-      if (!devManager) {
-        const userId = await getNextUserId()
-        await createUser({
-          id: userId,
-          name: '개발 매니저',
-          email: undefined,
-          role: '개발 매니저',
-        })
-        devManager = { id: userId, name: '개발 매니저', role: '개발 매니저' }
-      }
-      
-      // 일감 phases 설정
+      // 일감 phases 설정 (PI·개발 모두 그룹 매니저에서 시작)
       const taskPhases = {
         pi: {
-          owner: pimManager!.name,
+          owner: groupManager!.name,
           status: phases.pi?.status || 'Planning',
           progress: phases.pi?.progress || 0,
           start: phases.pi?.start || phases.start || new Date().toISOString().slice(0, 10),
           due: phases.pi?.due || phases.due || '',
         },
         development: {
-          owner: devManager!.name,
+          owner: groupManager!.name,
           status: phases.development?.status || 'Planning',
           progress: phases.development?.progress || 0,
           start: phases.development?.start || phases.start || new Date().toISOString().slice(0, 10),
@@ -1291,7 +1286,7 @@ export async function updateGmpRecord(
       const linkedTask: ProjectChild = {
         id: taskId,
         title: record.title,
-        owner: pimManager!.name,
+        owner: groupManager!.name,
         status: record.status,
         progress: record.progress || 0,
         start: record.start,
@@ -1343,25 +1338,27 @@ export async function updateGmpRecord(
   }
   
   const phasesJson = (record as any).phases ? JSON.stringify((record as any).phases) : null
+  const linkedIssueId = (record as any).linked_issue_id || null
   await pool.query(
     `UPDATE gmp_records 
-     SET project_id = ?, title = ?, kind = ?, number = ?, kind_number = ?, owner = ?, status = ?, progress = ?, start = ?, due = ?, description = ?, phases = ?, linked_task_id = ?
+     SET project_id = ?, title = ?, kind = ?, number = ?, kind_number = ?, owner = ?, status = ?, progress = ?, start = ?, due = ?, description = ?, phases = ?, linked_task_id = ?, linked_issue_id = ?
      WHERE id = ?`,
     [
-      projectId, 
-      record.title, 
+      projectId,
+      record.title,
       kind,
       number,
       kindNumber,
-      record.owner, 
-      finalStatus, 
-      record.progress || 0, 
-      record.start || null, 
-      record.due || null, 
+      record.owner,
+      finalStatus,
+      record.progress || 0,
+      record.start || null,
+      record.due || null,
       record.description || null,
       phasesJson,
       linkedTaskId,
-      record.id
+      linkedIssueId,
+      record.id,
     ]
   )
   
@@ -1466,6 +1463,7 @@ export async function getOrphanGmpRecords(): Promise<Array<ProjectChild & { kind
           kind_number: record.kind_number || kindNumber,
           phases: phases,
           linked_task_id: record.linked_task_id || null,
+          linked_issue_id: record.linked_issue_id || null,
         }
       })
     } catch (error: any) {
@@ -1559,6 +1557,8 @@ export async function getAllIssues(): Promise<Issue[]> {
         module: issue.module || '',
         is_deviation: issue.is_deviation ? true : false,
         related_issue_id: issue.related_issue_id || '',
+        linked_gmp_record_id: issue.linked_gmp_record_id || '',
+        linked_task_id: issue.linked_task_id || '',
         created_at: issue.created_at ? (typeof issue.created_at === 'string' ? issue.created_at : new Date(issue.created_at).toISOString()) : '',
         updated_at: issue.updated_at ? (typeof issue.updated_at === 'string' ? issue.updated_at : new Date(issue.updated_at).toISOString()) : '',
       }))
@@ -1586,8 +1586,8 @@ export async function getAllIssues(): Promise<Issue[]> {
 export async function addIssue(issue: Issue): Promise<void> {
   const pool = getPool()
   await pool.query(
-    `INSERT INTO issues (id, title, description, status, owner, occurred_date, due_date, resolved_date, sw_version, resolved_sw_version, cause, cause_category, module, is_deviation, related_issue_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO issues (id, title, description, status, owner, occurred_date, due_date, resolved_date, sw_version, resolved_sw_version, cause, cause_category, module, is_deviation, related_issue_id, linked_gmp_record_id, linked_task_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       issue.id,
       issue.title,
@@ -1604,6 +1604,8 @@ export async function addIssue(issue: Issue): Promise<void> {
       issue.module || null,
       issue.is_deviation ? 1 : 0,
       issue.related_issue_id || null,
+      issue.linked_gmp_record_id || null,
+      issue.linked_task_id || null,
     ]
   )
 }
@@ -1613,7 +1615,7 @@ export async function updateIssue(issue: Issue): Promise<void> {
   const pool = getPool()
   await pool.query(
     `UPDATE issues 
-     SET title = ?, description = ?, status = ?, owner = ?, occurred_date = ?, due_date = ?, resolved_date = ?, sw_version = ?, resolved_sw_version = ?, cause = ?, cause_category = ?, module = ?, is_deviation = ?, related_issue_id = ?
+     SET title = ?, description = ?, status = ?, owner = ?, occurred_date = ?, due_date = ?, resolved_date = ?, sw_version = ?, resolved_sw_version = ?, cause = ?, cause_category = ?, module = ?, is_deviation = ?, related_issue_id = ?, linked_gmp_record_id = ?, linked_task_id = ?
      WHERE id = ?`,
     [
       issue.title,
@@ -1630,6 +1632,8 @@ export async function updateIssue(issue: Issue): Promise<void> {
       issue.module || null,
       issue.is_deviation ? 1 : 0,
       issue.related_issue_id || null,
+      issue.linked_gmp_record_id || null,
+      issue.linked_task_id || null,
       issue.id,
     ]
   )

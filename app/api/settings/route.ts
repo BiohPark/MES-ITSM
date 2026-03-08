@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     const session = await verifySession(request.cookies.get('session')?.value ?? '')
-    if (!session || session.role !== 'admin') {
+    if (!session || (session.role !== 'admin' && !session.isAdmin)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 

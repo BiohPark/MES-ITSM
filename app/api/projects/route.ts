@@ -177,21 +177,22 @@ export async function POST(request: NextRequest) {
       // 하위 아이템 추가
       // 클라이언트에서 넘어온 ID가 있어도 무시하고, 항상 서버에서 다음 ID를 생성해 중복을 방지한다.
       const taskId = await getNextTaskId()
-      const newChild: ProjectChild = {
+      const newChild: ProjectChild & { linked_issue_id?: string | null } = {
         id: taskId,
-        title: body.child?.title,
-        owner: body.child?.owner,
+        title: body.child?.title ?? '',
+        owner: body.child?.owner ?? '',
         status: body.child?.status || 'Planning',
         progress: body.child?.progress ?? 0,
         start: body.child?.start ?? null,
         due: body.child?.due || '',
         description: body.child?.description || '',
         phases: body.child?.phases,
+        linked_issue_id: body.child?.linked_issue_id ?? null,
       }
 
       await addChildToProject(body.projectId, newChild)
       const projects = await getProjects()
-      return NextResponse.json({ success: true, projects })
+      return NextResponse.json({ success: true, projects, newTaskId: taskId })
     } else if (body.action === 'updateChild') {
       // 하위 아이템 업데이트
       await updateChild(body.projectId, body.child)

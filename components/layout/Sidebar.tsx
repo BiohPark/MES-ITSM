@@ -77,7 +77,7 @@ export function Sidebar({ activeTab, onTabChange, user, isCollapsed = false, onT
       key: 'voc',
       label: 'VOC 관리',
     },
-    ...(user?.role === 'admin' ? [{ key: 'backup' as TabKey, label: '백업' }] : []),
+    ...((user?.role === 'admin' || user?.isAdmin) ? [{ key: 'backup' as TabKey, label: '백업' }] : []),
   ]
 
   const toggleSection = (section: string) => {

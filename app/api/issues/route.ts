@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getAllIssues, addIssue, updateIssue, deleteIssue, getNextIssueId, getRelatedIssues, getNextGmpRecordId, getNextGmpRecordNumberForKind, addGmpRecord, getAllGmpRecords, updateGmpRecord } from '@/lib/db'
+import { getAllIssues, addIssue, updateIssue, deleteIssue, getNextIssueId, getRelatedIssues, getNextGmpRecordId, getNextGmpRecordNumberForKind, addGmpRecord, getAllGmpRecords, updateGmpRecord, clearTaskLinksByIssueId, setTaskLinkedIssueId } from '@/lib/db'
 import { getUsers, createUser, getNextUserId } from '@/lib/users'
 import type { Issue } from '@/types/issue'
 import type { ProjectChild } from '@/types/project'
@@ -85,7 +85,18 @@ export async function POST(request: NextRequest) {
 
     if (action === 'add') {
       const issue: Issue = body.issue
+      // 신규 이슈 담당자 미지정 시 그룹 매니저를 1차 담당자로 설정
+      if (!issue.owner || String(issue.owner).trim() === '') {
+        const users = await getUsers()
+        const groupManager = users.find(u => u.role === '그룹 매니저')
+        issue.owner = groupManager?.name ?? '그룹 매니저'
+      }
       await addIssue(issue)
+
+      // 이슈 ↔ 일감 링크: 연결 일감이 있으면 해당 일감에 linked_issue_id 설정
+      if (issue.linked_task_id) {
+        await setTaskLinkedIssueId(issue.linked_task_id, issue.id)
+      }
       
       // Deviation이 체크된 경우 GMP Record 자동 생성
       const isDeviation = issue.is_deviation === true
@@ -102,30 +113,26 @@ export async function POST(request: NextRequest) {
           
           if (!existingRecord) {
             console.log('기존 GMP Record 없음, 새로 생성')
-            // Deviation 매니저(또는 총괄 매니저) 확인/생성
+            // 그룹 매니저 확인/생성 (이슈·일감 담당은 그룹 매니저에서 시작)
           const users = await getUsers()
-            let deviationManager = users.find(
-              u => u.role === 'Deviation 매니저' || u.role === '총괄 매니저'
-            )
+            let groupManager = users.find(u => u.role === '그룹 매니저')
           
-            // Deviation 매니저가 없으면 생성
-            if (!deviationManager) {
+            if (!groupManager) {
             try {
               const userId = await getNextUserId()
               await createUser({
                 id: userId,
-                  name: 'Deviation 매니저',
+                  name: '그룹 매니저',
                 email: undefined,
-                  role: 'Deviation 매니저',
+                  role: '그룹 매니저',
               })
-                deviationManager = { id: userId, name: 'Deviation 매니저', role: 'Deviation 매니저' }
+                groupManager = { id: userId, name: '그룹 매니저', role: '그룹 매니저' }
             } catch (error) {
               // 사용자 생성 실패해도 계속 진행
             }
           }
             
-            // GMP Record의 담당자는 항상 Deviation 매니저로 설정
-            const ownerName = deviationManager?.name || 'Deviation 매니저'
+            const ownerName = groupManager?.name || '그룹 매니저'
           
           // GMP Record 생성
           const gmpRecordId = await getNextGmpRecordId()
@@ -137,14 +144,16 @@ export async function POST(request: NextRequest) {
             owner: ownerName,
             status: 'Planning',
             progress: 0,
-              start: issue.occurred_date || new Date().toISOString().slice(0, 10),
+            start: issue.occurred_date || new Date().toISOString().slice(0, 10),
             due: issue.due_date || new Date().toISOString().slice(0, 10),
             description: issue.description || '',
             kind: 'Deviation',
             number: deviationNumber,
-          }
+            ...(issue.id ? { linked_issue_id: issue.id } : {}),
+          } as ProjectChild & { linked_issue_id?: string }
           
           await addGmpRecord(null, gmpRecord) // 프로젝트는 N/A (null)
+          await updateIssue({ ...issue, linked_gmp_record_id: gmpRecordId })
           }
         } catch (error) {
           // GMP Record 생성 실패해도 이슈 저장은 성공한 것으로 처리
@@ -156,6 +165,12 @@ export async function POST(request: NextRequest) {
     } else if (action === 'update') {
       const issue: Issue = body.issue
       await updateIssue(issue)
+
+      // 이슈 ↔ 일감 링크 반영: 기존 연결 해제 후 새 linked_task_id에 연결
+      await clearTaskLinksByIssueId(issue.id)
+      if (issue.linked_task_id) {
+        await setTaskLinkedIssueId(issue.linked_task_id, issue.id)
+      }
       
       // Deviation이 체크된 경우 GMP Record 동기화
       if (issue.is_deviation) {
@@ -167,45 +182,43 @@ export async function POST(request: NextRequest) {
           )
           
           if (existingRecord) {
-            // 기존 GMP Record 업데이트 (담당자는 항상 Deviation 매니저 또는 총괄 매니저로 유지)
-            const updatedRecord: ProjectChild = {
+            // 기존 GMP Record 업데이트 (이슈 링크 유지)
+            const updatedRecord: ProjectChild & { linked_issue_id?: string } = {
               ...existingRecord,
               title: issue.title,
-              owner: existingRecord.owner || 'Deviation 매니저',
+              owner: existingRecord.owner || '그룹 매니저',
               due: issue.due_date || '',
               description: issue.description || '',
               kind: 'Deviation',
+              linked_issue_id: issue.id,
             }
             await updateGmpRecord((existingRecord as any).projectId || null, updatedRecord)
+            await updateIssue({ ...issue, linked_gmp_record_id: existingRecord.id })
           } else {
-            // 새 GMP Record 생성 - Deviation 매니저(또는 총괄 매니저) 확인/생성
+            // 새 GMP Record 생성 - 그룹 매니저 확인/생성
             const users = await getUsers()
-            let deviationManager = users.find(
-              u => u.role === 'Deviation 매니저' || u.role === '총괄 매니저'
-            )
+            let groupManager = users.find(u => u.role === '그룹 매니저')
             
-            // Deviation 매니저가 없으면 생성
-            if (!deviationManager) {
+            if (!groupManager) {
               try {
                 const userId = await getNextUserId()
                 await createUser({
                   id: userId,
-                  name: 'Deviation 매니저',
+                  name: '그룹 매니저',
                   email: undefined,
-                  role: 'Deviation 매니저',
+                  role: '그룹 매니저',
                 })
-                deviationManager = { id: userId, name: 'Deviation 매니저', role: 'Deviation 매니저' }
+                groupManager = { id: userId, name: '그룹 매니저', role: '그룹 매니저' }
               } catch (error) {
               }
             }
             
-            // GMP Record의 담당자는 항상 Deviation 매니저로 설정
-            const ownerName = deviationManager?.name || 'Deviation 매니저'
+            const ownerName = groupManager?.name || '그룹 매니저'
             
             const gmpRecordId = await getNextGmpRecordId()
             const deviationNumber = await getNextGmpRecordNumberForKind('Deviation')
             
-            const gmpRecord: ProjectChild = {
+            const gmpRecord: ProjectChild & { linked_issue_id?: string } = {
               id: gmpRecordId,
               title: issue.title,
               owner: ownerName,
@@ -216,9 +229,11 @@ export async function POST(request: NextRequest) {
               description: issue.description || '',
               kind: 'Deviation',
               number: deviationNumber,
+              linked_issue_id: issue.id,
             }
             
             await addGmpRecord(null, gmpRecord)
+            await updateIssue({ ...issue, linked_gmp_record_id: gmpRecordId })
           }
         } catch (error) {
           // GMP Record 동기화 실패해도 이슈 업데이트는 성공한 것으로 처리

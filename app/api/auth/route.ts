@@ -32,12 +32,14 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      // 세션 토큰 생성
+      // 세션 토큰 생성 (관리자 권한: role=admin 또는 is_admin 플래그)
+      const isAdmin = account.role === 'admin' || !!account.is_admin
       const token = await createSession({
         userId: account.id,
         username: account.username,
         name: account.name,
         role: account.role,
+        isAdmin,
         email: account.email,
       })
 
@@ -49,6 +51,7 @@ export async function POST(request: NextRequest) {
           username: account.username,
           name: account.name,
           role: account.role,
+          isAdmin,
           email: account.email,
         },
       })
@@ -84,7 +87,7 @@ export async function POST(request: NextRequest) {
       }
 
       try {
-        const allowedRoles = ['admin', 'user', 'Viewonly', 'Deviation 매니저', '개발 매니저', 'PIM 매니저', '총괄 매니저'] as const
+        const allowedRoles = ['admin', 'user', 'Viewonly', '그룹 매니저', '파트 매니저'] as const
         const requestedRole: any = role
         const finalRole =
           allowedRoles.includes(requestedRole) && requestedRole !== 'admin'
@@ -96,11 +99,13 @@ export async function POST(request: NextRequest) {
         // 자동 로그인
         const account = await verifyLogin(username, password)
         if (account) {
+          const isAdmin = account.role === 'admin' || !!account.is_admin
           const token = await createSession({
             userId: account.id,
             username: account.username,
             name: account.name,
             role: account.role,
+            isAdmin,
             email: account.email,
           })
 
@@ -112,6 +117,7 @@ export async function POST(request: NextRequest) {
               username: account.username,
               name: account.name,
               role: account.role,
+              isAdmin,
               email: account.email,
             },
           })
@@ -255,6 +261,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ authenticated: false })
     }
 
+    const isAdmin = session.role === 'admin' || !!session.isAdmin
     return NextResponse.json({
       authenticated: true,
       user: {
@@ -262,6 +269,7 @@ export async function GET(request: NextRequest) {
         username: session.username,
         name: session.name,
         role: session.role,
+        isAdmin,
         email: session.email,
       },
     })

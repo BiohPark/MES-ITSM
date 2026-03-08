@@ -46,6 +46,8 @@ export interface GanttChartEvent {
 
 interface Props {
   tasks: GanttTask[]
+  /** 접기 시 표시할 행만 (tasks 배열 인덱스). 없으면 전체 표시 */
+  visibleRowIndices?: Set<number>
   events?: GanttChartEvent[]
   /** 이슈 작업의 task.id 집합 (작업명 강조용) */
   issueTaskIds?: Set<number>
@@ -53,7 +55,7 @@ interface Props {
   onDeleteEvent?: (event: GanttChartEvent) => void
 }
 
-export function GanttTasksChart({ tasks, events = [], issueTaskIds, onDoubleClickDate, onDeleteEvent }: Props) {
+export function GanttTasksChart({ tasks, visibleRowIndices, events = [], issueTaskIds, onDoubleClickDate, onDeleteEvent }: Props) {
   const [timeScale, setTimeScale] = useState<'day' | 'week' | 'month'>('day')
   const [dateRange, setDateRange] = useState<{ start: Date; end: Date}>(() => {
     const today = new Date()
@@ -64,13 +66,25 @@ export function GanttTasksChart({ tasks, events = [], issueTaskIds, onDoubleClic
     return { start, end }
   })
 
+  /** 전체 목록 순서 (스케줄/선행 계산용). visibleRowIndices 있으면 표시 순서 유지(정렬 없음) */
   const sortedTasks = useMemo(
     () =>
-      tasks
-        .slice()
-        .sort((a, b) => (a.sortOrder ?? 1) - (b.sortOrder ?? 1))
-        .map((t, idx) => ({ ...t, _rowIndex: idx + 1 })),
-    [tasks]
+      visibleRowIndices != null
+        ? tasks.map((t, idx) => ({ ...t, _rowIndex: idx + 1 }))
+        : tasks
+            .slice()
+            .sort((a, b) => (a.sortOrder ?? 1) - (b.sortOrder ?? 1))
+            .map((t, idx) => ({ ...t, _rowIndex: idx + 1 })),
+    [tasks, visibleRowIndices]
+  )
+
+  /** 실제 렌더링할 행만 (접기 반영) */
+  const rowsToRender = useMemo(
+    () =>
+      visibleRowIndices != null
+        ? sortedTasks.filter((_, i) => visibleRowIndices.has(i))
+        : sortedTasks,
+    [sortedTasks, visibleRowIndices]
   )
 
   const { schedules, predecessors, projectedRange } = useMemo(() => {
@@ -208,22 +222,37 @@ export function GanttTasksChart({ tasks, events = [], issueTaskIds, onDoubleClic
     return map
   }, [predecessors])
 
+  /** 접기 시 표시 행 내에서의 행 인덱스 (화살표 Y 좌표용) */
+  const visibleRowIndexByTaskId = useMemo(() => {
+    const map = new Map<string, number>()
+    rowsToRender.forEach((task, i) => {
+      const taskId = task.id != null ? String(task.id) : `local-${(task as any)._rowIndex}`
+      map.set(taskId, i)
+    })
+    return map
+  }, [rowsToRender])
+
   /** 선행 화살표 오버레이용 데이터 */
   const arrowPaths = useMemo(() => {
     const rows: Array<{ fromX: number; toX: number; fromY: number; toY: number; isCritical: boolean; depType: string; predName: string }> = []
     const rowHeight = GANTT_CHART_SIZES.rowHeight
     const rangeMs = dateRange.end.getTime() - dateRange.start.getTime()
+    const getRowIndex = (taskId: string) =>
+      visibleRowIndices != null ? visibleRowIndexByTaskId.get(taskId) : sortedTasks.findIndex((t) => (t.id != null ? String(t.id) : `local-${(t as any)._rowIndex}`) === taskId) ?? 0
 
     sortedTasks.forEach((task) => {
       const taskId = task.id != null ? String(task.id) : `local-${(task as any)._rowIndex}`
       const pos = getItemPosition(taskId)
       if (!pos) return
       const taskPreds = predsByTask.get(taskId) || []
-      const toRow = sortedTasks.findIndex((t) => (t.id != null ? String(t.id) : `local-${(t as any)._rowIndex}`) === taskId) ?? 0
+      const toRow = getRowIndex(taskId)
+      if (visibleRowIndices != null && toRow === undefined) return
 
       taskPreds.forEach((pred) => {
         const fromPos = getItemPosition(pred.predecessorTaskId)
         if (!fromPos) return
+        const fromRow = getRowIndex(pred.predecessorTaskId)
+        if (visibleRowIndices != null && (fromRow === undefined || toRow === undefined)) return
 
         let fromX = 0
         let toX = 0
@@ -251,14 +280,13 @@ export function GanttTasksChart({ tasks, events = [], issueTaskIds, onDoubleClic
         const lagPercent = (pred.lagDays * 24 * 60 * 60 * 1000 / rangeMs) * 100
         toX = Math.min(100, toX + lagPercent)
 
-        const fromRow = sortedTasks.findIndex((t) => (t.id != null ? String(t.id) : `local-${(t as any)._rowIndex}`) === pred.predecessorTaskId) ?? 0
-        const predTask = sortedTasks[fromRow]
+        const predTask = sortedTasks.find((t) => (t.id != null ? String(t.id) : `local-${(t as any)._rowIndex}`) === pred.predecessorTaskId)
         const predName = predTask?.name || `#${(predTask as any)?._rowIndex}` || ''
 
         rows.push({
           fromX, toX,
-          fromY: fromRow * rowHeight + rowHeight / 2,
-          toY: toRow * rowHeight + rowHeight / 2,
+          fromY: fromRow! * rowHeight + rowHeight / 2,
+          toY: toRow! * rowHeight + rowHeight / 2,
           isCritical: pos.schedule?.isCritical ?? false,
           depType: pred.dependencyType,
           predName,
@@ -266,7 +294,7 @@ export function GanttTasksChart({ tasks, events = [], issueTaskIds, onDoubleClic
       })
     })
     return rows
-  }, [sortedTasks, predsByTask, dateRange, schedules])
+  }, [sortedTasks, rowsToRender, visibleRowIndices, visibleRowIndexByTaskId, predsByTask, dateRange, schedules])
 
   const dayCellWidth = useMemo(() => {
     switch (timeScale) {
@@ -301,10 +329,10 @@ export function GanttTasksChart({ tasks, events = [], issueTaskIds, onDoubleClic
     [days, onDoubleClickDate, dayCellWidth]
   )
 
-  if (sortedTasks.length === 0) {
+  if (rowsToRender.length === 0) {
     return (
       <div className="placeholder">
-        <p>표시할 작업이 없습니다. 왼쪽 WBS에서 행을 추가해 주세요.</p>
+        <p>표시할 작업이 없습니다. 왼쪽 WBS에서 행을 추가하거나 접힌 행을 펼쳐 주세요.</p>
       </div>
     )
   }
@@ -403,7 +431,7 @@ export function GanttTasksChart({ tasks, events = [], issueTaskIds, onDoubleClic
               <div style={{ width: GANTT_CHART_SIZES.cp, minWidth: GANTT_CHART_SIZES.cp, textAlign: 'center' }}>CP</div>
             </div>
             {/* 행들 */}
-            {sortedTasks.map((task) => {
+            {rowsToRender.map((task) => {
               const taskId =
                 task.id != null ? String(task.id) : `local-${(task as any)._rowIndex}`
               const schedule = schedules.find((s) => s.taskId === taskId)
@@ -605,7 +633,7 @@ export function GanttTasksChart({ tasks, events = [], issueTaskIds, onDoubleClic
                 const rangeEndMs = dateRange.end.getTime()
                 if (evMs < rangeStartMs || evMs > rangeEndMs) return null
                 const leftPercent = ((evMs - rangeStartMs) / (rangeEndMs - rangeStartMs)) * 100
-                const chartBodyHeight = sortedTasks.length * GANTT_CHART_SIZES.rowHeight
+                const chartBodyHeight = rowsToRender.length * GANTT_CHART_SIZES.rowHeight
                 return (
                   <div
                     key={ev.id ?? `ev-${evIdx}-${ev.date}`}
@@ -661,7 +689,7 @@ export function GanttTasksChart({ tasks, events = [], issueTaskIds, onDoubleClic
                 const rangeEndMs = dateRange.end.getTime()
                 if (todayMs < rangeStartMs || todayMs > rangeEndMs) return null
                 const leftPercent = ((todayMs - rangeStartMs) / (rangeEndMs - rangeStartMs)) * 100
-                const chartBodyHeight = sortedTasks.length * GANTT_CHART_SIZES.rowHeight
+                const chartBodyHeight = rowsToRender.length * GANTT_CHART_SIZES.rowHeight
                 return (
                   <div
                     style={{
@@ -689,7 +717,7 @@ export function GanttTasksChart({ tasks, events = [], issueTaskIds, onDoubleClic
                     left: 0,
                     top: 0,
                     width: '100%',
-                    height: sortedTasks.length * GANTT_CHART_SIZES.rowHeight,
+                    height: rowsToRender.length * GANTT_CHART_SIZES.rowHeight,
                     pointerEvents: 'none',
                     zIndex: 5,
                   }}
@@ -727,7 +755,7 @@ export function GanttTasksChart({ tasks, events = [], issueTaskIds, onDoubleClic
                 </div>
               )}
               {/* 차트 행들 - 바 영역만 */}
-            {sortedTasks.map((task) => {
+            {rowsToRender.map((task) => {
               const taskId =
                 task.id != null ? String(task.id) : `local-${(task as any)._rowIndex}`
               const pos = getItemPosition(taskId)

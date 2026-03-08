@@ -7,6 +7,7 @@ export interface User {
   username?: string
   email?: string
   role?: string
+  is_admin?: boolean
   can_edit_wbs?: boolean
   created_at?: string
 }
@@ -24,6 +25,7 @@ export async function getUsers(): Promise<User[]> {
     username: row.username != null ? String(row.username) : '',
     email: row.email != null ? String(row.email) : '',
     role: row.role != null ? String(row.role) : 'user',
+    is_admin: row.role === 'admin' || !!row.is_admin,
     can_edit_wbs: !!row.can_edit_wbs,
     created_at: row.created_at ? new Date(row.created_at).toISOString() : '',
   }))

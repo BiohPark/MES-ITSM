@@ -41,6 +41,7 @@
     "check-auth-security": "tsx scripts/check-auth-security.ts",
     "add-task-phases-column": "tsx scripts/add-task-phases-column.ts",
     "add-task-link-columns": "tsx scripts/add-task-link-columns.ts",
+    "add-issue-gmp-task-links": "tsx scripts/add-issue-gmp-task-links.ts",
     "add-performance-indexes": "tsx scripts/add-performance-indexes.ts",
     "performance-test": "tsx scripts/performance-test.ts",
     "memory-leak-check": "node --expose-gc scripts/memory-leak-check.ts",

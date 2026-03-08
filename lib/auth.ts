@@ -12,6 +12,8 @@ export interface SessionPayload {
   username: string
   name: string
   role: UserRole
+  /** 관리자 권한(역할과 중복 가능). Viewonly는 항상 false */
+  isAdmin?: boolean
   email?: string
 }
 

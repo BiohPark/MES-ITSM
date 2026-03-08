@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 
 interface UserManagementModalProps {
   onClose: () => void
-  currentUser?: { id: string; username: string; name: string; role: string; email?: string } | null
+  currentUser?: { id: string; username: string; name: string; role: string; email?: string; isAdmin?: boolean } | null
   /** 설정 모달 내 패널로 삽입 시 true (오버레이 없음, 뒤로가기 버튼 표시) */
   embedInPanel?: boolean
   /** embedInPanel일 때 '설정 목록'으로 돌아가기 콜백 */
@@ -12,23 +12,25 @@ interface UserManagementModalProps {
 }
 
 export function UserManagementModal({ onClose, currentUser, embedInPanel, onBack }: UserManagementModalProps) {
-  const [users, setUsers] = useState<Array<{ id: string; name: string; username?: string; email?: string; role?: string; can_edit_wbs?: boolean }>>([])
+  const [users, setUsers] = useState<Array<{ id: string; name: string; username?: string; email?: string; role?: string; is_admin?: boolean; can_edit_wbs?: boolean }>>([])
   const [loading, setLoading] = useState(true)
   const [newUserUsername, setNewUserUsername] = useState('')
   const [newUserName, setNewUserName] = useState('')
   const [newUserEmail, setNewUserEmail] = useState('')
   const [newUserPassword, setNewUserPassword] = useState('')
   const [newUserRole, setNewUserRole] = useState<string>('user')
-  const [editingUser, setEditingUser] = useState<{ id: string; username: string; name: string; email: string; role: string; can_edit_wbs?: boolean } | null>(null)
+  const [newUserIsAdmin, setNewUserIsAdmin] = useState(false)
+  const [editingUser, setEditingUser] = useState<{ id: string; username: string; name: string; email: string; role: string; is_admin?: boolean; can_edit_wbs?: boolean } | null>(null)
   const [editUsername, setEditUsername] = useState('')
   const [editName, setEditName] = useState('')
   const [editEmail, setEditEmail] = useState('')
   const [editPassword, setEditPassword] = useState('')
   const [editRole, setEditRole] = useState<string>('user')
+  const [editIsAdmin, setEditIsAdmin] = useState(false)
   const [editCanEditWbs, setEditCanEditWbs] = useState(false)
   const [addingUser, setAddingUser] = useState(false)
   
-  const isAdmin = currentUser?.role === 'admin'
+  const isAdmin = currentUser?.role === 'admin' || !!currentUser?.isAdmin
 
   useEffect(() => {
     fetchUsers()
@@ -96,6 +98,7 @@ export function UserManagementModal({ onClose, currentUser, embedInPanel, onBack
             email: newUserEmail.trim(),
             password: newUserPassword,
             role: newUserRole,
+            is_admin: newUserRole === 'Viewonly' ? false : newUserIsAdmin,
           },
         }),
       })
@@ -109,6 +112,7 @@ export function UserManagementModal({ onClose, currentUser, embedInPanel, onBack
         setNewUserEmail('')
         setNewUserPassword('')
         setNewUserRole('user')
+        setNewUserIsAdmin(false)
         await fetchUsers()
       } else {
         alert(data.error || '사용자 추가에 실패했습니다.')
@@ -133,6 +137,7 @@ export function UserManagementModal({ onClose, currentUser, embedInPanel, onBack
       name: user.name,
       email: user.email || '',
       role: user.role || 'user',
+      is_admin: user.is_admin,
       can_edit_wbs: user.can_edit_wbs,
     })
     setEditUsername(user.username || '')
@@ -140,6 +145,7 @@ export function UserManagementModal({ onClose, currentUser, embedInPanel, onBack
     setEditEmail(user.email || '')
     setEditPassword('')
     setEditRole(user.role || 'user')
+    setEditIsAdmin(!!user.is_admin || user.role === 'admin')
     setEditCanEditWbs(!!user.can_edit_wbs)
   }
 
@@ -150,6 +156,7 @@ export function UserManagementModal({ onClose, currentUser, embedInPanel, onBack
     setEditEmail('')
     setEditPassword('')
     setEditRole('user')
+    setEditIsAdmin(false)
     setEditCanEditWbs(false)
   }
 
@@ -188,6 +195,7 @@ export function UserManagementModal({ onClose, currentUser, embedInPanel, onBack
             email: editEmail,
             password: editPassword || undefined, // 비밀번호가 입력된 경우에만 전송
             role: editRole,
+            is_admin: editRole === 'Viewonly' ? false : editIsAdmin,
             can_edit_wbs: isAdmin ? editCanEditWbs : undefined,
           },
         }),
@@ -320,18 +328,31 @@ export function UserManagementModal({ onClose, currentUser, embedInPanel, onBack
             <select
               id="new-user-role"
               value={newUserRole}
-              onChange={(e) => setNewUserRole(e.target.value)}
+              onChange={(e) => {
+                const v = e.target.value
+                setNewUserRole(v)
+                if (v === 'Viewonly') setNewUserIsAdmin(false)
+              }}
               className="form-input"
               required
             >
               <option value="user">일반 사용자</option>
               <option value="Viewonly">Viewonly (읽기 전용)</option>
-              <option value="admin">관리자</option>
-              <option value="Deviation 매니저">Deviation 매니저</option>
-              <option value="개발 매니저">개발 매니저</option>
-              <option value="PIM 매니저">PIM 매니저</option>
-              <option value="총괄 매니저">총괄 매니저</option>
+              <option value="그룹 매니저">그룹 매니저</option>
+              <option value="파트 매니저">파트 매니저</option>
             </select>
+          </div>
+          <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <input
+              type="checkbox"
+              id="new-user-is-admin"
+              checked={newUserRole !== 'Viewonly' && newUserIsAdmin}
+              disabled={newUserRole === 'Viewonly'}
+              onChange={(e) => setNewUserIsAdmin(e.target.checked)}
+            />
+            <label htmlFor="new-user-is-admin" style={{ marginBottom: 0 }}>
+              관리자 권한 부여 (Viewonly는 불가)
+            </label>
           </div>
 
           <div className="form-actions">
@@ -406,18 +427,31 @@ export function UserManagementModal({ onClose, currentUser, embedInPanel, onBack
                 <select
                   id="edit-user-role"
                   value={editRole}
-                  onChange={(e) => setEditRole(e.target.value)}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    setEditRole(v)
+                    if (v === 'Viewonly') setEditIsAdmin(false)
+                  }}
                   className="form-input"
                   required
                 >
                   <option value="user">일반 사용자</option>
                   <option value="Viewonly">Viewonly (읽기 전용)</option>
-                  <option value="admin">관리자</option>
-                  <option value="Deviation 매니저">Deviation 매니저</option>
-                  <option value="개발 매니저">개발 매니저</option>
-                  <option value="PIM 매니저">PIM 매니저</option>
-                  <option value="총괄 매니저">총괄 매니저</option>
+                  <option value="그룹 매니저">그룹 매니저</option>
+                  <option value="파트 매니저">파트 매니저</option>
                 </select>
+              </div>
+              <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <input
+                  type="checkbox"
+                  id="edit-user-is-admin"
+                  checked={editRole !== 'Viewonly' && editIsAdmin}
+                  disabled={editRole === 'Viewonly'}
+                  onChange={(e) => setEditIsAdmin(e.target.checked)}
+                />
+                <label htmlFor="edit-user-is-admin" style={{ marginBottom: 0 }}>
+                  관리자 권한 부여 (Viewonly는 불가)
+                </label>
               </div>
 
               {isAdmin && (

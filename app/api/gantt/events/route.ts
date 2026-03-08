@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
     const account = await getAccountById(session.userId)
-    const canEditWbs = session.role === 'admin' || !!account?.can_edit_wbs
+    const canEditWbs = session.role === 'admin' || !!session.isAdmin || !!account?.can_edit_wbs
     if (!canEditWbs) {
       return NextResponse.json(
         { error: 'WBS 수정 권한이 없습니다. 관리자에게 권한 부여를 요청하세요.' },

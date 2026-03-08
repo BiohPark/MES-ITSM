@@ -225,11 +225,15 @@ export function GanttWorkspace({
   const [selectedLevel1Index, setSelectedLevel1Index] = useState<number | null>(null)
   /** 담당자 검증용 등록 사용자 목록 (name, username) */
   const [registeredUserNames, setRegisteredUserNames] = useState<Set<string>>(new Set())
+  /** 신규 일감 기본 담당자: 그룹 매니저에서 시작 (그룹 매니저 → 파트 매니저 → 파트원) */
+  const [defaultAssignee, setDefaultAssignee] = useState<string>('')
   const [assigneeError, setAssigneeError] = useState<string | null>(null)
   /** 차트 이벤트 (특정 날짜 목표/마일스톤) - 프로젝트별 서버 저장 */
   const [chartEvents, setChartEvents] = useState<GanttChartEvent[]>([])
   /** 이벤트 추가 팝업: { date, name } */
   const [addEventModal, setAddEventModal] = useState<{ date: string; name: string } | null>(null)
+  /** WBS/간트 접기: displayTasks 인덱스 중 접힌 행(해당 하위 숨김) */
+  const [collapsedDisplayIndices, setCollapsedDisplayIndices] = useState<Set<number>>(new Set())
 
   // 드래그 앤 드롭 상태
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null)
@@ -302,12 +306,15 @@ export function GanttWorkspace({
       .then((res) => res.ok ? res.json() : { users: [] })
       .then((data) => {
         if (cancelled) return
+        const userList = data.users || []
         const names = new Set<string>()
-        ;(data.users || []).forEach((u: { name?: string; username?: string }) => {
+        userList.forEach((u: { name?: string; username?: string; role?: string }) => {
           if (u.name) names.add(String(u.name).trim())
           if (u.username) names.add(String(u.username).trim())
         })
         setRegisteredUserNames(names)
+        const groupManager = userList.find((u: { role?: string }) => u.role === '그룹 매니저')
+        setDefaultAssignee(groupManager?.name ? String(groupManager.name).trim() : '')
       })
       .catch(() => {
         if (!cancelled) setRegisteredUserNames(new Set())
@@ -394,7 +401,7 @@ export function GanttWorkspace({
         durationDays: 1,
         progressPercent: 0,
         predecessors: '',
-        assignee: '',
+        assignee: defaultAssignee,
         isMilestone: false,
       },
     ])
@@ -433,7 +440,7 @@ export function GanttWorkspace({
         durationDays: 1,
         progressPercent: 0,
         predecessors: '',
-        assignee: '',
+        assignee: defaultAssignee,
         isMilestone: false,
       }
 
@@ -1064,6 +1071,48 @@ export function GanttWorkspace({
     })
     return set
   }, [displayTasks, selectedLevel1Index, rootLevel1IndexForRow, statusFilter, assigneeFilter, todayStr])
+
+  /** 접기 반영: 필터 통과한 행 중 부모가 접혀 있지 않은 행만 표시 (displayTasks 인덱스) */
+  const visibleRowIndices = useMemo(() => {
+    const result = new Set<number>()
+    const getParentIndex = (i: number): number => {
+      const levelI = displayTasks[i]?.outlineLevel ?? 1
+      for (let j = i - 1; j >= 0; j--) {
+        if ((displayTasks[j]?.outlineLevel ?? 1) < levelI) return j
+      }
+      return -1
+    }
+    for (let i = 0; i < displayTasks.length; i++) {
+      if (!filteredRowIndices.has(i)) continue
+      const level = displayTasks[i]?.outlineLevel ?? 1
+      if (level === 1) {
+        result.add(i)
+        continue
+      }
+      const p = getParentIndex(i)
+      if (p === -1) {
+        result.add(i)
+        continue
+      }
+      if (collapsedDisplayIndices.has(p)) continue
+      if (!result.has(p)) continue
+      result.add(i)
+    }
+    return result
+  }, [displayTasks, filteredRowIndices, collapsedDisplayIndices])
+
+  /** filteredDisplayTasks 기준 접힌 행 제외한 표시 인덱스 (간트 차트에 전달) */
+  const visibleChartRowIndices = useMemo(() => {
+    const displayIndexForFiltered: number[] = []
+    displayTasks.forEach((_, i) => {
+      if (filteredRowIndices.has(i)) displayIndexForFiltered.push(i)
+    })
+    const set = new Set<number>()
+    displayIndexForFiltered.forEach((displayIdx, filteredIdx) => {
+      if (visibleRowIndices.has(displayIdx)) set.add(filteredIdx)
+    })
+    return set
+  }, [displayTasks, filteredRowIndices, visibleRowIndices])
 
   /** 프로젝트 실적 요약: 계획 기간, 계획 실적 %, 전체 실적 % (가중 평균, 필터 적용 목록 기준) */
   const projectProgressSummary = useMemo(() => {
@@ -1898,7 +1947,7 @@ export function GanttWorkspace({
                   <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.delete, minWidth: WBS_COLUMNS.delete, padding: '0.3rem 0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>삭제</div>
                 </div>
                 {displayTasks.map((t, idx) => {
-                  if (!filteredRowIndices.has(idx)) return null
+                  if (!visibleRowIndices.has(idx)) return null
 
                   const isDragging = draggingIndex != null && getDraggedSubtreeIndices(draggingIndex).includes(idx)
                   const isDropChild = dropTarget?.type === 'child' && dropTarget.index === idx
@@ -1995,8 +2044,43 @@ export function GanttWorkspace({
                     <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.seq, minWidth: WBS_COLUMNS.seq, padding: '0.3rem 0.55rem', textAlign: 'center', color: '#64748b' }}>
                       {idx + 1}
                     </div>
-                    <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.wbs, minWidth: WBS_COLUMNS.wbs, padding: '0.3rem 0.55rem', fontFamily: 'monospace' }}>
-                      {t.wbsCode || '-'}
+                    <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.wbs, minWidth: WBS_COLUMNS.wbs, padding: '0.3rem 0.55rem', fontFamily: 'monospace', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                      {hasDirectChildrenInList(displayTasks, idx) ? (
+                        <button
+                          type="button"
+                          aria-label={collapsedDisplayIndices.has(idx) ? '펼치기' : '접기'}
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            setCollapsedDisplayIndices((prev) => {
+                              const next = new Set(prev)
+                              if (next.has(idx)) next.delete(idx)
+                              else next.add(idx)
+                              return next
+                            })
+                          }}
+                          style={{
+                            padding: 0,
+                            margin: 0,
+                            width: '1.1rem',
+                            height: '1.1rem',
+                            border: 'none',
+                            background: 'transparent',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '0.65rem',
+                            color: '#475569',
+                            flexShrink: 0,
+                          }}
+                        >
+                          {collapsedDisplayIndices.has(idx) ? '▶' : '▼'}
+                        </button>
+                      ) : (
+                        <span style={{ width: '1.1rem', flexShrink: 0, display: 'inline-block' }} />
+                      )}
+                      <span>{t.wbsCode || '-'}</span>
                     </div>
                     <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.issue, minWidth: WBS_COLUMNS.issue, padding: '0.3rem 0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       {isTaskIssue(t, todayStr) ? <span aria-hidden>❗</span> : null}
@@ -2354,6 +2438,7 @@ export function GanttWorkspace({
               ) : (
                 <GanttTasksChart
                   tasks={filteredDisplayTasks}
+                  visibleRowIndices={visibleChartRowIndices}
                   events={chartEvents}
                   issueTaskIds={issueTaskIds}
                 onDoubleClickDate={(date) => setAddEventModal({ date, name: '' })}

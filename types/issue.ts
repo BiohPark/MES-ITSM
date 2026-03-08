@@ -14,6 +14,10 @@ export interface Issue {
   module?: string // 발생 모듈
   is_deviation: boolean // Deviation 판정 여부
   related_issue_id?: string // 관련 이슈 ID (재발 이슈 추적용)
+  /** Deviation 시 자동 생성된 GMP Record ID (양방향 링크) */
+  linked_gmp_record_id?: string
+  /** 이슈 해결을 위한 연결 일감 ID */
+  linked_task_id?: string
   created_at?: string
   updated_at?: string
 }

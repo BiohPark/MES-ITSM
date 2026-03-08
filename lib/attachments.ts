@@ -114,6 +114,8 @@ function getMimeType(ext: string): string {
     '.jpeg': 'image/jpeg',
     '.png': 'image/png',
     '.gif': 'image/gif',
+    '.webp': 'image/webp',
+    '.log': 'text/plain',
     '.zip': 'application/zip',
     '.rar': 'application/x-rar-compressed',
   }

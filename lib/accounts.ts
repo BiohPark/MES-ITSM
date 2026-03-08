@@ -6,10 +6,8 @@ export type UserRole =
   | 'admin'
   | 'user'
   | 'Viewonly'
-  | 'Deviation 매니저'
-  | '개발 매니저'
-  | 'PIM 매니저'
-  | '총괄 매니저'
+  | '그룹 매니저'
+  | '파트 매니저'
 
 export interface Account {
   id: string
@@ -18,6 +16,8 @@ export interface Account {
   email?: string
   password?: string // 해싱된 비밀번호
   role: UserRole
+  /** 관리자 권한(다른 역할과 중복 가능). Viewonly는 관리자 불가 */
+  is_admin?: boolean
   can_edit_wbs?: boolean
   password_reset_token?: string | null
   password_reset_expires?: Date | null
@@ -27,6 +27,10 @@ export interface Account {
 
 function parseCanEditWbs(value: unknown): boolean {
   return value === 1 || value === true || value === '1'
+}
+
+function parseIsAdmin(row: any): boolean {
+  return row.role === 'admin' || row.is_admin === 1 || row.is_admin === true || row.is_admin === '1'
 }
 
 // username으로 계정 조회
@@ -50,6 +54,7 @@ export async function getAccountByUsername(username: string): Promise<Account | 
     email: row.email || undefined,
     password: toStr(row.password) || undefined,
     role: (row.role || 'user') as UserRole,
+    is_admin: parseIsAdmin(row),
     can_edit_wbs: parseCanEditWbs(row.can_edit_wbs),
     password_reset_token: row.password_reset_token || null,
     password_reset_expires: row.password_reset_expires ? new Date(row.password_reset_expires) : null,
@@ -78,6 +83,7 @@ export async function getAccountByEmail(email: string): Promise<Account | null> 
     email: row.email || undefined,
     password: row.password || undefined,
     role: (row.role || 'user') as UserRole,
+    is_admin: parseIsAdmin(row),
     can_edit_wbs: parseCanEditWbs(row.can_edit_wbs),
     password_reset_token: row.password_reset_token || null,
     password_reset_expires: row.password_reset_expires ? new Date(row.password_reset_expires) : null,
@@ -106,6 +112,7 @@ export async function getAccountById(id: string): Promise<Account | null> {
     email: row.email || undefined,
     password: row.password || undefined,
     role: (row.role || 'user') as UserRole,
+    is_admin: parseIsAdmin(row),
     can_edit_wbs: parseCanEditWbs(row.can_edit_wbs),
     password_reset_token: row.password_reset_token || null,
     password_reset_expires: row.password_reset_expires ? new Date(row.password_reset_expires) : null,
@@ -120,8 +127,11 @@ export async function createAccount(
   name: string,
   email: string,
   password: string,
-  role: UserRole = 'user'
+  role: UserRole = 'user',
+  is_admin: boolean = false
 ): Promise<string> {
+  // Viewonly는 다른 권한과 중복 불가 → 관리자 권한 부여 불가
+  const effectiveIsAdmin = role === 'Viewonly' ? false : is_admin
   const pool = getPool()
 
   // username 중복 확인
@@ -160,17 +170,27 @@ export async function createAccount(
   // 비밀번호 해싱
   const hashedPassword = await hashPassword(password)
 
-  // 계정 생성 (can_edit_wbs 컬럼이 없으면 제외하고 INSERT)
+  // 계정 생성 (is_admin, can_edit_wbs 컬럼 없으면 제외하고 INSERT)
   try {
     await pool.query(
-      'INSERT INTO users (id, username, name, email, password, role, can_edit_wbs) VALUES (?, ?, ?, ?, ?, ?, 0)',
-      [userId, username, name, email || null, hashedPassword, role]
+      'INSERT INTO users (id, username, name, email, password, role, is_admin, can_edit_wbs) VALUES (?, ?, ?, ?, ?, ?, ?, 0)',
+      [userId, username, name, email || null, hashedPassword, role, effectiveIsAdmin ? 1 : 0]
     )
   } catch (err: any) {
-    if (err?.code === 'ER_BAD_FIELD_ERROR' || err?.message?.includes("Unknown column 'can_edit_wbs'")) {
+    if (err?.code === 'ER_BAD_FIELD_ERROR' || err?.message?.includes("Unknown column 'is_admin'")) {
+      try {
+        await pool.query(`ALTER TABLE users ADD COLUMN is_admin TINYINT(1) NOT NULL DEFAULT 0`)
+      } catch (alterErr: any) {
+        if (alterErr?.code !== 'ER_DUP_FIELDNAME') throw alterErr
+      }
       await pool.query(
-        'INSERT INTO users (id, username, name, email, password, role) VALUES (?, ?, ?, ?, ?, ?)',
-        [userId, username, name, email || null, hashedPassword, role]
+        'INSERT INTO users (id, username, name, email, password, role, is_admin, can_edit_wbs) VALUES (?, ?, ?, ?, ?, ?, ?, 0)',
+        [userId, username, name, email || null, hashedPassword, role, effectiveIsAdmin ? 1 : 0]
+      )
+    } else if (err?.code === 'ER_BAD_FIELD_ERROR' || err?.message?.includes("Unknown column 'can_edit_wbs'")) {
+      await pool.query(
+        'INSERT INTO users (id, username, name, email, password, role, is_admin) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [userId, username, name, email || null, hashedPassword, role, effectiveIsAdmin ? 1 : 0]
       )
     } else {
       throw err
@@ -210,9 +230,14 @@ export async function updateAccount(
     email?: string
     password?: string
     role?: UserRole
+    is_admin?: boolean
     can_edit_wbs?: boolean
   }
 ): Promise<void> {
+  // Viewonly는 관리자 권한과 중복 불가
+  if (updates.role === 'Viewonly' && updates.is_admin !== undefined) {
+    updates.is_admin = false
+  }
   const pool = getPool()
 
   // username 중복 확인 (다른 사용자가 사용 중인지)
@@ -256,6 +281,18 @@ export async function updateAccount(
     updateFields.push('role = ?')
     updateValues.push(updates.role)
   }
+  if (updates.is_admin !== undefined) {
+    let isAdminValue = updates.is_admin
+    const roleToCheck = updates.role
+    if (roleToCheck === 'Viewonly') {
+      isAdminValue = false
+    } else if (roleToCheck === undefined) {
+      const cur = await getAccountById(userId)
+      if (cur?.role === 'Viewonly') isAdminValue = false
+    }
+    updateFields.push('is_admin = ?')
+    updateValues.push(isAdminValue ? 1 : 0)
+  }
   if (updates.can_edit_wbs !== undefined) {
     updateFields.push('can_edit_wbs = ?')
     updateValues.push(updates.can_edit_wbs ? 1 : 0)
@@ -273,6 +310,24 @@ export async function updateAccount(
       updateValues
     )
   } catch (err: any) {
+    // is_admin 컬럼이 없을 때 컬럼 추가 후 재시도
+    if (
+      (err?.code === 'ER_BAD_FIELD_ERROR' || err?.message?.includes("Unknown column 'is_admin'")) &&
+      updates.is_admin !== undefined
+    ) {
+      try {
+        await pool.query(
+          `ALTER TABLE users ADD COLUMN is_admin TINYINT(1) NOT NULL DEFAULT 0`
+        )
+      } catch (alterErr: any) {
+        if (alterErr?.code !== 'ER_DUP_FIELDNAME') throw alterErr
+      }
+      await pool.query(
+        `UPDATE users SET ${updateFields.join(', ')} WHERE id = ?`,
+        updateValues
+      )
+      return
+    }
     // can_edit_wbs 컬럼이 없을 때 컬럼 추가 후 재시도
     if (
       (err?.code === 'ER_BAD_FIELD_ERROR' || err?.message?.includes("Unknown column 'can_edit_wbs'")) &&
@@ -345,6 +400,7 @@ export async function getAccountByResetToken(token: string): Promise<Account | n
     email: row.email || undefined,
     password: row.password || undefined,
     role: (row.role || 'user') as UserRole,
+    is_admin: parseIsAdmin(row),
     can_edit_wbs: parseCanEditWbs(row.can_edit_wbs),
     password_reset_token: row.password_reset_token || null,
     password_reset_expires: row.password_reset_expires ? new Date(row.password_reset_expires) : null,

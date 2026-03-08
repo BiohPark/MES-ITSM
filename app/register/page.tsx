@@ -150,10 +150,9 @@ export default function RegisterPage() {
               }}
             >
               <option value="user">일반 사용자</option>
-              <option value="Deviation 매니저">Deviation 매니저</option>
-              <option value="개발 매니저">개발 매니저</option>
-              <option value="PIM 매니저">PIM 매니저</option>
-              <option value="총괄 매니저">총괄 매니저</option>
+              <option value="Viewonly">Viewonly (읽기 전용)</option>
+              <option value="그룹 매니저">그룹 매니저</option>
+              <option value="파트 매니저">파트 매니저</option>
             </select>
           </div>
 

@@ -9,7 +9,7 @@ export async function GET() {
     if (!session) {
       return NextResponse.json({ canEditWbs: false })
     }
-    if (session.role === 'admin') {
+    if (session.role === 'admin' || session.isAdmin) {
       return NextResponse.json({ canEditWbs: true })
     }
     // 로그인 ID(username) 기준으로 계정 조회 → 사용자 관리 화면과 동일한 행 사용

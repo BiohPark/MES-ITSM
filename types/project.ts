@@ -27,6 +27,8 @@ export interface ProjectChild {
   isGmpRecord?: boolean
   linked_task_id?: string | null
   linked_gmp_record_id?: string | null
+  /** 연결된 이슈 ID (해결용 일감일 때) */
+  linked_issue_id?: string | null
 }
 
 export interface Project {

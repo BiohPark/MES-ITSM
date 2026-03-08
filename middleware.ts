@@ -54,9 +54,10 @@ export async function middleware(request: NextRequest) {
       return response
     }
 
-    // Admin 권한이 필요한 경로 확인 (GET 요청은 제외)
+    // Admin 권한이 필요한 경로 확인 (GET 요청은 제외) — role=admin 또는 isAdmin 플래그
+    const isAdmin = session.role === 'admin' || !!session.isAdmin
     const isAdminPath = adminPaths.some(path => pathname.startsWith(path))
-    if (isAdminPath && session.role !== 'admin') {
+    if (isAdminPath && !isAdmin) {
       // GET 요청은 모든 인증된 사용자에게 허용 (담당자 목록 조회용)
       const method = request.method
       if (method !== 'GET') {

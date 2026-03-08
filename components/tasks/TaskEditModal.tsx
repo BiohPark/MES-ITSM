@@ -17,6 +17,7 @@ export function TaskEditModal({
   onSave,
   isGmpRecord = false,
   currentUser,
+  onOpenIssue,
 }: {
   task: ProjectChild
   projectId: string | null
@@ -27,6 +28,8 @@ export function TaskEditModal({
   onSave: (task: ProjectChild, projectId: string | null) => Promise<void> | void
   isGmpRecord?: boolean
   currentUser?: { name: string; username: string }
+  /** 연결된 이슈로 이동 (해결용 일감 / Deviation GMP Record) */
+  onOpenIssue?: (issueId: string) => void
 }) {
   const [formData, setFormData] = useState<any>({ ...task, description: (task as any).description || '', progress: (task as any).progress || 0 })
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(projectId || null)
@@ -478,6 +481,25 @@ export function TaskEditModal({
               onChange={handleChange}
             />
           </div>
+
+          {((formData as any).linked_issue_id && onOpenIssue) && (
+            <div className="form-group">
+              <label>연결된 이슈</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <span className="form-input" style={{ flex: 1, minWidth: 0 }}>
+                  {(formData as any).linked_issue_id}
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ backgroundColor: '#2563eb', color: '#fff', borderColor: '#2563eb' }}
+                  onClick={() => onOpenIssue((formData as any).linked_issue_id)}
+                >
+                  이슈로 이동
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="form-group">
             <label htmlFor="project-select">프로젝트</label>

@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
 
     if (body.action === 'create') {
       // 로그인 가능한 계정 생성 (회원가입과 동일한 정보 필요)
-      const { username, name, email, password, role } = body.user || body
+      const { username, name, email, password, role, is_admin } = body.user || body
 
       if (!username || !name || !email || !password) {
         return NextResponse.json(
@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
       }
 
       try {
-        await createAccount(username, name, email, password, role || 'user')
+        await createAccount(username, name, email, password, role || 'user', !!is_admin)
         const users = await getUsers()
         return NextResponse.json({ success: true, users })
       } catch (error: any) {
@@ -85,7 +85,7 @@ export async function PUT(request: NextRequest) {
       }
 
       const session = await getSession()
-      const isAdmin = session?.role === 'admin'
+      const isAdmin = session?.role === 'admin' || !!session?.isAdmin
       // WBS 수정 권한은 admin만 부여/해제 가능
       const updates: Parameters<typeof updateAccount>[1] = {
         username: user.username,
@@ -93,6 +93,7 @@ export async function PUT(request: NextRequest) {
         email: user.email,
         password: user.password,
         role: user.role,
+        is_admin: user.is_admin,
       }
       if (isAdmin && typeof user.can_edit_wbs === 'boolean') {
         updates.can_edit_wbs = user.can_edit_wbs
