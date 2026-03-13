@@ -16,7 +16,7 @@ const PRIORITIES = ['Low', 'Medium', 'High', 'Critical']
 const STATUSES = ['Open', 'In Progress', 'Resolved', 'Closed']
 
 interface VocViewProps {
-  currentUser?: { name: string; username: string; role: string }
+  currentUser?: { name: string; username: string; role: string; isAdmin?: boolean }
 }
 
 export function VocView({ currentUser }: VocViewProps) {

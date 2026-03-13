@@ -9,7 +9,38 @@ const fs = require('fs')
 const path = require('path')
 
 const projectRoot = path.join(__dirname, '..')
-const releaseDir = path.join(projectRoot, 'release')
+const defaultReleaseDir = path.join(projectRoot, 'release')
+
+function makeTimestamp() {
+  const now = new Date()
+  const yyyy = String(now.getFullYear())
+  const mm = String(now.getMonth() + 1).padStart(2, '0')
+  const dd = String(now.getDate()).padStart(2, '0')
+  const hh = String(now.getHours()).padStart(2, '0')
+  const mi = String(now.getMinutes()).padStart(2, '0')
+  const ss = String(now.getSeconds()).padStart(2, '0')
+  return `${yyyy}${mm}${dd}-${hh}${mi}${ss}`
+}
+
+function prepareOutputDir(preferredDir) {
+  try {
+    if (fs.existsSync(preferredDir)) {
+      fs.rmSync(preferredDir, { recursive: true })
+    }
+    fs.mkdirSync(preferredDir, { recursive: true })
+    return preferredDir
+  } catch (error) {
+    if (error && (error.code === 'EPERM' || error.code === 'EBUSY')) {
+      const fallbackDir = path.join(projectRoot, `release-${makeTimestamp()}`)
+      console.warn(
+        `⚠️  기존 release 폴더가 사용 중이어서 새 폴더로 생성합니다: ${path.basename(fallbackDir)}`
+      )
+      fs.mkdirSync(fallbackDir, { recursive: true })
+      return fallbackDir
+    }
+    throw error
+  }
+}
 
 function copyRecursive(src, dest) {
   if (!fs.existsSync(src)) {
@@ -37,18 +68,17 @@ function main() {
   const standaloneDir = path.join(projectRoot, '.next', 'standalone')
   const staticDir = path.join(projectRoot, '.next', 'static')
   const publicDir = path.join(projectRoot, 'public')
+  const releaseDir = prepareOutputDir(
+    process.env.RELEASE_DIR
+      ? path.resolve(projectRoot, process.env.RELEASE_DIR)
+      : defaultReleaseDir
+  )
 
   if (!fs.existsSync(standaloneDir)) {
     console.error('❌ .next/standalone 폴더를 찾을 수 없습니다.')
     console.error('   먼저 "npm run build"를 실행해 주세요.\n')
     process.exit(1)
   }
-
-  // release 폴더 초기화
-  if (fs.existsSync(releaseDir)) {
-    fs.rmSync(releaseDir, { recursive: true })
-  }
-  fs.mkdirSync(releaseDir, { recursive: true })
 
   // standalone 내용 복사
   console.log('   → .next/standalone 복사 중...')
@@ -84,6 +114,7 @@ function main() {
 
 이 폴더는 npm 접속 없이 실행 가능한 독립 패키지입니다.
 방화벽으로 외부 네트워크가 차단된 환경에서도 Node.js만 있으면 동작합니다.
+엑셀 내보내기 같은 기능에 필요한 서버 런타임 의존성도 함께 포함됩니다.
 
 ## 실행 방법
 
@@ -180,13 +211,14 @@ HOSTNAME=0.0.0.0 SSL_CERT_PATH=./cert.pem SSL_KEY_PATH=./key.pem node server-htt
 - **public/** – Static files.
 - **.env.example** – Example environment variables (copy to \`.env\` and edit).
 
-No \`node_modules\` or \`npm install\` is needed to run this package.
+This package already includes the minimal runtime dependencies required by the app, including server-side libraries used by features such as Excel export.
+No additional \`npm install\` is needed on the target machine.
 `
   fs.writeFileSync(path.join(releaseDir, 'README-OFFLINE.md'), readmeEn, 'utf8')
 
-  console.log('\n✅ release 폴더 생성 완료!')
+  console.log(`\n✅ ${path.basename(releaseDir)} 폴더 생성 완료!`)
   console.log('   npm 접속 없이 배포 가능합니다.')
-  console.log('   release 폴더를 Git에 커밋하거나 압축하여 전달하세요.\n')
+  console.log(`   ${path.basename(releaseDir)} 폴더를 Git에 커밋하거나 압축하여 전달하세요.\n`)
 }
 
 main()

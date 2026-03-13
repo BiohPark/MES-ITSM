@@ -46,7 +46,6 @@ export async function GET(
 
     const workbook = new ExcelJS.Workbook()
 
-    // Sheet 1: WBS 테이블
     const sheet = workbook.addWorksheet('Gantt')
 
     sheet.columns = [
@@ -101,14 +100,11 @@ export async function GET(
         milestone: task.is_milestone ? 'Yes' : '',
       })
 
-      // 들여쓰기로 계층 구조 표현 (현재 차트에서 작업명 들여쓰기를 그대로 반영)
-      const nameCell = row.getCell('name')
-      nameCell.alignment = {
+      row.getCell('name').alignment = {
         indent: Math.max(0, level - 1),
       }
     })
 
-    // 격자선 정리
     sheet.eachRow((row, rowNumber) => {
       if (rowNumber === 1) return
       row.eachCell((cell) => {
@@ -119,7 +115,6 @@ export async function GET(
       })
     })
 
-    // Sheet 2: Gantt Chart (월/일 축 + Bar)
     const chartSheet = workbook.addWorksheet('Chart')
     chartSheet.views = [{ state: 'frozen', xSplit: 1, ySplit: 2 }]
 
@@ -136,24 +131,20 @@ export async function GET(
     ;(tasks as any[]).forEach((task) => {
       const s = parseDateOnly(task.start_date)
       const f = parseDateOnly(task.finish_date)
-      if (s) {
-        if (!minStart || s < minStart) minStart = s
-      }
-      if (f) {
-        if (!maxFinish || f > maxFinish) maxFinish = f
-      }
+      if (s && (!minStart || s < minStart)) minStart = s
+      if (f && (!maxFinish || f > maxFinish)) maxFinish = f
     })
 
-    // 날짜 정보가 없으면 Chart 시트는 비워 둠
     if (minStart && maxFinish) {
       const days: Date[] = []
-      const cursor = new Date(minStart)
-      while (cursor <= maxFinish) {
+      const rangeStart = new Date(minStart)
+      const rangeEnd = new Date(maxFinish)
+      const cursor = new Date(rangeStart)
+      while (cursor.getTime() <= rangeEnd.getTime()) {
         days.push(new Date(cursor))
         cursor.setDate(cursor.getDate() + 1)
       }
 
-      // 헤더: A열은 Task, 1행 월, 2행 일
       chartSheet.getCell(1, 1).value = 'Task'
       chartSheet.getCell(1, 1).font = { bold: true }
       chartSheet.getColumn(1).width = 40
@@ -170,7 +161,6 @@ export async function GET(
         monthLabels[idx] = monthLabel
       })
 
-      // 월별 병합 (1행)
       let currentMonth = monthLabels[0]
       let monthStartCol = 2
       for (let i = 1; i < monthLabels.length; i++) {
@@ -182,8 +172,6 @@ export async function GET(
           monthStartCol = col
         }
       }
-      // 마지막 월 병합
-      const lastCol = 1 + days.length + 1 - 0 // 1 + (#days) +? actually days.length +1
       chartSheet.mergeCells(1, monthStartCol, 1, 1 + days.length)
       chartSheet.getRow(1).alignment = { horizontal: 'center', vertical: 'middle' }
 
@@ -213,10 +201,10 @@ export async function GET(
           finish && (progress == null || progress < 100) && today > finish
 
         const barColor = isComplete
-          ? 'FFCBD5E1' // 회색 (완료)
+          ? 'FFCBD5E1'
           : isDelayed
-          ? 'FFDC2626' // 빨강 (지연)
-          : 'FF3B82F6' // 파랑 (진행 중 / 기타)
+          ? 'FFDC2626'
+          : 'FF3B82F6'
 
         if (start && finish) {
           const startIdx = days.findIndex((d) => isSameDay(d, start))

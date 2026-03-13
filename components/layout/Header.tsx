@@ -6,7 +6,7 @@ import { SearchIcon, SettingsIcon } from '../common/Icons'
 interface HeaderProps {
   onSearch?: (query: string) => void
   onSettingsClick?: () => void
-  user?: { name: string; username: string; role: string } | null
+  user?: { name: string; username: string; role: string; isAdmin?: boolean } | null
   onLogout?: () => void
 }
 

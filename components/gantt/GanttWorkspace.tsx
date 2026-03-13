@@ -1396,6 +1396,21 @@ export function GanttWorkspace({
     }
   }
 
+  const downloadBlobResponse = async (res: Response, fallbackFilename: string) => {
+    const blob = await res.blob()
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    const disposition = res.headers.get('content-disposition') || ''
+    const match = disposition.match(/filename="?([^"]+)"?/)
+
+    a.href = url
+    a.download = match?.[1] || fallbackFilename
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+  }
+
   const handleExportXml = async () => {
     if (!selectedProjectId) {
       alert('먼저 Gantt 프로젝트를 선택하세요.')
@@ -1407,15 +1422,7 @@ export function GanttWorkspace({
         const data = await res.json().catch(() => ({}))
         throw new Error(data.error || 'XML Export 실패')
       }
-      const blob = await res.blob()
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `gantt_project_${selectedProjectId}.xml`
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
-      URL.revokeObjectURL(url)
+      await downloadBlobResponse(res, `gantt_project_${selectedProjectId}.xlsx`)
     } catch (err: any) {
       console.error('Failed to export xml', err)
       alert(err.message || 'XML Export 실패')
@@ -1433,15 +1440,7 @@ export function GanttWorkspace({
         const data = await res.json().catch(() => ({}))
         throw new Error(data.error || 'Excel Export 실패')
       }
-      const blob = await res.blob()
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `gantt_project_${selectedProjectId}.xlsx`
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
-      URL.revokeObjectURL(url)
+      await downloadBlobResponse(res, `gantt_project_${selectedProjectId}.xml`)
     } catch (err: any) {
       console.error('Failed to export excel', err)
       alert(err.message || 'Excel Export 실패')

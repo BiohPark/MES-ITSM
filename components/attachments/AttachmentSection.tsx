@@ -18,7 +18,7 @@ interface Attachment {
 interface AttachmentSectionProps {
   recordId: string
   recordType?: string
-  currentUser?: { id: string; name: string; role: string }
+  currentUser?: { id: string; name: string; role: string; isAdmin?: boolean }
   onUploadComplete?: () => void
   /** 제목 옆 안내 (예: 이슈에서는 "화면 캡처·로그 등") */
   titleHint?: string

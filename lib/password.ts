@@ -1,4 +1,4 @@
-import bcrypt from 'bcrypt'
+import bcrypt from 'bcryptjs'
 
 // 비밀번호 해싱
 export async function hashPassword(password: string): Promise<string> {

@@ -75,13 +75,12 @@
     "analyze-logs": "tsx scripts/analyze-logs.ts"
   },
   "dependencies": {
-    "exceljs": "^4.4.0",
     "@tiptap/extension-highlight": "^3.20.0",
     "@tiptap/extension-task-item": "^3.20.0",
     "@tiptap/extension-task-list": "^3.20.0",
     "@tiptap/react": "^3.20.0",
     "@tiptap/starter-kit": "^3.20.0",
-    "bcrypt": "^6.0.0",
+    "bcryptjs": "^3.0.3",
     "csv-parse": "^6.1.0",
     "csv-stringify": "^6.6.0",
     "exceljs": "^4.4.0",
@@ -93,7 +92,6 @@
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
-    "@types/bcrypt": "^6.0.0",
     "@types/node": "^20.14.12",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",

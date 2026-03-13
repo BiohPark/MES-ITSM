@@ -96,7 +96,7 @@ export default function Home() {
   const [selectedMeetingNoteIds, setSelectedMeetingNoteIds] = useState<Set<string>>(new Set())
   const [meetingNoteSearchKeyword, setMeetingNoteSearchKeyword] = useState<string>('')
   // 인증 관련 상태
-  const [user, setUser] = useState<{ id: string; username: string; name: string; role: 'admin' | 'user'; email?: string } | null>(null)
+  const [user, setUser] = useState<{ id: string; username: string; name: string; role: 'admin' | 'user'; email?: string; isAdmin?: boolean } | null>(null)
   const [isLoadingSession, setIsLoadingSession] = useState(true)
   const [appVersion, setAppVersion] = useState<string>('0.1.0')
   // 간트 차트: 내 일감에서 클릭 시 해당 프로젝트로 열기

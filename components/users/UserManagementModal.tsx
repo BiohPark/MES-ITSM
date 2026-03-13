@@ -125,7 +125,7 @@ export function UserManagementModal({ onClose, currentUser, embedInPanel, onBack
     }
   }
 
-  const handleRowClick = (user: { id: string; name: string; username?: string; email?: string; role?: string; can_edit_wbs?: boolean }) => {
+  const handleRowClick = (user: { id: string; name: string; username?: string; email?: string; role?: string; is_admin?: boolean; can_edit_wbs?: boolean }) => {
     if (!isAdmin) {
       alert('관리자만 사용자 정보를 수정할 수 있습니다.')
       return

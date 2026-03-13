@@ -7,7 +7,7 @@ import { TABS } from '@/utils/constants'
 interface SidebarProps {
   activeTab: TabKey
   onTabChange: (tab: TabKey) => void
-  user?: { role: string } | null
+  user?: { role: string; isAdmin?: boolean } | null
   isCollapsed?: boolean
   onToggleCollapse?: () => void
 }

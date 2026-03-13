@@ -88,7 +88,7 @@ interface IssueEditModalProps {
   onSave: (issue: Issue) => Promise<void> | void
   allIssues?: Issue[] // 관련 이슈 선택용
   /** 첨부파일 업로드/삭제 시 필요 (id, name, role) */
-  currentUser?: { id: string; name: string; role: string }
+  currentUser?: { id: string; name: string; role: string; isAdmin?: boolean }
   /** 연결 일감 선택 목록 (해결용 일감 연결) */
   taskLinkOptions?: TaskLinkOption[]
   /** 프로젝트 목록 (이슈에서 일감 생성 시 선택용) */

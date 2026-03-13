@@ -12,7 +12,7 @@ interface ServiceNowLayoutProps {
   onSearch?: (query: string) => void
   onSettingsClick?: () => void
   onLogout?: () => void
-  user?: { name: string; username: string; role: string } | null
+  user?: { name: string; username: string; role: string; isAdmin?: boolean } | null
 }
 
 export function ServiceNowLayout({
