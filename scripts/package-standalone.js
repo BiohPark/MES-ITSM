@@ -65,8 +65,9 @@ function copyRecursive(src, dest) {
 function main() {
   console.log('\n📦 Standalone 배포 패키지 생성 중...\n')
 
-  const standaloneDir = path.join(projectRoot, '.next', 'standalone')
-  const staticDir = path.join(projectRoot, '.next', 'static')
+  const distDirName = process.env.NEXT_DIST_DIR || '.next'
+  const standaloneDir = path.join(projectRoot, distDirName, 'standalone')
+  const staticDir = path.join(projectRoot, distDirName, 'static')
   const publicDir = path.join(projectRoot, 'public')
   const releaseDir = prepareOutputDir(
     process.env.RELEASE_DIR
@@ -75,19 +76,19 @@ function main() {
   )
 
   if (!fs.existsSync(standaloneDir)) {
-    console.error('❌ .next/standalone 폴더를 찾을 수 없습니다.')
+    console.error(`❌ ${distDirName}/standalone 폴더를 찾을 수 없습니다.`)
     console.error('   먼저 "npm run build"를 실행해 주세요.\n')
     process.exit(1)
   }
 
   // standalone 내용 복사
-  console.log('   → .next/standalone 복사 중...')
+  console.log(`   → ${distDirName}/standalone 복사 중...`)
   copyRecursive(standaloneDir, releaseDir)
 
-  // .next/static 복사 (standalone/.next/static으로)
+  // static 복사 (standalone/.next/static으로)
   const releaseStaticDir = path.join(releaseDir, '.next', 'static')
   if (fs.existsSync(staticDir)) {
-    console.log('   → .next/static 복사 중...')
+    console.log(`   → ${distDirName}/static 복사 중...`)
     copyRecursive(staticDir, releaseStaticDir)
   }
 
