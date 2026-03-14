@@ -1,0 +1,28 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-02-22T10:48:35.094Z",
+  "tables": {
+    "projects": [],
+    "project_children": [],
+    "gmp_records": [],
+    "val_packages": [],
+    "val_package_task_links": [],
+    "issues": [],
+    "users": [],
+    "voc_feedbacks": [],
+    "comments": [],
+    "attachments": [],
+    "predecessors": [],
+    "workflows": [],
+    "workflow_statuses": [],
+    "workflow_transitions": [],
+    "workflow_schemes": [],
+    "gantt_projects": [],
+    "gantt_tasks": [],
+    "gantt_events": [],
+    "gantt_wbs_history": [],
+    "meeting_notes": [],
+    "system_settings": [],
+    "backup_metadata": []
+  }
+}
