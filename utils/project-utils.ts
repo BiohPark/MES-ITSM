@@ -2,6 +2,7 @@
 
 import type { Project, ProjectChild } from '@/types/project'
 import type { Issue } from '@/types/issue'
+import type { Ticket, TicketType } from '@/types/ticket'
 
 export const buildNewProject = async (): Promise<Project> => {
   const response = await fetch('/api/projects?type=project')
@@ -94,5 +95,43 @@ export const buildNewValPackage = async (): Promise<Project> => {
   }
   valPackage.description = ''
   return valPackage as Project
+}
+
+export const buildNewTicket = async (ticketType: TicketType): Promise<Ticket> => {
+  const response = await fetch(`/api/tickets?type=nextId&ticketType=${ticketType}`)
+  const data = await response.json()
+  const id = data.nextId || 'TKT-0001'
+
+  return {
+    id,
+    ticket_no: id,
+    title: '',
+    description: '',
+    ticket_type: ticketType,
+    category: '',
+    subcategory: '',
+    status: 'Open',
+    priority: ticketType === 'incident' ? 'P2' : 'P3',
+    impact: 'Medium',
+    urgency: 'Medium',
+    requester_name: '',
+    requester_dept: '',
+    assignee_name: '',
+    approver_name: '',
+    related_project_id: '',
+    related_task_id: '',
+    related_issue_id: '',
+    catalog_item_id: '',
+    detail_fields: {},
+    approval_required: ticketType === 'change' || ticketType === 'request',
+    approval_status: ticketType === 'change' || ticketType === 'request' ? 'Not Requested' : '',
+    opened_at: new Date().toISOString(),
+    links: [],
+    activity_logs: [],
+    approvals: [],
+    notifications: [],
+    escalations: [],
+    audit_logs: [],
+  }
 }
 

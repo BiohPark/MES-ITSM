@@ -3,6 +3,9 @@
 This folder is a **standalone deployment package** that runs without any npm or network access.
 Suitable for environments where the firewall blocks npm registry or external connections.
 
+**Run from a Git clone:** If you cloned this repository, run the app from this `release` folder:  
+`cd release` → copy `.env.example` to `.env` and edit → `node server.js`. No `npm install` needed.
+
 ## Requirements
 
 - **Node.js** only (npm is not required to run the app).

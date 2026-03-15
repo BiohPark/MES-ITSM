@@ -79,18 +79,40 @@ function normalizeDateStr(s: string | null | undefined): string | null {
   return null
 }
 
-/** 목록에서 해당 인덱스 행이 직접 자식(바로 다음 레벨)을 갖는지 여부 */
-function hasDirectChildrenInList(
-  list: { outlineLevel?: number }[],
-  index: number
-): boolean {
-  const level = list[index]?.outlineLevel ?? 1
-  for (let j = index + 1; j < list.length; j++) {
-    const nextLevel = list[j].outlineLevel ?? 1
-    if (nextLevel <= level) return false
-    if (nextLevel === level + 1) return true
+function buildTaskHierarchyMeta(list: { outlineLevel?: number }[]) {
+  const parentIndexByRow: number[] = new Array(list.length).fill(-1)
+  const rootLevel1IndexForRow: number[] = new Array(list.length).fill(-1)
+  const hasDirectChildrenByIndex: boolean[] = new Array(list.length).fill(false)
+  const directChildrenByIndex: number[][] = Array.from({ length: list.length }, () => [])
+  const stack: number[] = []
+  let currentRootLevel1Index = -1
+
+  for (let i = 0; i < list.length; i++) {
+    const level = Math.max(1, list[i]?.outlineLevel ?? 1)
+    stack.length = Math.max(0, level - 1)
+
+    const parentIndex = level > 1 ? (stack[level - 2] ?? -1) : -1
+    parentIndexByRow[i] = parentIndex
+    if (parentIndex !== -1) {
+      hasDirectChildrenByIndex[parentIndex] = true
+      directChildrenByIndex[parentIndex].push(i)
+    }
+
+    if (level === 1) currentRootLevel1Index = i
+    rootLevel1IndexForRow[i] = currentRootLevel1Index
+    stack[level - 1] = i
   }
-  return false
+
+  return {
+    parentIndexByRow,
+    rootLevel1IndexForRow,
+    hasDirectChildrenByIndex,
+    directChildrenByIndex,
+  }
+}
+
+function normalizeAssigneeKey(value: string | null | undefined): string {
+  return String(value || '').trim().toLocaleLowerCase()
 }
 
 /** 행 순서가 바뀐 경우(드래그 드롭 등), 기존 순서 기준 선행 인덱스를 새 순서 기준으로 재매핑 */
@@ -223,7 +245,7 @@ export function GanttWorkspace({
   const [canEditWbs, setCanEditWbs] = useState<boolean | null>(null)
   /** 레벨 1 필터: null = 전체, number = 해당 레벨 1 행 인덱스(그 하위만 표시) */
   const [selectedLevel1Index, setSelectedLevel1Index] = useState<number | null>(null)
-  /** 담당자 검증용 등록 사용자 목록 (name, username) */
+  /** 담당자 검증용 등록 사용자 목록 (name, username 정규화 키) */
   const [registeredUserNames, setRegisteredUserNames] = useState<Set<string>>(new Set())
   /** 신규 일감 기본 담당자: 그룹 매니저에서 시작 (그룹 매니저 → 파트 매니저 → 파트원) */
   const [defaultAssignee, setDefaultAssignee] = useState<string>('')
@@ -244,35 +266,52 @@ export function GanttWorkspace({
   const rowRefs = useRef<Map<number, HTMLDivElement>>(new Map())
   const autoSaveTimerRef = useRef<number | null>(null)
   const xmlFileInputRef = useRef<HTMLInputElement>(null)
+  const usersLoadedRef = useRef(false)
+  const usersLoadPromiseRef = useRef<Promise<Set<string>> | null>(null)
+  const registeredUserNamesRef = useRef<Set<string>>(new Set())
+  const projectsLoadedRef = useRef(false)
+  const projectsLoadPromiseRef = useRef<Promise<void> | null>(null)
 
   const selectedProject = useMemo(
     () => projects.find((p) => p.id === selectedProjectId) || null,
     [projects, selectedProjectId]
   )
 
-  const loadProjects = async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const res = await fetch('/api/gantt/projects')
-      if (!res.ok) {
-        throw new Error('Gantt 프로젝트 목록을 불러오지 못했습니다.')
-      }
-      const data = await res.json()
-      setProjects(data.projects || [])
-      if (!selectedProjectId && data.projects?.length > 0) {
-        setSelectedProjectId(data.projects[0].id)
-      }
-    } catch (err: any) {
-      console.error('Failed to load Gantt projects', err)
-      setError(err.message || 'Gantt 프로젝트 로딩 실패')
-    } finally {
-      setLoading(false)
+  const loadProjects = useCallback(async (force = false) => {
+    if (!force && projectsLoadedRef.current) return
+    if (projectsLoadPromiseRef.current) {
+      await projectsLoadPromiseRef.current
+      return
     }
-  }
+
+    projectsLoadPromiseRef.current = (async () => {
+      setLoading(true)
+      setError(null)
+      try {
+        const res = await fetch('/api/gantt/projects')
+        if (!res.ok) {
+          throw new Error('Gantt 프로젝트 목록을 불러오지 못했습니다.')
+        }
+        const data = await res.json()
+        setProjects(data.projects || [])
+        projectsLoadedRef.current = true
+        if (!selectedProjectId && data.projects?.length > 0) {
+          setSelectedProjectId(data.projects[0].id)
+        }
+      } catch (err: any) {
+        console.error('Failed to load Gantt projects', err)
+        setError(err.message || 'Gantt 프로젝트 로딩 실패')
+      } finally {
+        projectsLoadPromiseRef.current = null
+        setLoading(false)
+      }
+    })()
+
+    await projectsLoadPromiseRef.current
+  }, [selectedProjectId])
 
   useEffect(() => {
-    loadProjects()
+    void loadProjects()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -299,27 +338,43 @@ export function GanttWorkspace({
     return () => { cancelled = true }
   }, [])
 
-  /** 담당자 검증용: 등록된 사용자 목록 로드 (name, username) */
-  useEffect(() => {
-    let cancelled = false
-    fetch('/api/users')
-      .then((res) => res.ok ? res.json() : { users: [] })
-      .then((data) => {
-        if (cancelled) return
-        const userList = data.users || []
-        const names = new Set<string>()
-        userList.forEach((u: { name?: string; username?: string; role?: string }) => {
-          if (u.name) names.add(String(u.name).trim())
-          if (u.username) names.add(String(u.username).trim())
-        })
-        setRegisteredUserNames(names)
-        const groupManager = userList.find((u: { role?: string }) => u.role === '그룹 매니저')
-        setDefaultAssignee(groupManager?.name ? String(groupManager.name).trim() : '')
+  /** 담당자 검증용 사용자 목록은 수정/저장 시점에 지연 로드 */
+  const ensureAssignableUsersLoaded = useCallback(async (): Promise<Set<string>> => {
+    if (usersLoadedRef.current) return registeredUserNamesRef.current
+    if (usersLoadPromiseRef.current) {
+      await usersLoadPromiseRef.current
+      return registeredUserNamesRef.current
+    }
+
+    usersLoadPromiseRef.current = (async () => {
+      const res = await fetch('/api/users')
+      const data = res.ok ? await res.json() : { users: [] }
+      const userList = data.users || []
+      const names = new Set<string>()
+      userList.forEach((u: { name?: string; username?: string; role?: string }) => {
+        const normalizedName = normalizeAssigneeKey(u.name)
+        const normalizedUsername = normalizeAssigneeKey(u.username)
+        if (normalizedName) names.add(normalizedName)
+        if (normalizedUsername) names.add(normalizedUsername)
       })
-      .catch(() => {
-        if (!cancelled) setRegisteredUserNames(new Set())
-      })
-    return () => { cancelled = true }
+      registeredUserNamesRef.current = names
+      setRegisteredUserNames(names)
+      const groupManager = userList.find((u: { role?: string }) => u.role === '그룹 매니저')
+      setDefaultAssignee(groupManager?.name ? String(groupManager.name).trim() : '')
+      usersLoadedRef.current = true
+      return names
+    })()
+
+    try {
+      return await usersLoadPromiseRef.current
+    } catch {
+      const emptySet = new Set<string>()
+      registeredUserNamesRef.current = emptySet
+      setRegisteredUserNames(emptySet)
+      return new Set<string>()
+    } finally {
+      usersLoadPromiseRef.current = null
+    }
   }, [])
 
   const loadTasks = async (projectId: number) => {
@@ -347,22 +402,25 @@ export function GanttWorkspace({
     }
   }
 
+  const loadEvents = useCallback(async (projectId: number) => {
+    const res = await fetch(`/api/gantt/events?projectId=${projectId}`)
+    if (!res.ok) {
+      throw new Error('이벤트를 불러오지 못했습니다.')
+    }
+    const data = await res.json()
+    setChartEvents((data.events || []).map((e: any) => ({
+      id: e.id,
+      date: e.date,
+      name: e.name,
+    })))
+  }, [])
+
   // 프로젝트 선택 시: 태스크 + 이벤트를 함께 로드 (이벤트는 서버에서 공유)
   useEffect(() => {
     let cancelled = false
     async function loadForProject(projectId: number) {
-      await loadTasks(projectId)
       try {
-        const res = await fetch(`/api/gantt/events?projectId=${projectId}`)
-        if (!res.ok) throw new Error('이벤트를 불러오지 못했습니다.')
-        const data = await res.json()
-        if (!cancelled) {
-          setChartEvents((data.events || []).map((e: any) => ({
-            id: e.id,
-            date: e.date,
-            name: e.name,
-          })))
-        }
+        await Promise.all([loadTasks(projectId), loadEvents(projectId)])
       } catch {
         if (!cancelled) setChartEvents([])
       }
@@ -379,13 +437,14 @@ export function GanttWorkspace({
     return () => {
       cancelled = true
     }
-  }, [selectedProjectId])
+  }, [selectedProjectId, loadEvents])
 
-  const handleAddRow = () => {
+  const handleAddRow = async () => {
     if (!selectedProjectId) {
       alert('먼저 Gantt 프로젝트를 선택하거나 생성하세요.')
       return
     }
+    await ensureAssignableUsersLoaded()
     setPreserveWbsCodeAfterReorder(false)
     const nextSort =
       tasks.length === 0
@@ -409,11 +468,12 @@ export function GanttWorkspace({
   }
 
   /** 특정 행의 하위 레벨 행 추가 (마지막 자식 위치 = 맨 아래) */
-  const handleAddChildRow = (parentIndex: number) => {
+  const handleAddChildRow = async (parentIndex: number) => {
     if (!selectedProjectId) {
       alert('먼저 Gantt 프로젝트를 선택하거나 생성하세요.')
       return
     }
+    await ensureAssignableUsersLoaded()
     setPreserveWbsCodeAfterReorder(false)
     setTasks((prev) => {
       const parent = prev[parentIndex]
@@ -486,6 +546,11 @@ export function GanttWorkspace({
     return indices
   }, [tasks])
 
+  const draggedSubtreeIndexSet = useMemo(() => {
+    if (draggingIndex == null) return null
+    return new Set(getDraggedSubtreeIndices(draggingIndex))
+  }, [draggingIndex, getDraggedSubtreeIndices])
+
   /** 드롭 처리: child = 해당 행의 하위로, sibling = 같은 레벨로 위치만 변경 */
   const handleDrop = useCallback(
     (targetType: 'child' | 'sibling', targetIndex: number) => {
@@ -552,7 +617,9 @@ export function GanttWorkspace({
   const updateDropTarget = useCallback(
     (clientY: number) => {
       if (draggingIndex == null) return
-      const entries = Array.from(rowRefs.current.entries()).filter(([i]) => !getDraggedSubtreeIndices(draggingIndex).includes(i))
+      const entries = Array.from(rowRefs.current.entries()).filter(
+        ([i]) => !(draggedSubtreeIndexSet?.has(i) ?? false)
+      )
       for (const [idx, el] of entries) {
         const rect = el.getBoundingClientRect()
         const relY = clientY - rect.top
@@ -578,7 +645,7 @@ export function GanttWorkspace({
         setDropTarget(null)
       }
     },
-    [draggingIndex, getDraggedSubtreeIndices]
+    [draggingIndex, draggedSubtreeIndexSet]
   )
 
   useEffect(() => {
@@ -895,103 +962,69 @@ export function GanttWorkspace({
       })
     }
 
+    const { hasDirectChildrenByIndex, directChildrenByIndex } = buildTaskHierarchyMeta(result)
+
     // 2단계: 리프 작업 - 시작/종료가 있으면 기간 자동 계산
     for (let i = 0; i < result.length; i++) {
       const curr = result[i]
-      const currLevel = curr.outlineLevel || 1
-      const hasChildren = i + 1 < result.length && (result[i + 1].outlineLevel ?? 1) > currLevel
-      if (!hasChildren && curr.startDate && curr.finishDate && curr.durationDays === undefined) {
+      if (!hasDirectChildrenByIndex[i] && curr.startDate && curr.finishDate && curr.durationDays === undefined) {
         curr.durationDays = calcDurationFromDates(curr.startDate, curr.finishDate)
       }
     }
 
-    // 3단계: 상위 레벨의 시작/종료 날짜 및 실적(%)를 하위 레벨에 따라 자동 계산
-    // 하위 레벨부터 상위 레벨 순으로 계산 (역순으로 처리)
-    const maxLevel = Math.max(...result.map(t => t.outlineLevel || 1))
-    
-    // 레벨이 높은 것부터 낮은 것 순으로 처리 (하위 레벨부터 상위 레벨로)
-    for (let targetLevel = maxLevel - 1; targetLevel >= 1; targetLevel--) {
-      for (let i = 0; i < result.length; i++) {
-        const current = result[i]
-        const currentLevel = current.outlineLevel || 1
-        
-        // 현재 처리할 레벨이 아니면 스킵
-        if (currentLevel !== targetLevel) continue
-        
-        // 하위 레벨 항목들 찾기 (현재 항목 다음에 오는 더 높은 레벨의 항목들)
-        const childItems: GanttTask[] = []
-        for (let j = i + 1; j < result.length; j++) {
-          const next = result[j]
-          const nextLevel = next.outlineLevel || 1
-          
-          // 같은 레벨이나 더 낮은 레벨이 나오면 하위 항목 종료
-          if (nextLevel <= currentLevel) {
-            break
-          }
-          
-          // 바로 다음 레벨인 경우만 직접 하위 항목으로 간주
-          if (nextLevel === currentLevel + 1) {
-            childItems.push(next)
-          }
-        }
+    // 3단계: 상위 레벨의 시작/종료 날짜 및 실적(%)를 직접 하위 항목 기준으로 계산
+    for (let i = result.length - 1; i >= 0; i--) {
+      const childIndices = directChildrenByIndex[i]
+      if (childIndices.length === 0) continue
 
-        // 하위 항목이 있는 경우, 시작일·종료일·실적 자동 계산 (로컬 날짜 기준, 타임존 ±1일 오류 방지)
-        if (childItems.length > 0) {
-          const childStartDates = childItems
-            .map(item => item.startDate)
-            .filter((date): date is string => date !== null && date !== undefined)
-            .map(date => parseLocalDate(date).getTime())
-          
-          const childFinishDates = childItems
-            .map(item => item.finishDate)
-            .filter((date): date is string => date !== null && date !== undefined)
-            .map(date => parseLocalDate(date).getTime())
+      const current = result[i]
+      const childItems = childIndices.map((childIndex) => result[childIndex])
+      const childStartDates = childItems
+        .map((item) => item.startDate)
+        .filter((date): date is string => date !== null && date !== undefined)
+        .map((date) => parseLocalDate(date).getTime())
 
-          if (childStartDates.length > 0) {
-            const minStartDate = new Date(Math.min(...childStartDates))
-            current.startDate = formatLocalDate(minStartDate)
-          }
+      const childFinishDates = childItems
+        .map((item) => item.finishDate)
+        .filter((date): date is string => date !== null && date !== undefined)
+        .map((date) => parseLocalDate(date).getTime())
 
-          if (childFinishDates.length > 0) {
-            const maxFinishDate = new Date(Math.max(...childFinishDates))
-            current.finishDate = formatLocalDate(maxFinishDate)
-          }
+      if (childStartDates.length > 0) {
+        const minStartDate = new Date(Math.min(...childStartDates))
+        current.startDate = formatLocalDate(minStartDate)
+      }
 
-          // duration_days도 자동 계산 (최소 1일)
-          if (current.startDate && current.finishDate) {
-            current.durationDays = calcDurationFromDates(current.startDate, current.finishDate)
-          }
+      if (childFinishDates.length > 0) {
+        const maxFinishDate = new Date(Math.max(...childFinishDates))
+        current.finishDate = formatLocalDate(maxFinishDate)
+      }
 
-          // 상위 실적 %: 하위가 있으면 항상 하위 기준 가중 평균(정수 반올림)으로 자동 반영 (요약 작업은 항상 자식 실적 반영)
-          const childrenWithProgress = childItems.filter(
-            (c) => c.progressPercent != null
+      if (current.startDate && current.finishDate) {
+        current.durationDays = calcDurationFromDates(current.startDate, current.finishDate)
+      }
+
+      const childrenWithProgress = childItems.filter((c) => c.progressPercent != null)
+      if (childrenWithProgress.length > 0) {
+        const weightedChildren = childrenWithProgress.filter((c) => (c.durationDays ?? 0) > 0)
+        let agg = 0
+        if (weightedChildren.length > 0) {
+          const totalWeight = weightedChildren.reduce(
+            (sum, c) => sum + (c.durationDays ?? 0),
+            0
           )
-          if (childrenWithProgress.length > 0) {
-            const weightedChildren = childrenWithProgress.filter(
-              (c) => (c.durationDays ?? 0) > 0
-            )
-            let agg = 0
-            if (weightedChildren.length > 0) {
-              const totalWeight = weightedChildren.reduce(
-                (sum, c) => sum + (c.durationDays ?? 0),
-                0
-              )
-              const weightedSum = weightedChildren.reduce(
-                (sum, c) => sum + (c.progressPercent ?? 0) * (c.durationDays ?? 0),
-                0
-              )
-              agg = totalWeight > 0 ? weightedSum / totalWeight : 0
-            } else {
-              agg =
-                childrenWithProgress.reduce(
-                  (sum, c) => sum + (c.progressPercent ?? 0),
-                  0
-                ) / childrenWithProgress.length
-            }
-            // 실적은 소수점 없이, 0~100 범위의 정수로 저장
-            current.progressPercent = Math.min(100, Math.max(0, Math.round(agg)))
-          }
+          const weightedSum = weightedChildren.reduce(
+            (sum, c) => sum + (c.progressPercent ?? 0) * (c.durationDays ?? 0),
+            0
+          )
+          agg = totalWeight > 0 ? weightedSum / totalWeight : 0
+        } else {
+          agg =
+            childrenWithProgress.reduce(
+              (sum, c) => sum + (c.progressPercent ?? 0),
+              0
+            ) / childrenWithProgress.length
         }
+        current.progressPercent = Math.min(100, Math.max(0, Math.round(agg)))
       }
     }
 
@@ -1003,17 +1036,8 @@ export function GanttWorkspace({
     () => recomputeWbsCodes(tasks, preserveWbsCodeAfterReorder),
     [tasks, preserveWbsCodeAfterReorder]
   )
-
-  /** 각 행이 속한 레벨 1의 displayTasks 인덱스 (행 순서대로) */
-  const rootLevel1IndexForRow = useMemo(() => {
-    const result: number[] = []
-    let lastL1 = -1
-    for (let i = 0; i < displayTasks.length; i++) {
-      if ((displayTasks[i].outlineLevel ?? 1) === 1) lastL1 = i
-      result[i] = lastL1
-    }
-    return result
-  }, [displayTasks])
+  const displayTaskMeta = useMemo(() => buildTaskHierarchyMeta(displayTasks), [displayTasks])
+  const { hasDirectChildrenByIndex, parentIndexByRow, rootLevel1IndexForRow } = displayTaskMeta
 
   /** 레벨 1 작업만의 목록 (드롭다운용): { index, label } */
   const level1Options = useMemo(() => {
@@ -1075,13 +1099,6 @@ export function GanttWorkspace({
   /** 접기 반영: 필터 통과한 행 중 부모가 접혀 있지 않은 행만 표시 (displayTasks 인덱스) */
   const visibleRowIndices = useMemo(() => {
     const result = new Set<number>()
-    const getParentIndex = (i: number): number => {
-      const levelI = displayTasks[i]?.outlineLevel ?? 1
-      for (let j = i - 1; j >= 0; j--) {
-        if ((displayTasks[j]?.outlineLevel ?? 1) < levelI) return j
-      }
-      return -1
-    }
     for (let i = 0; i < displayTasks.length; i++) {
       if (!filteredRowIndices.has(i)) continue
       const level = displayTasks[i]?.outlineLevel ?? 1
@@ -1089,7 +1106,7 @@ export function GanttWorkspace({
         result.add(i)
         continue
       }
-      const p = getParentIndex(i)
+      const p = parentIndexByRow[i] ?? -1
       if (p === -1) {
         result.add(i)
         continue
@@ -1099,7 +1116,17 @@ export function GanttWorkspace({
       result.add(i)
     }
     return result
-  }, [displayTasks, filteredRowIndices, collapsedDisplayIndices])
+  }, [displayTasks, filteredRowIndices, collapsedDisplayIndices, parentIndexByRow])
+
+  const visibleDisplayRows = useMemo(() => {
+    const rows: Array<{ task: GanttTask; index: number }> = []
+    for (let i = 0; i < displayTasks.length; i++) {
+      if (visibleRowIndices.has(i)) {
+        rows.push({ task: displayTasks[i], index: i })
+      }
+    }
+    return rows
+  }, [displayTasks, visibleRowIndices])
 
   /** filteredDisplayTasks 기준 접힌 행 제외한 표시 인덱스 (간트 차트에 전달) */
   const visibleChartRowIndices = useMemo(() => {
@@ -1225,10 +1252,11 @@ export function GanttWorkspace({
     autoSaveTimerRef.current = window.setTimeout(async () => {
       try {
         const normalized = recomputeWbsCodes(tasks)
+        const normalizedTaskMeta = buildTaskHierarchyMeta(normalized)
         // 부모(요약) 행은 재계산된 실적 저장, 리프는 원본 실적 유지
         const toSave = normalized.map((n, i) => ({
           ...n,
-          progressPercent: hasDirectChildrenInList(normalized, i)
+          progressPercent: normalizedTaskMeta.hasDirectChildrenByIndex[i]
             ? n.progressPercent
             : (tasks[i]?.progressPercent ?? n.progressPercent),
         }))
@@ -1251,7 +1279,7 @@ export function GanttWorkspace({
         clearTimeout(autoSaveTimerRef.current)
       }
     }
-  }, [selectedProjectId, hasUnsavedChanges, tasks])
+  }, [canEditWbs, selectedProjectId, hasUnsavedChanges, tasks])
 
   const handleSaveTasks = async () => {
     if (!selectedProjectId) {
@@ -1259,10 +1287,12 @@ export function GanttWorkspace({
       return
     }
     setAssigneeError(null)
+    const assignableUsers = await ensureAssignableUsersLoaded()
     const normalized = recomputeWbsCodes(tasks)
+    const normalizedTaskMeta = buildTaskHierarchyMeta(normalized)
     for (const t of normalized) {
       const assignee = (t.assignee ?? '').trim()
-      if (assignee && !registeredUserNames.has(assignee)) {
+      if (assignee && !assignableUsers.has(normalizeAssigneeKey(assignee))) {
         setAssigneeError(`담당자 "${assignee}"(은)는 등록된 사용자가 아닙니다. 사용자 관리에서 등록 후 선택해 주세요.`)
         return
       }
@@ -1270,7 +1300,7 @@ export function GanttWorkspace({
     // 부모(요약) 행은 재계산된 실적 저장, 리프는 원본 실적 유지
     const toSave = normalized.map((n, i) => ({
       ...n,
-      progressPercent: hasDirectChildrenInList(normalized, i)
+      progressPercent: normalizedTaskMeta.hasDirectChildrenByIndex[i]
         ? n.progressPercent
         : (tasks[i]?.progressPercent ?? n.progressPercent),
     }))
@@ -1513,7 +1543,7 @@ export function GanttWorkspace({
             <button
               type="button"
               className="servicenow-button servicenow-button--secondary"
-              onClick={loadProjects}
+              onClick={() => { void loadProjects(true) }}
             >
               새로고침
             </button>
@@ -1945,26 +1975,13 @@ export function GanttWorkspace({
                   <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.addChild, minWidth: WBS_COLUMNS.addChild, padding: '0.3rem 0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>하위</div>
                   <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.delete, minWidth: WBS_COLUMNS.delete, padding: '0.3rem 0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>삭제</div>
                 </div>
-                {displayTasks.map((t, idx) => {
-                  if (!visibleRowIndices.has(idx)) return null
-
-                  const isDragging = draggingIndex != null && getDraggedSubtreeIndices(draggingIndex).includes(idx)
+                {visibleDisplayRows.map(({ task: t, index: idx }) => {
+                  const isDragging = draggedSubtreeIndexSet?.has(idx) ?? false
                   const isDropChild = dropTarget?.type === 'child' && dropTarget.index === idx
                   const isDropSiblingBefore = dropTarget?.type === 'sibling' && dropTarget.index === idx
                   const isDropSiblingAfter = dropTarget?.type === 'sibling' && dropTarget.index === idx + 1
 
-                  // 요약(부모) 행 여부: 바로 아래에 더 높은 레벨(=자식)이 존재하면 요약 행으로 간주
-                  const currentLevel = t.outlineLevel ?? 1
-                  let hasChildren = false
-                  for (let j = idx + 1; j < displayTasks.length; j++) {
-                    const nextLevel = displayTasks[j].outlineLevel ?? 1
-                    if (nextLevel <= currentLevel) break
-                    if (nextLevel === currentLevel + 1) {
-                      hasChildren = true
-                      break
-                    }
-                  }
-                  const isSummaryRow = hasChildren
+                  const isSummaryRow = hasDirectChildrenByIndex[idx]
 
                   return (
                   <div
@@ -2044,7 +2061,7 @@ export function GanttWorkspace({
                       {idx + 1}
                     </div>
                     <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.wbs, minWidth: WBS_COLUMNS.wbs, padding: '0.3rem 0.55rem', fontFamily: 'monospace', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
-                      {hasDirectChildrenInList(displayTasks, idx) ? (
+                      {hasDirectChildrenByIndex[idx] ? (
                         <button
                           type="button"
                           aria-label={collapsedDisplayIndices.has(idx) ? '펼치기' : '접기'}
@@ -2306,7 +2323,11 @@ export function GanttWorkspace({
                         }
                         onBlur={() => {
                           const assignee = (t.assignee ?? '').trim()
-                          if (assignee && registeredUserNames.size > 0 && !registeredUserNames.has(assignee)) {
+                          if (
+                            assignee &&
+                            registeredUserNames.size > 0 &&
+                            !registeredUserNames.has(normalizeAssigneeKey(assignee))
+                          ) {
                             setAssigneeError(`담당자 "${assignee}"(은)는 등록된 사용자가 아닙니다. 사용자 관리에서 등록 후 선택해 주세요.`)
                           }
                         }}

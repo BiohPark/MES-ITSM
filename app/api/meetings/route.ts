@@ -7,11 +7,20 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const keyword = searchParams.get('keyword')
     const type = searchParams.get('type')
+    const id = searchParams.get('id')
 
     if (type === 'nextId') {
       // 다음 회의록 ID 조회
       const nextId = await getNextMeetingNoteId()
       return NextResponse.json({ nextId })
+    }
+
+    if (type === 'detail' && id) {
+      const meetingNote = await getMeetingNoteById(id)
+      if (!meetingNote) {
+        return NextResponse.json({ error: '회의록을 찾을 수 없습니다.' }, { status: 404 })
+      }
+      return NextResponse.json({ meetingNote })
     }
 
     if (keyword) {

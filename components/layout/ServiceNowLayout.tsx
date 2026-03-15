@@ -3,6 +3,7 @@
 import { ReactNode, useState } from 'react'
 import { Header } from './Header'
 import { Sidebar } from './Sidebar'
+import { GuideModal } from './GuideModal'
 import type { TabKey } from '@/utils/constants'
 
 interface ServiceNowLayoutProps {
@@ -25,14 +26,17 @@ export function ServiceNowLayout({
   user,
 }: ServiceNowLayoutProps) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
+  const [isGuideOpen, setIsGuideOpen] = useState(false)
 
   return (
     <div className="servicenow-layout">
       <Header
+        activeTab={activeTab}
         onSearch={onSearch}
         onSettingsClick={onSettingsClick}
         onLogout={onLogout}
         user={user}
+        onGuideClick={() => setIsGuideOpen(true)}
       />
       <div className="servicenow-layout__body">
         <Sidebar
@@ -46,6 +50,7 @@ export function ServiceNowLayout({
           {children}
         </main>
       </div>
+      {isGuideOpen && <GuideModal activeTab={activeTab} onClose={() => setIsGuideOpen(false)} />}
     </div>
   )
 }

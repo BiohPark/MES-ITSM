@@ -21,8 +21,25 @@ const dbConfig = {
   // MariaDB/mysql2 호환을 위해 일부 옵션 제거
 }
 
+type GlobalDbState = typeof globalThis & {
+  __itsmDbPool?: mysql.Pool | null
+  __itsmDbPoolProxy?: mysql.Pool | null
+}
+
+const globalDbState = globalThis as GlobalDbState
+
 // 연결 풀 생성
-let pool: mysql.Pool | null = null
+let pool: mysql.Pool | null = globalDbState.__itsmDbPool ?? null
+let lastSuccessfulConnectionCheckAt = 0
+const CONNECTION_CHECK_TTL_MS = 30_000
+
+function wrapDbError(message: string, error: unknown): Error & { code?: string } {
+  const wrapped = new Error(message) as Error & { code?: string }
+  if (error && typeof error === 'object' && 'code' in error) {
+    wrapped.code = String((error as { code?: unknown }).code || '')
+  }
+  return wrapped
+}
 
 // 연결 풀 재생성 함수
 function recreatePool(): mysql.Pool {
@@ -34,6 +51,8 @@ function recreatePool(): mysql.Pool {
     }
   }
   pool = mysql.createPool(dbConfig)
+  globalDbState.__itsmDbPool = pool
+  globalDbState.__itsmDbPoolProxy = null
   
   // 연결 오류 핸들러 (타입 단언 사용)
   ;(pool as any).on('error', (err: any) => {
@@ -41,6 +60,8 @@ function recreatePool(): mysql.Pool {
     if (err.code === 'PROTOCOL_CONNECTION_LOST' || err.code === 'ECONNRESET') {
       console.log('Attempting to recreate pool...')
       pool = null
+      globalDbState.__itsmDbPool = null
+      globalDbState.__itsmDbPoolProxy = null
     }
   })
   
@@ -90,36 +111,33 @@ export function getPool(): mysql.Pool {
   if (!pool) {
     pool = recreatePool()
   }
-  return wrapPoolWithAutoRecreate(pool)
+  if (!globalDbState.__itsmDbPoolProxy) {
+    globalDbState.__itsmDbPoolProxy = wrapPoolWithAutoRecreate(pool)
+  }
+  return globalDbState.__itsmDbPoolProxy
 }
 
 // 연결 테스트 함수
 export async function testConnection(maxRetries: number = 1): Promise<boolean> {
-  console.log('[DB] testConnection 시작, maxRetries:', maxRetries)
+  const now = Date.now()
+  if (now - lastSuccessfulConnectionCheckAt < CONNECTION_CHECK_TTL_MS) {
+    return true
+  }
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      console.log(`[DB] 연결 테스트 시도 ${attempt + 1}/${maxRetries + 1}`)
       const currentPool = pool || getPool()
-      console.log('[DB] 연결 풀 획득 완료')
       const connection = await currentPool.getConnection()
-      console.log('[DB] 연결 획득 완료, ping 시작')
       await connection.ping()
-      console.log('[DB] ping 성공')
       connection.release()
-      console.log('[DB] 연결 해제 완료')
+      lastSuccessfulConnectionCheckAt = Date.now()
       return true
     } catch (error: any) {
-      console.error(`[DB] 연결 테스트 실패 (시도 ${attempt + 1}/${maxRetries + 1}):`, error)
-      console.error('[DB] 에러 코드:', error.code)
-      console.error('[DB] 에러 메시지:', error.message)
       if (attempt < maxRetries) {
-        console.warn(`[DB] 재시도 중...`)
         // 연결 풀 재생성 시도
         pool = null
         await new Promise(resolve => setTimeout(resolve, 500)) // 500ms 대기
         continue
       }
-      console.error('[DB] 연결 테스트 최종 실패')
       return false
     }
   }
@@ -247,28 +265,92 @@ export async function initializeDatabase(): Promise<void> {
   }
 }
 
+type ProjectPayloadDetail = 'full' | 'lite'
+
+function toIsoDateValue(value: any, fallback: string): string {
+  if (!value) return fallback
+  return typeof value === 'string' ? value : new Date(value).toISOString().slice(0, 10)
+}
+
+function parseTaskPhases(raw: any) {
+  if (!raw) return null
+  try {
+    return typeof raw === 'string' ? JSON.parse(raw) : raw
+  } catch {
+    return null
+  }
+}
+
+function mapProjectChildRow(
+  child: any,
+  today: string,
+  detail: ProjectPayloadDetail,
+  valPackageLinks?: Map<string, any[]>
+): ProjectChild {
+  const baseChild: ProjectChild = {
+    id: child.id,
+    title: child.title,
+    owner: child.owner,
+    status: child.status,
+    progress: child.progress || 0,
+    start: toIsoDateValue(child.start, today),
+    due: toIsoDateValue(child.due, ''),
+  }
+
+  if (detail === 'lite') {
+    return baseChild
+  }
+
+  return {
+    ...baseChild,
+    description: child.description || '',
+    issue_reason: child.issue_reason || null,
+    phases: parseTaskPhases(child.phases),
+    linked_gmp_record_id: child.linked_gmp_record_id || null,
+    linked_issue_id: child.linked_issue_id || null,
+    linked_val_packages: valPackageLinks?.get(child.id) || [],
+  } as ProjectChild
+}
+
+function mapGmpRecordRow(record: any, today: string, detail: ProjectPayloadDetail): ProjectChild {
+  const kind = record.kind || 'CC'
+  const number = record.number || 0
+  const kindNumber = record.kind_number || `${kind}-${String(number).padStart(5, '0')}`
+  const baseRecord: ProjectChild = {
+    id: record.id,
+    title: record.title,
+    owner: record.owner,
+    status: record.status,
+    progress: record.progress || 0,
+    start: toIsoDateValue(record.start, today),
+    due: toIsoDateValue(record.due, ''),
+    kind,
+    number,
+    kind_number: kindNumber,
+    isGmpRecord: true,
+  }
+
+  if (detail === 'lite') {
+    return baseRecord
+  }
+
+  return {
+    ...baseRecord,
+    description: record.description || '',
+    linked_task_id: record.linked_task_id || null,
+    linked_issue_id: record.linked_issue_id || null,
+  }
+}
+
 // 프로젝트 조회 (최적화: N+1 문제 해결)
-export async function getProjects(): Promise<Project[]> {
-  console.log('[DB] getProjects 시작')
+export async function getProjects(detail: ProjectPayloadDetail = 'full'): Promise<Project[]> {
   let retries = 2
   while (retries > 0) {
     try {
-      console.log(`[DB] getProjects 시도 ${3 - retries}/3`)
-      // 연결 테스트
-      console.log('[DB] 연결 테스트 시작')
-      const isConnected = await testConnection()
-      console.log('[DB] 연결 테스트 결과:', isConnected)
-      if (!isConnected) {
-        throw new Error('Database connection failed')
-      }
-      
-      console.log('[DB] 연결 풀 가져오기')
       const pool = getPool()
-      console.log('[DB] 프로젝트 쿼리 실행')
       const [projects] = await pool.query<any[]>(
         'SELECT * FROM projects ORDER BY created_at DESC'
       )
-      console.log('[DB] 프로젝트 쿼리 완료, 개수:', projects.length)
 
     if (projects.length === 0) {
       return []
@@ -289,10 +371,10 @@ export async function getProjects(): Promise<Project[]> {
       projectIds
     )
 
-    // 모든 일감의 VAL Pkg 링크 조회
+      // 모든 일감의 VAL Pkg 링크 조회
     const allChildIds = allChildren.map(c => c.id)
     let valPackageLinks = new Map<string, any[]>()
-    if (allChildIds.length > 0) {
+      if (detail === 'full' && allChildIds.length > 0) {
       const childPlaceholders = allChildIds.map(() => '?').join(',')
       const [links] = await pool.query<any[]>(
         `SELECT vptl.task_id, vp.id as val_package_id, vp.name as val_package_name
@@ -338,56 +420,13 @@ export async function getProjects(): Promise<Project[]> {
       const children = childrenByProject.get(project.id) || []
       const gmpRecords = gmpRecordsByProject.get(project.id) || []
 
-      // 일반 일감 매핑 (Dropped 일감도 포함 - 프로젝트 하위 표시는 UI에서 필터링)
-      const childrenList: any[] = children.map((child) => {
-          let phases = null
-          if (child.phases) {
-            try {
-              phases = typeof child.phases === 'string' ? JSON.parse(child.phases) : child.phases
-            } catch (e) {
-              phases = null
-            }
-          }
-          return {
-            id: child.id,
-            title: child.title,
-            owner: child.owner,
-            status: child.status,
-            progress: child.progress || 0,
-            start: child.start ? (typeof child.start === 'string' ? child.start : new Date(child.start).toISOString().slice(0, 10)) : today,
-            due: child.due ? (typeof child.due === 'string' ? child.due : new Date(child.due).toISOString().slice(0, 10)) : '',
-            description: child.description || '',
-            issue_reason: child.issue_reason || null,
-            phases: phases,
-            linked_gmp_record_id: child.linked_gmp_record_id || null,
-            linked_issue_id: child.linked_issue_id || null,
-            linked_val_packages: valPackageLinks.get(child.id) || [],
-          }
-        })
+      const childrenList: ProjectChild[] = children.map((child) =>
+        mapProjectChildRow(child, today, detail, valPackageLinks)
+      )
 
-      // GMP Record 매핑 (kind_number 포함)
-      const gmpRecordsList: any[] = gmpRecords.map((record) => {
-        const kind = record.kind || 'CC'
-        const number = record.number || 0
-        const kindNumber = record.kind_number || `${kind}-${String(number).padStart(5, '0')}`
-        
-        return {
-          id: record.id,
-          title: record.title,
-          owner: record.owner,
-          status: record.status,
-          progress: record.progress || 0,
-          start: record.start ? (typeof record.start === 'string' ? record.start : new Date(record.start).toISOString().slice(0, 10)) : today,
-          due: record.due ? (typeof record.due === 'string' ? record.due : new Date(record.due).toISOString().slice(0, 10)) : '',
-          description: record.description || '',
-          kind: kind,
-          number: number,
-          kind_number: kindNumber,
-          isGmpRecord: true, // GMP Record 구분용 플래그
-          linked_task_id: record.linked_task_id || null,
-          linked_issue_id: record.linked_issue_id || null,
-        }
-      })
+      const gmpRecordsList: ProjectChild[] = gmpRecords.map((record) =>
+        mapGmpRecordRow(record, today, detail)
+      )
 
       // 일반 일감과 GMP Record를 합쳐서 정렬
       // ID 기준으로 중복 제거 (GMP Record가 우선)
@@ -427,28 +466,20 @@ export async function getProjects(): Promise<Project[]> {
       })
     }
 
-      console.log('[DB] getProjects 성공, 반환할 프로젝트 수:', projectsWithChildren.length)
       return projectsWithChildren
     } catch (error: any) {
       retries--
-      console.error(`[DB] getProjects 에러 (시도 ${3 - retries}/3):`, error)
-      console.error('[DB] 에러 코드:', error.code)
-      console.error('[DB] 에러 메시지:', error.message)
-      console.error('[DB] 에러 스택:', error instanceof Error ? error.stack : 'No stack trace')
-      console.error('[DB] 에러 전체:', JSON.stringify(error, Object.getOwnPropertyNames(error)))
       
       if (retries === 0) {
         // 마지막 시도 실패 시 연결 풀 재생성
         pool = null
-        console.error('Error in getProjects (final attempt):', error)
         const errorMessage = error instanceof Error ? error.message : 'Unknown error'
         const errorCode = error.code || 'UNKNOWN_ERROR'
-        throw new Error(`데이터베이스 조회 실패 [${errorCode}]: ${errorMessage}`)
+        throw wrapDbError(`데이터베이스 조회 실패 [${errorCode}]: ${errorMessage}`, error)
       }
       
       // 재시도 전 잠시 대기
       await new Promise(resolve => setTimeout(resolve, 500))
-      console.warn(`Retrying getProjects... (${retries} attempts remaining)`)
     }
   }
   
@@ -457,16 +488,10 @@ export async function getProjects(): Promise<Project[]> {
 }
 
 // 프로젝트가 없는 일감 조회 (N/A 일감, Dropped 포함 - 일감 목록에서 표시하기 위해)
-export async function getOrphanTasks(): Promise<ProjectChild[]> {
+export async function getOrphanTasks(detail: ProjectPayloadDetail = 'full'): Promise<ProjectChild[]> {
   let retries = 2
   while (retries > 0) {
     try {
-      // 연결 테스트
-      const isConnected = await testConnection()
-      if (!isConnected) {
-        throw new Error('Database connection failed')
-      }
-      
       const pool = getPool()
       const [tasks] = await pool.query<any[]>(
         "SELECT * FROM project_children WHERE project_id IS NULL ORDER BY created_at ASC"
@@ -475,7 +500,7 @@ export async function getOrphanTasks(): Promise<ProjectChild[]> {
       // VAL Pkg 링크 조회
       const taskIds = tasks.map(t => t.id)
       let valPackageLinks = new Map<string, any[]>()
-      if (taskIds.length > 0) {
+      if (detail === 'full' && taskIds.length > 0) {
         const placeholders = taskIds.map(() => '?').join(',')
         const [links] = await pool.query<any[]>(
           `SELECT vptl.task_id, vp.id as val_package_id, vp.name as val_package_name
@@ -496,30 +521,7 @@ export async function getOrphanTasks(): Promise<ProjectChild[]> {
       }
 
       const today = new Date().toISOString().slice(0, 10)
-      return tasks.map((task) => {
-    let phases = null
-    if (task.phases) {
-      try {
-        phases = typeof task.phases === 'string' ? JSON.parse(task.phases) : task.phases
-      } catch (e) {
-        phases = null
-      }
-    }
-    return {
-      id: task.id,
-      title: task.title,
-      owner: task.owner,
-      status: task.status,
-      progress: task.progress || 0,
-      start: task.start ? (typeof task.start === 'string' ? task.start : new Date(task.start).toISOString().slice(0, 10)) : today,
-      due: task.due ? (typeof task.due === 'string' ? task.due : new Date(task.due).toISOString().slice(0, 10)) : '',
-      description: task.description || '',
-      issue_reason: task.issue_reason || null,
-      phases: phases,
-      linked_gmp_record_id: task.linked_gmp_record_id || null,
-      linked_val_packages: valPackageLinks.get(task.id) || [],
-    }
-  })
+      return tasks.map((task) => mapProjectChildRow(task, today, detail, valPackageLinks))
     } catch (error: any) {
       retries--
       if (retries === 0) {
@@ -527,7 +529,10 @@ export async function getOrphanTasks(): Promise<ProjectChild[]> {
         if (process.env.NODE_ENV === 'development') {
           console.error('Error in getOrphanTasks (final attempt):', error)
         }
-        throw new Error(`Orphan Task 조회 실패: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        throw wrapDbError(
+          `Orphan Task 조회 실패: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          error
+        )
       }
       
       await new Promise(resolve => setTimeout(resolve, 500))
@@ -1039,12 +1044,6 @@ export async function getAllGmpRecords(): Promise<Array<ProjectChild & { project
   let retries = 2
   while (retries > 0) {
     try {
-      // 연결 테스트
-      const isConnected = await testConnection()
-      if (!isConnected) {
-        throw new Error('Database connection failed')
-      }
-      
       const pool = getPool()
       const [records] = await pool.query<any[]>(
         `SELECT g.*, p.name as project_name 
@@ -1093,7 +1092,10 @@ export async function getAllGmpRecords(): Promise<Array<ProjectChild & { project
         if (process.env.NODE_ENV === 'development') {
           console.error('Error in getAllGmpRecords (final attempt):', error)
         }
-        throw new Error(`GMP Record 조회 실패: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        throw wrapDbError(
+          `GMP Record 조회 실패: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          error
+        )
       }
       
       await new Promise(resolve => setTimeout(resolve, 500))
@@ -1530,12 +1532,6 @@ export async function getAllIssues(): Promise<Issue[]> {
   let retries = 2
   while (retries > 0) {
     try {
-      // 연결 테스트
-      const isConnected = await testConnection()
-      if (!isConnected) {
-        throw new Error('Database connection failed')
-      }
-      
       const pool = getPool()
       const [issues] = await pool.query<any[]>(
         'SELECT * FROM issues ORDER BY occurred_date DESC, created_at DESC'
@@ -1569,7 +1565,10 @@ export async function getAllIssues(): Promise<Issue[]> {
         if (process.env.NODE_ENV === 'development') {
           console.error('Error in getAllIssues (final attempt):', error)
         }
-        throw new Error(`이슈 조회 실패: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        throw wrapDbError(
+          `이슈 조회 실패: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          error
+        )
       }
       
       await new Promise(resolve => setTimeout(resolve, 500))
@@ -2519,19 +2518,7 @@ export async function getActionItemsByAssignee(assignee: string): Promise<Array<
 }>> {
   const allItems = await getAllActionItems()
   // 담당자 이름 정확히 일치하는 항목만 반환 (대소문자 구분)
-  const filtered = allItems.filter(item => item.assignee === assignee)
-  
-  if (process.env.NODE_ENV === 'development') {
-    console.log('[getActionItemsByAssignee]', {
-      assignee,
-      totalItems: allItems.length,
-      filteredCount: filtered.length,
-      allAssignees: Array.from(new Set(allItems.map(item => item.assignee))),
-      filteredItems: filtered,
-    })
-  }
-  
-  return filtered
+  return allItems.filter(item => item.assignee === assignee)
 }
 
 // 액션 아이템 상태 업데이트

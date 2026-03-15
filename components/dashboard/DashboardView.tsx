@@ -37,57 +37,10 @@ export function DashboardView({
     const projectTasks = projects.flatMap((p) => p.children || [])
     const allTasks = [...projectTasks, ...(orphanTasks || [])]
     
-    // 디버깅: "생산 요구사항 1" 일감 확인
-    if (process.env.NODE_ENV === 'development') {
-      const targetTask = allTasks.find((t) => t.title?.includes('생산 요구사항'))
-      if (targetTask) {
-        console.log('Dashboard - 생산 요구사항 일감 발견:', {
-          id: targetTask.id,
-          title: targetTask.title,
-          status: targetTask.status,
-          isOrphan: orphanTasks?.some(ot => ot.id === targetTask.id),
-          allTasksCount: allTasks.length,
-          projectTasksCount: projectTasks.length,
-          orphanTasksCount: orphanTasks?.length || 0,
-        })
-      }
-    }
-    
     // KPI 관련 통계
     const issuedTasks = allTasks.filter((t) => t.status === 'Issued').length
-    const completedTasksList = allTasks.filter((t) => {
-      const isCompleted = t.status === 'Completed'
-      // 디버깅: Completed 필터링 확인
-      if (process.env.NODE_ENV === 'development' && t.title?.includes('생산 요구사항')) {
-        console.log('Completed 필터링:', {
-          title: t.title,
-          status: t.status,
-          isCompleted,
-          statusType: typeof t.status,
-        })
-      }
-      return isCompleted
-    })
+    const completedTasksList = allTasks.filter((t) => t.status === 'Completed')
     const completedTasks = completedTasksList.length
-    
-    // 디버깅: 모든 Completed 일감 목록 출력
-    if (process.env.NODE_ENV === 'development') {
-      console.log('Dashboard - Completed 일감 목록:', completedTasksList.map(t => ({
-        id: t.id,
-        title: t.title,
-        status: t.status,
-        isOrphan: orphanTasks?.some(ot => ot.id === t.id),
-      })))
-      console.log('Dashboard - 전체 일감 상태 분포:', {
-        total: allTasks.length,
-        issued: issuedTasks,
-        completed: completedTasks,
-        byStatus: allTasks.reduce((acc, t) => {
-          acc[t.status] = (acc[t.status] || 0) + 1
-          return acc
-        }, {} as Record<string, number>),
-      })
-    }
     
     const totalTasks = allTasks.length
     

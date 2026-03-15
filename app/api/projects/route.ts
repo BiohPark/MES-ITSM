@@ -34,6 +34,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const type = searchParams.get('type')
     const taskId = searchParams.get('taskId')
+    const detail = searchParams.get('detail') === 'lite' ? 'lite' : 'full'
 
     if (type === 'project') {
       const nextId = await getNextProjectId()
@@ -42,7 +43,7 @@ export async function GET(request: NextRequest) {
       const nextId = await getNextTaskId()
       return NextResponse.json({ nextId })
     } else if (type === 'orphan-tasks') {
-      const orphanTasks = await getOrphanTasks()
+      const orphanTasks = await getOrphanTasks(detail)
       return NextResponse.json(orphanTasks)
     } else if (taskId) {
       // 특정 일감 조회 (Link 상태 확인용)
@@ -58,7 +59,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 기본: 프로젝트 목록 조회
-    const projects = await getProjects()
+    const projects = await getProjects(detail)
     const response = NextResponse.json(projects)
     // 개발 모드에서는 캐싱 비활성화, 프로덕션에서는 짧은 캐시 시간 설정
     if (process.env.NODE_ENV === 'production') {

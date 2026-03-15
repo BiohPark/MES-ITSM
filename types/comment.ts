@@ -1,4 +1,4 @@
-export type CommentEntityType = 'project' | 'task' | 'gmp_record'
+export type CommentEntityType = 'project' | 'task' | 'gmp_record' | 'ticket'
 
 export interface Comment {
   id: string

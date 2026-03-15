@@ -4,14 +4,16 @@
 .servicenow-layout {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  height: 100vh;
   background: #ffffff;
+  overflow: hidden;
 }
 
 .servicenow-layout__body {
   display: flex;
   flex: 1;
   overflow: hidden;
+  min-height: 0;
 }
 
 .servicenow-layout__content {
@@ -19,7 +21,7 @@
   background: #FFFFFF;
   padding: 1.5rem 2rem;
   overflow-y: auto;
-  min-height: calc(100vh - 60px);
+  min-height: 0;
 }
 
 /* Header Styles */
@@ -172,6 +174,8 @@
   transition: width 0.3s ease;
   border-right: 1px solid #0F1F2E;
   flex-shrink: 0;
+  height: 100%;
+  overflow: hidden;
 }
 
 .servicenow-sidebar--collapsed {
@@ -221,6 +225,7 @@
   flex: 1;
   overflow-y: auto;
   padding: 0.5rem 0;
+  min-height: 0;
 }
 
 .servicenow-sidebar__menu {

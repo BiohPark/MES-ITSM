@@ -1,16 +1,21 @@
 'use client'
 
 import { useState } from 'react'
-import { SearchIcon, SettingsIcon } from '../common/Icons'
+import type { TabKey } from '@/utils/constants'
+import { TABS } from '@/utils/constants'
+import { HelpCircleIcon, SearchIcon, SettingsIcon } from '../common/Icons'
+import { AssignmentBell } from './AssignmentBell'
 
 interface HeaderProps {
   onSearch?: (query: string) => void
   onSettingsClick?: () => void
   user?: { name: string; username: string; role: string; isAdmin?: boolean } | null
   onLogout?: () => void
+  activeTab: TabKey
+  onGuideClick?: () => void
 }
 
-export function Header({ onSearch, onSettingsClick, user, onLogout }: HeaderProps) {
+export function Header({ onSearch, onSettingsClick, user, onLogout, activeTab, onGuideClick }: HeaderProps) {
   const [searchQuery, setSearchQuery] = useState('')
 
   const handleSearch = (e: React.FormEvent) => {
@@ -56,6 +61,17 @@ export function Header({ onSearch, onSettingsClick, user, onLogout }: HeaderProp
               <span className="servicenow-header__user-role">{user.role}</span>
             </div>
           )}
+          {onGuideClick && (
+            <button
+              className="servicenow-header__icon-button"
+              onClick={onGuideClick}
+              aria-label="현재 기능 가이드"
+              title={`현재 기능 가이드: ${TABS.find((tab) => tab.key === activeTab)?.label || activeTab}`}
+            >
+              <HelpCircleIcon size={20} color="#666" />
+            </button>
+          )}
+          <AssignmentBell user={user} />
           {onSettingsClick && (
             <button
               className="servicenow-header__icon-button"

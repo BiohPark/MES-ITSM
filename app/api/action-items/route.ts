@@ -9,13 +9,6 @@ export async function GET(request: NextRequest) {
     if (assignee) {
       // 특정 담당자의 액션 아이템 조회
       const actionItems = await getActionItemsByAssignee(assignee)
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[action-items][GET]', {
-          assignee,
-          actionItemsCount: actionItems.length,
-          actionItems: actionItems,
-        })
-      }
       return NextResponse.json(actionItems)
     }
 

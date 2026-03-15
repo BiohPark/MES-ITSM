@@ -1,13 +1,20 @@
 'use client'
 
-import { useMemo, useState, useEffect, useCallback } from 'react'
+import { useMemo, useState, useEffect, useCallback, useRef } from 'react'
 import type { MouseEvent } from 'react'
 import type { Project, ProjectChild } from '@/types/project'
-import { TABS, type TabKey } from '@/utils/constants'
-import { buildNewProject, buildNewChild, buildNewGmpRecord, buildNewIssue, buildNewValPackage } from '@/utils/project-utils'
+import { APP_VERSION, TABS, type TabKey } from '@/utils/constants'
+import { buildNewProject, buildNewChild, buildNewGmpRecord, buildNewIssue, buildNewTicket, buildNewValPackage } from '@/utils/project-utils'
 import type { Issue } from '@/types/issue'
+import type { Ticket, TicketType } from '@/types/ticket'
 import { IssuesTable } from '@/components/issues/IssuesTable'
 import { IssueEditModal } from '@/components/issues/IssueEditModal'
+import { TicketsTable } from '@/components/tickets/TicketsTable'
+import { TicketEditModal } from '@/components/tickets/TicketEditModal'
+import { ApprovalInboxView } from '@/components/tickets/ApprovalInboxView'
+import { NotificationsView } from '@/components/tickets/NotificationsView'
+import { AuditLogView } from '@/components/tickets/AuditLogView'
+import { TicketPoliciesView } from '@/components/tickets/TicketPoliciesView'
 import { MeetingNotesView } from '@/components/meetings/MeetingNotesView'
 import { MeetingNoteEditModal } from '@/components/meetings/MeetingNoteEditModal'
 import { MeetingNoteTemplateModal } from '@/components/meetings/MeetingNoteTemplateModal'
@@ -85,6 +92,18 @@ export default function Home() {
   const [isIssueEditing, setIsIssueEditing] = useState(false)
   const [issueEditMode, setIssueEditMode] = useState<'create' | 'edit'>('edit')
   const [selectedIssueIds, setSelectedIssueIds] = useState<Set<string>>(new Set())
+  // ITSM 티켓 관련 상태
+  const [ticketsByType, setTicketsByType] = useState<Record<TicketType, Ticket[]>>({
+    request: [],
+    incident: [],
+    problem: [],
+    change: [],
+  })
+  const [ticketsLoading, setTicketsLoading] = useState(false)
+  const [ticketsError, setTicketsError] = useState<string | null>(null)
+  const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null)
+  const [isTicketEditing, setIsTicketEditing] = useState(false)
+  const [ticketEditMode, setTicketEditMode] = useState<'create' | 'edit'>('edit')
   // 회의록 관련 상태
   const [meetingNotes, setMeetingNotes] = useState<MeetingNote[]>([])
   const [meetingNotesLoading, setMeetingNotesLoading] = useState(false)
@@ -98,29 +117,66 @@ export default function Home() {
   // 인증 관련 상태
   const [user, setUser] = useState<{ id: string; username: string; name: string; role: 'admin' | 'user'; email?: string; isAdmin?: boolean } | null>(null)
   const [isLoadingSession, setIsLoadingSession] = useState(true)
-  const [appVersion, setAppVersion] = useState<string>('0.1.0')
+  const appVersion = APP_VERSION.getFullVersion()
   // 간트 차트: 내 일감에서 클릭 시 해당 프로젝트로 열기
   const [ganttMyTasks, setGanttMyTasks] = useState<GanttMyTaskItem[]>([])
   const [pendingGanttProjectId, setPendingGanttProjectId] = useState<number | null>(null)
+  const projectsDetailRef = useRef<'lite' | 'full'>('lite')
+  const orphanTasksDetailRef = useRef<'lite' | 'full'>('lite')
+  const deepLinkHandledRef = useRef(false)
+  const loadedDataRef = useRef<{
+    projects: boolean
+    orphanTasks: boolean
+    issues: boolean
+    gmpRecords: boolean
+    valPackages: boolean
+    ganttMyTasks: boolean
+    tickets: Record<TicketType, boolean>
+  }>({
+    projects: false,
+    orphanTasks: false,
+    issues: false,
+    gmpRecords: false,
+    valPackages: false,
+    ganttMyTasks: false,
+    tickets: {
+      request: false,
+      incident: false,
+      problem: false,
+      change: false,
+    },
+  })
+  const normalizeProjects = useCallback((items: Project[]) => {
+    return items.map((project) => ({
+      ...project,
+      children: project.children ?? [],
+    }))
+  }, [])
+  const normalizeGmpRecords = useCallback((data: any[]) => {
+    return data.map((record: any) => ({
+      ...record,
+      projectId: record.projectId || null,
+      projectName: record.projectName || 'N/A',
+      kind_number:
+        record.kind_number ||
+        (record.kind && record.number !== undefined
+          ? `${record.kind}-${String(record.number || 0).padStart(5, '0')}`
+          : 'CC-00000'),
+    }))
+  }, [])
 
-  const fetchVersion = useCallback(async (signal?: AbortSignal) => {
-    try {
-      const response = await fetch('/api/version', {
-        cache: 'no-store',
-        signal,
-      })
-      if (signal?.aborted) return
-      if (response.ok) {
-        const data = await response.json()
-        setAppVersion(data.version || '0.1.0')
-      }
-    } catch (error) {
-      if (signal?.aborted) return
-      // 버전 가져오기 실패 시 기본값 유지
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Error fetching version:', error)
-      }
-    }
+  const applyProjectsPayload = useCallback((items?: Project[], detail: 'lite' | 'full' = 'full') => {
+    if (!items) return
+    setProjects(normalizeProjects(items))
+    loadedDataRef.current.projects = true
+    projectsDetailRef.current = detail
+  }, [normalizeProjects])
+
+  const applyOrphanTasksPayload = useCallback((items?: ProjectChild[], detail: 'lite' | 'full' = 'full') => {
+    if (!items) return
+    setOrphanTasks(items)
+    loadedDataRef.current.orphanTasks = true
+    orphanTasksDetailRef.current = detail
   }, [])
 
   useEffect(() => {
@@ -131,13 +187,11 @@ export default function Home() {
       if (!isMounted) return
       await checkSession(abortController.signal)
       if (!isMounted) return
-      await fetchProjects()
-      if (!isMounted) return
-      await fetchOrphanTasks()
-      if (!isMounted) return
-      await fetchIssues()
-      if (!isMounted) return
-      await fetchVersion(abortController.signal)
+      await Promise.all([
+        fetchProjects(abortController.signal, 'lite'),
+        fetchOrphanTasks(abortController.signal, 'lite'),
+        fetchIssues(abortController.signal),
+      ])
     }
 
     init()
@@ -147,7 +201,7 @@ export default function Home() {
       abortController.abort()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fetchVersion])
+  }, [])
 
   const checkSession = async (signal?: AbortSignal) => {
     try {
@@ -198,12 +252,12 @@ export default function Home() {
     }
   }
 
-  const fetchProjects = useCallback(async (signal?: AbortSignal) => {
+  const fetchProjects = useCallback(async (signal?: AbortSignal, detail: 'lite' | 'full' = 'full') => {
     try {
       setLoading(true)
       setError(null)
       
-      const response = await fetch('/api/projects', {
+      const response = await fetch(`/api/projects?detail=${detail}`, {
         cache: 'no-store',
         signal,
       })
@@ -224,12 +278,7 @@ export default function Home() {
       const data = (await response.json()) as Project[]
       if (signal?.aborted) return
       
-      setProjects(
-        data.map((project) => ({
-          ...project,
-          children: project.children ?? [],
-        }))
-      )
+      applyProjectsPayload(data, detail)
     } catch (err: any) {
       if (signal?.aborted) return
       
@@ -249,12 +298,12 @@ export default function Home() {
         setLoading(false)
       }
     }
-  }, [])
+  }, [applyProjectsPayload])
 
   // Orphan tasks 가져오기
-  const fetchOrphanTasks = useCallback(async (signal?: AbortSignal) => {
+  const fetchOrphanTasks = useCallback(async (signal?: AbortSignal, detail: 'lite' | 'full' = 'full') => {
     try {
-      const response = await fetch('/api/projects?type=orphan-tasks', {
+      const response = await fetch(`/api/projects?type=orphan-tasks&detail=${detail}`, {
         cache: 'no-store',
         signal,
       })
@@ -262,7 +311,7 @@ export default function Home() {
       if (response.ok) {
         const data = await response.json()
         if (signal?.aborted) return
-        setOrphanTasks(data || [])
+        applyOrphanTasksPayload(data || [], detail)
       } else {
         setOrphanTasks([])
       }
@@ -273,7 +322,7 @@ export default function Home() {
       }
       setOrphanTasks([])
     }
-  }, [])
+  }, [applyOrphanTasksPayload])
 
   // GMP Record 관련 함수들
   const fetchGmpRecords = useCallback(async (signal?: AbortSignal) => {
@@ -301,17 +350,8 @@ export default function Home() {
       }
       const data = (await response.json()) as any[]
       if (signal?.aborted) return
-      
-      // GMP Record 데이터를 ProjectChild 형식으로 변환 (프로젝트 정보 포함)
-      const formattedRecords = data.map((record: any) => ({
-        ...record,
-        projectId: record.projectId || null,
-        projectName: record.projectName || 'N/A',
-        kind_number: record.kind_number || (record.kind && record.number !== undefined 
-          ? `${record.kind}-${String(record.number || 0).padStart(5, '0')}` 
-          : 'CC-00000'),
-      }))
-      setGmpRecords(formattedRecords)
+      setGmpRecords(normalizeGmpRecords(data))
+      loadedDataRef.current.gmpRecords = true
     } catch (err) {
       if (signal?.aborted) return
       const errorMessage = err instanceof Error ? err.message : 'Unknown error'
@@ -324,7 +364,7 @@ export default function Home() {
         setGmpRecordsLoading(false)
       }
     }
-  }, [])
+  }, [normalizeGmpRecords])
 
   // VAL Pkg 관련 함수들
   const fetchValPackages = useCallback(async (signal?: AbortSignal) => {
@@ -346,6 +386,7 @@ export default function Home() {
       const data = (await response.json()) as Project[]
       if (signal?.aborted) return
       setValPackages(data)
+      loadedDataRef.current.valPackages = true
     } catch (err) {
       if (signal?.aborted) return
       const errorMessage = err instanceof Error ? err.message : 'Unknown error'
@@ -377,6 +418,7 @@ export default function Home() {
       const data = (await response.json()) as Issue[]
       if (signal?.aborted) return
       setIssues(data)
+      loadedDataRef.current.issues = true
     } catch (err) {
       if (signal?.aborted) return
       const errorMessage = err instanceof Error ? err.message : 'Unknown error'
@@ -390,6 +432,119 @@ export default function Home() {
       }
     }
   }, [])
+
+  const getTicketTypeForTab = useCallback((tab: TabKey): TicketType | null => {
+    if (tab === 'request' || tab === 'incident' || tab === 'problem' || tab === 'change') {
+      return tab
+    }
+    return null
+  }, [])
+
+  const fetchTickets = useCallback(async (ticketType: TicketType, signal?: AbortSignal) => {
+    try {
+      setTicketsLoading(true)
+      setTicketsError(null)
+      const response = await fetch(`/api/tickets?ticketType=${ticketType}`, {
+        cache: 'no-store',
+        signal,
+      })
+      if (signal?.aborted) return
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || `HTTP ${response.status}: Failed to fetch tickets`)
+      }
+      const data = await response.json()
+      if (signal?.aborted) return
+      setTicketsByType((prev) => ({
+        ...prev,
+        [ticketType]: data.tickets || [],
+      }))
+      loadedDataRef.current.tickets[ticketType] = true
+    } catch (err) {
+      if (signal?.aborted) return
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+      setTicketsError(errorMessage)
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error fetching tickets:', err)
+      }
+    } finally {
+      if (!signal?.aborted) {
+        setTicketsLoading(false)
+      }
+    }
+  }, [])
+
+  const fetchGanttMyTasks = useCallback(async (signal?: AbortSignal) => {
+    try {
+      const ganttRes = await fetch('/api/gantt/my-tasks', {
+        cache: 'no-store',
+        signal,
+      })
+      if (signal?.aborted) return
+      if (ganttRes.ok) {
+        const ganttData = await ganttRes.json()
+        if (signal?.aborted) return
+        setGanttMyTasks(ganttData.tasks ?? [])
+        loadedDataRef.current.ganttMyTasks = true
+      } else {
+        setGanttMyTasks([])
+      }
+    } catch {
+      if (!signal?.aborted) {
+        setGanttMyTasks([])
+      }
+    }
+  }, [])
+
+  const handleOpenTicketDetail = useCallback(async (ticketId: string) => {
+    try {
+      const response = await fetch(`/api/tickets?type=detail&id=${encodeURIComponent(ticketId)}`, {
+        cache: 'no-store',
+      })
+      const data = await response.json()
+      if (!response.ok || !data.ticket) {
+        throw new Error(data.error || '티켓 상세를 불러오지 못했습니다.')
+      }
+      setSelectedTicket(data.ticket)
+      setTicketEditMode('edit')
+      setIsTicketEditing(true)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '티켓 상세를 불러오지 못했습니다.')
+    }
+  }, [])
+
+  const handleCreateTicket = useCallback(async (ticketType: TicketType) => {
+    const newTicket = await buildNewTicket(ticketType)
+    setSelectedTicket({
+      ...newTicket,
+      requester_name: user?.name || '',
+      requester_dept: '',
+    })
+    setTicketEditMode('create')
+    setIsTicketEditing(true)
+  }, [user?.name])
+
+  const handleSaveTicket = useCallback(async (updatedTicket: Ticket) => {
+    const action = ticketEditMode === 'create' ? 'add' : 'update'
+    const response = await fetch('/api/tickets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        action,
+        ticket: updatedTicket,
+      }),
+    })
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      throw new Error(data.error || '티켓 저장에 실패했습니다.')
+    }
+    setTicketsByType((prev) => ({
+      ...prev,
+      [updatedTicket.ticket_type]: data.tickets || prev[updatedTicket.ticket_type],
+    }))
+    loadedDataRef.current.tickets[updatedTicket.ticket_type] = true
+  }, [ticketEditMode])
 
   // 회의록 관련 함수들
   const fetchMeetingNotes = useCallback(async (signal?: AbortSignal): Promise<MeetingNote[] | undefined> => {
@@ -427,6 +582,221 @@ export default function Home() {
     }
   }, [meetingNoteSearchKeyword])
 
+  const openIssueDetailById = useCallback(async (issueId: string) => {
+    setActiveTab('issues')
+    let issue = issues.find((item) => item.id === issueId) || null
+    if (!issue) {
+      const response = await fetch('/api/issues', {
+        cache: 'no-store',
+        credentials: 'include',
+      })
+      if (!response.ok) {
+        throw new Error('이슈 상세를 불러오지 못했습니다.')
+      }
+      const data = (await response.json()) as Issue[]
+      setIssues(data)
+      loadedDataRef.current.issues = true
+      issue = data.find((item) => item.id === issueId) || null
+    }
+    if (!issue) {
+      throw new Error('이슈를 찾을 수 없습니다.')
+    }
+    setSelectedIssue(issue)
+    setIssueEditMode('edit')
+    setIsIssueEditing(true)
+  }, [issues])
+
+  const openMeetingNoteDetailById = useCallback(async (meetingNoteId: string) => {
+    setActiveTab('meetings')
+    let meetingNote = meetingNotes.find((item) => item.id === meetingNoteId) || null
+    if (!meetingNote) {
+      const response = await fetch(`/api/meetings?type=detail&id=${encodeURIComponent(meetingNoteId)}`, {
+        cache: 'no-store',
+        credentials: 'include',
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok || !data.meetingNote) {
+        throw new Error(data.error || '회의록을 불러오지 못했습니다.')
+      }
+      meetingNote = data.meetingNote as MeetingNote
+      setMeetingNotes((prev) => (prev.some((item) => item.id === meetingNoteId) ? prev : [meetingNote!, ...prev]))
+    }
+    setSelectedMeetingNote(meetingNote)
+    setMeetingNoteEditMode('edit')
+    setIsMeetingNoteEditing(true)
+  }, [meetingNotes])
+
+  const openProjectTaskDetailById = useCallback(async (taskId: string) => {
+    setActiveTab('tasks')
+
+    let workingProjects = projects
+    let workingOrphanTasks = orphanTasks
+
+    if (projectsDetailRef.current !== 'full') {
+      const response = await fetch('/api/projects?detail=full', {
+        cache: 'no-store',
+        credentials: 'include',
+      })
+      if (!response.ok) {
+        throw new Error('일감 목록을 불러오지 못했습니다.')
+      }
+      const data = (await response.json()) as Project[]
+      applyProjectsPayload(data, 'full')
+      workingProjects = normalizeProjects(data)
+    }
+
+    if (orphanTasksDetailRef.current !== 'full') {
+      const response = await fetch('/api/projects?type=orphan-tasks&detail=full', {
+        cache: 'no-store',
+        credentials: 'include',
+      })
+      if (!response.ok) {
+        throw new Error('미배정 일감을 불러오지 못했습니다.')
+      }
+      const data = (await response.json()) as ProjectChild[]
+      applyOrphanTasksPayload(data, 'full')
+      workingOrphanTasks = data
+    }
+
+    for (const project of workingProjects) {
+      const task = (project.children || []).find((item) => item.id === taskId)
+      if (task) {
+        setSelectedTask({
+          task,
+          projectId: project.id,
+          projectName: project.name,
+        })
+        setTaskEditMode('edit')
+        setIsTaskEditing(true)
+        return
+      }
+    }
+
+    const orphanTask = workingOrphanTasks.find((item) => item.id === taskId)
+    if (orphanTask) {
+      setSelectedTask({
+        task: orphanTask,
+        projectId: null,
+        projectName: 'N/A',
+      })
+      setTaskEditMode('edit')
+      setIsTaskEditing(true)
+      return
+    }
+
+    throw new Error('일감을 찾을 수 없습니다.')
+  }, [applyOrphanTasksPayload, applyProjectsPayload, normalizeProjects, orphanTasks, projects])
+
+  const openGmpRecordDetailById = useCallback(async (recordId: string) => {
+    setActiveTab('gmp-record')
+    let records = gmpRecords
+    if (!loadedDataRef.current.gmpRecords) {
+      const response = await fetch('/api/gmp-records', {
+        cache: 'no-store',
+        credentials: 'include',
+      })
+      if (!response.ok) {
+        throw new Error('GMP Record를 불러오지 못했습니다.')
+      }
+      const data = await response.json()
+      records = normalizeGmpRecords(data)
+      setGmpRecords(records)
+      loadedDataRef.current.gmpRecords = true
+    }
+    const record = records.find((item: any) => item.id === recordId)
+    if (!record) {
+      throw new Error('GMP Record를 찾을 수 없습니다.')
+    }
+    setSelectedTask({
+      task: record,
+      projectId: (record as any).projectId ?? null,
+      projectName: (record as any).projectName || 'N/A',
+    })
+    setTaskEditMode('edit')
+    setIsTaskEditing(true)
+  }, [gmpRecords, normalizeGmpRecords])
+
+  useEffect(() => {
+    if (deepLinkHandledRef.current || isLoadingSession) return
+
+    const params = new URLSearchParams(window.location.search)
+    const tabParam = params.get('tab')
+    const taskId = params.get('taskId')
+    const recordId = params.get('recordId')
+    const issueId = params.get('issueId')
+    const ticketId = params.get('ticketId')
+    const meetingNoteId = params.get('meetingNoteId')
+    const ganttProjectId = params.get('ganttProjectId')
+
+    if (!tabParam && !taskId && !recordId && !issueId && !ticketId && !meetingNoteId && !ganttProjectId) {
+      deepLinkHandledRef.current = true
+      return
+    }
+
+    deepLinkHandledRef.current = true
+    const clearDeepLinkParams = () => {
+      const cleanUrl = `${window.location.pathname}${window.location.hash || ''}`
+      window.history.replaceState({}, document.title, cleanUrl)
+    }
+
+    void (async () => {
+      try {
+        if (ticketId) {
+          const targetTab = TABS.some((tab) => tab.key === tabParam) ? (tabParam as TabKey) : 'incident'
+          setActiveTab(targetTab)
+          await handleOpenTicketDetail(ticketId)
+          return
+        }
+
+        if (issueId) {
+          await openIssueDetailById(issueId)
+          return
+        }
+
+        if (recordId) {
+          await openGmpRecordDetailById(recordId)
+          return
+        }
+
+        if (taskId) {
+          await openProjectTaskDetailById(taskId)
+          return
+        }
+
+        if (meetingNoteId) {
+          await openMeetingNoteDetailById(meetingNoteId)
+          return
+        }
+
+        if (ganttProjectId) {
+          const parsedProjectId = Number(ganttProjectId)
+          if (!Number.isNaN(parsedProjectId)) {
+            setPendingGanttProjectId(parsedProjectId)
+            setActiveTab('gantt')
+            return
+          }
+        }
+
+        if (tabParam && TABS.some((tab) => tab.key === tabParam)) {
+          setActiveTab(tabParam as TabKey)
+        }
+      } catch (error) {
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Deep link open error:', error)
+        }
+      } finally {
+        clearDeepLinkParams()
+      }
+    })()
+  }, [
+    handleOpenTicketDetail,
+    isLoadingSession,
+    openGmpRecordDetailById,
+    openIssueDetailById,
+    openMeetingNoteDetailById,
+    openProjectTaskDetailById,
+  ])
+
   useEffect(() => {
     if (activeTab === 'meetings') {
       const abortController = new AbortController()
@@ -440,37 +810,47 @@ export default function Home() {
     let isMounted = true
 
     const loadTabData = async () => {
+      const ticketType = getTicketTypeForTab(activeTab)
+      if (ticketType && isMounted && !loadedDataRef.current.tickets[ticketType]) {
+        await fetchTickets(ticketType, abortController.signal)
+      }
+      const needsFullProjectData = activeTab === 'list' || activeTab === 'tasks' || activeTab === 'personal'
+      if (needsFullProjectData && isMounted && projectsDetailRef.current !== 'full') {
+        await fetchProjects(abortController.signal, 'full')
+      }
+      const needsFullOrphanTasks = activeTab === 'tasks' || activeTab === 'personal'
+      if (needsFullOrphanTasks && isMounted && orphanTasksDetailRef.current !== 'full') {
+        await fetchOrphanTasks(abortController.signal, 'full')
+      }
       // GMP Record 탭이 활성화될 때 데이터 로드
-      if (activeTab === 'gmp-record') {
+      if (activeTab === 'gmp-record' && !loadedDataRef.current.gmpRecords) {
         await fetchGmpRecords(abortController.signal)
       }
       // 이슈 관리 탭이 활성화될 때 데이터 로드
-      if (activeTab === 'issues' && isMounted) {
+      if (activeTab === 'issues' && isMounted && !loadedDataRef.current.issues) {
         await fetchIssues(abortController.signal)
       }
       // VAL Pkg 탭이 활성화될 때 데이터 로드
-      if (activeTab === 'val-pkg' && isMounted) {
+      if (activeTab === 'val-pkg' && isMounted && !loadedDataRef.current.valPackages) {
         await fetchValPackages(abortController.signal)
-      }
-      // 회의록 탭이 활성화될 때 데이터 로드
-      if (activeTab === 'meetings' && isMounted) {
-        await fetchMeetingNotes(abortController.signal)
       }
       // 내 일감 탭이 활성화될 때 데이터 로드
       if (activeTab === 'personal' && isMounted) {
-        await fetchProjects(abortController.signal)
-        await fetchGmpRecords(abortController.signal)
-        await fetchOrphanTasks(abortController.signal)
-        try {
-          const ganttRes = await fetch('/api/gantt/my-tasks', { cache: 'no-store', signal: abortController.signal })
-          if (ganttRes.ok && !abortController.signal?.aborted) {
-            const ganttData = await ganttRes.json()
-            setGanttMyTasks(ganttData.tasks ?? [])
-          } else {
-            setGanttMyTasks([])
-          }
-        } catch {
-          if (!abortController.signal?.aborted) setGanttMyTasks([])
+        const personalFetches: Promise<void>[] = []
+        if (!loadedDataRef.current.projects || projectsDetailRef.current !== 'full') {
+          personalFetches.push(fetchProjects(abortController.signal, 'full'))
+        }
+        if (!loadedDataRef.current.gmpRecords) {
+          personalFetches.push(fetchGmpRecords(abortController.signal))
+        }
+        if (!loadedDataRef.current.orphanTasks || orphanTasksDetailRef.current !== 'full') {
+          personalFetches.push(fetchOrphanTasks(abortController.signal, 'full'))
+        }
+        if (!loadedDataRef.current.ganttMyTasks) {
+          personalFetches.push(fetchGanttMyTasks(abortController.signal))
+        }
+        if (personalFetches.length > 0) {
+          await Promise.all(personalFetches)
         }
       }
     }
@@ -481,7 +861,7 @@ export default function Home() {
       isMounted = false
       abortController.abort()
     }
-  }, [activeTab, fetchGmpRecords, fetchIssues, fetchValPackages, fetchProjects, fetchOrphanTasks])
+  }, [activeTab, fetchGanttMyTasks, fetchGmpRecords, fetchIssues, fetchTickets, fetchValPackages, fetchProjects, fetchOrphanTasks, getTicketTypeForTab])
 
   useEffect(() => {
     const closeMenu = () => setContextMenu(null)
@@ -533,7 +913,8 @@ export default function Home() {
         throw new Error(errorData.error || 'Failed to save project')
       }
 
-      await fetchProjects()
+      const data = await response.json().catch(() => ({}))
+      applyProjectsPayload(data.projects)
       setIsEditing(false)
       setSelectedProject(null)
       setEditMode('edit')
@@ -564,7 +945,8 @@ export default function Home() {
         throw new Error('Failed to add child item')
       }
 
-      await fetchProjects()
+      const data = await response.json().catch(() => ({}))
+      applyProjectsPayload(data.projects)
       setChildTarget(null)
       setIsChildModalOpen(false)
     } catch (err) {
@@ -593,10 +975,11 @@ export default function Home() {
         throw new Error('Failed to add task')
       }
 
-      // 데이터 새로고침 (내 일감 탭도 자동 업데이트됨)
-      await fetchProjects()
-      await fetchGmpRecords()
-      await fetchOrphanTasks()
+      const data = await response.json().catch(() => ({}))
+      applyProjectsPayload(data.projects)
+      if (projectId === null) {
+        await fetchOrphanTasks()
+      }
     } catch (err) {
       if (process.env.NODE_ENV === 'development') {
         console.error('Error adding task:', err)
@@ -617,6 +1000,7 @@ export default function Home() {
     }
 
     try {
+      let latestProjects: Project[] | undefined
       for (const projectId of Array.from(selectedProjectIds)) {
         const response = await fetch('/api/projects', {
           method: 'POST',
@@ -632,9 +1016,11 @@ export default function Home() {
         if (!response.ok) {
           throw new Error(`Failed to delete project ${projectId}`)
         }
+        const data = await response.json().catch(() => ({}))
+        latestProjects = data.projects
       }
 
-      await fetchProjects()
+      applyProjectsPayload(latestProjects)
       setSelectedProjectIds(new Set())
       setIsDeleteMode(false)
       alert('프로젝트가 삭제되었습니다.')
@@ -672,27 +1058,17 @@ export default function Home() {
         })
       })
 
-      // Orphan tasks 확인
-      try {
-        const orphanResponse = await fetch('/api/projects?type=orphan-tasks')
-        if (orphanResponse.ok) {
-          const orphanTasks = await orphanResponse.json()
-          orphanTasks.forEach((task: ProjectChild) => {
-            if (selectedTaskIds.has(task.id)) {
-              if (!tasksByProject.has(null)) {
-                tasksByProject.set(null, [])
-              }
-              tasksByProject.get(null)!.push(task.id)
-            }
-          })
+      orphanTasks.forEach((task: ProjectChild) => {
+        if (selectedTaskIds.has(task.id)) {
+          if (!tasksByProject.has(null)) {
+            tasksByProject.set(null, [])
+          }
+          tasksByProject.get(null)!.push(task.id)
         }
-      } catch (error) {
-        if (process.env.NODE_ENV === 'development') {
-          console.error('Error fetching orphan tasks:', error)
-        }
-      }
+      })
 
       // 각 프로젝트별로 일감 삭제
+      let latestProjects: Project[] | undefined
       for (const [projectId, taskIds] of Array.from(tasksByProject.entries())) {
         for (const taskId of taskIds) {
           try {
@@ -716,6 +1092,8 @@ export default function Home() {
               }
               throw new Error(`일감 ${taskId} 삭제 실패: ${errorMessage}`)
             }
+            const data = await response.json().catch(() => ({}))
+            latestProjects = data.projects
           } catch (err) {
             if (process.env.NODE_ENV === 'development') {
               console.error(`Error deleting task ${taskId}:`, err)
@@ -725,7 +1103,10 @@ export default function Home() {
         }
       }
 
-      await fetchProjects()
+      applyProjectsPayload(latestProjects)
+      if (tasksByProject.has(null)) {
+        setOrphanTasks((prev) => prev.filter((task) => !selectedTaskIds.has(task.id)))
+      }
       setSelectedTaskIds(new Set())
       setIsDeleteMode(false)
       alert('일감이 삭제되었습니다.')
@@ -1044,7 +1425,11 @@ export default function Home() {
         throw new Error('Failed to add issue')
       }
 
-      await fetchIssues()
+      const data = await response.json().catch(() => ({}))
+      if (data.issues) {
+        setIssues(data.issues)
+        loadedDataRef.current.issues = true
+      }
     } catch (err) {
       if (process.env.NODE_ENV === 'development') {
         console.error('Error adding issue:', err)
@@ -1071,7 +1456,11 @@ export default function Home() {
         throw new Error('Failed to update issue')
       }
 
-      await fetchIssues()
+      const data = await response.json().catch(() => ({}))
+      if (data.issues) {
+        setIssues(data.issues)
+        loadedDataRef.current.issues = true
+      }
     } catch (err) {
       if (process.env.NODE_ENV === 'development') {
         console.error('Error updating issue:', err)
@@ -1092,6 +1481,7 @@ export default function Home() {
     }
 
     try {
+      let latestIssues: Issue[] | undefined
       for (const issueId of Array.from(selectedIssueIds)) {
         const response = await fetch('/api/issues', {
           method: 'POST',
@@ -1107,9 +1497,14 @@ export default function Home() {
         if (!response.ok) {
           throw new Error(`Failed to delete issue ${issueId}`)
         }
+        const data = await response.json().catch(() => ({}))
+        latestIssues = data.issues
       }
 
-      await fetchIssues()
+      if (latestIssues) {
+        setIssues(latestIssues)
+        loadedDataRef.current.issues = true
+      }
       setSelectedIssueIds(new Set())
       setIsDeleteMode(false)
       alert('이슈가 삭제되었습니다.')
@@ -1296,9 +1691,11 @@ export default function Home() {
             loading={loading}
             error={error}
             onRefresh={async () => {
-              await fetchProjects()
-              await fetchIssues()
-              await fetchOrphanTasks()
+              await Promise.all([
+                fetchProjects(),
+                fetchIssues(),
+                fetchOrphanTasks(),
+              ])
             }}
           />
         ) : activeTab === 'list' ? (
@@ -1641,18 +2038,12 @@ export default function Home() {
             searchOwner={searchOwner}
             onSearchOwnerChange={setSearchOwner}
             onRefresh={async () => {
-              await fetchProjects()
-              await fetchGmpRecords()
-              await fetchOrphanTasks()
-              try {
-                const ganttRes = await fetch('/api/gantt/my-tasks', { cache: 'no-store' })
-                if (ganttRes.ok) {
-                  const ganttData = await ganttRes.json()
-                  setGanttMyTasks(ganttData.tasks ?? [])
-                } else setGanttMyTasks([])
-              } catch {
-                setGanttMyTasks([])
-              }
+              await Promise.all([
+                fetchProjects(),
+                fetchGmpRecords(),
+                fetchOrphanTasks(),
+                fetchGanttMyTasks(),
+              ])
             }}
             onGanttTaskClick={(projectId, _projectName) => {
               setPendingGanttProjectId(projectId)
@@ -1701,6 +2092,26 @@ export default function Home() {
             initialProjectId={pendingGanttProjectId ?? undefined}
             onInitialProjectIdConsumed={() => setPendingGanttProjectId(null)}
           />
+        ) : activeTab === 'request' || activeTab === 'incident' || activeTab === 'problem' || activeTab === 'change' ? (
+          <TicketsTable
+            ticketType={activeTab}
+            tickets={ticketsByType[activeTab] || []}
+            loading={ticketsLoading}
+            error={ticketsError}
+            onRefresh={() => void fetchTickets(activeTab)}
+            onNewTicket={() => void handleCreateTicket(activeTab)}
+            onTicketClick={(ticket) => void handleOpenTicketDetail(ticket.id)}
+          />
+        ) : activeTab === 'approval-inbox' ? (
+          <ApprovalInboxView onOpenTicket={(ticketId) => void handleOpenTicketDetail(ticketId)} />
+        ) : activeTab === 'notifications' ? (
+          <NotificationsView />
+        ) : activeTab === 'audit-log' ? (
+          <AuditLogView />
+        ) : activeTab === 'priority-policy' ? (
+          <TicketPoliciesView mode="priority" isAdmin={!!(user?.role === 'admin' || user?.isAdmin)} />
+        ) : activeTab === 'sla-policy' ? (
+          <TicketPoliciesView mode="sla" isAdmin={!!(user?.role === 'admin' || user?.isAdmin)} />
         ) : activeTab === 'issues' ? (
           <>
             <IssuesTable
@@ -1892,11 +2303,14 @@ export default function Home() {
                     if (!response.ok) {
                       throw new Error('Failed to update task')
                     }
+                    const data = await response.json().catch(() => ({}))
+                    applyProjectsPayload(data.projects)
                   }
                   // 데이터 새로고침 (내 일감 탭도 자동 업데이트됨)
-                  await fetchProjects()
                   await fetchGmpRecords()
-                  await fetchOrphanTasks()
+                  if (newProjectId === null) {
+                    await fetchOrphanTasks()
+                  }
                 }
                 setIsTaskEditing(false)
                 setSelectedTask(null)
@@ -1906,6 +2320,32 @@ export default function Home() {
                   console.error('Error saving task:', err)
                 }
                 alert(activeTab === 'gmp-record' ? 'GMP Record 저장에 실패했습니다.' : '일감 저장에 실패했습니다.')
+              }
+            }}
+          />
+        )}
+
+        {isTicketEditing && selectedTicket && (
+          <TicketEditModal
+            ticket={selectedTicket}
+            mode={ticketEditMode}
+            currentUser={user ? { id: user.id, name: user.name, username: user.username, role: user.role, isAdmin: user.isAdmin } : undefined}
+            onClose={() => {
+              setIsTicketEditing(false)
+              setSelectedTicket(null)
+              setTicketEditMode('edit')
+            }}
+            onSave={async (updatedTicket) => {
+              try {
+                await handleSaveTicket(updatedTicket)
+                setIsTicketEditing(false)
+                setSelectedTicket(null)
+                setTicketEditMode('edit')
+              } catch (err) {
+                if (process.env.NODE_ENV === 'development') {
+                  console.error('Error saving ticket:', err)
+                }
+                alert(err instanceof Error ? err.message : '티켓 저장에 실패했습니다.')
               }
             }}
           />
@@ -1944,6 +2384,10 @@ export default function Home() {
                   throw new Error(err.error || '일감 생성 실패')
                 }
                 const data = await res.json()
+                applyProjectsPayload(data.projects)
+                if (projectId === null) {
+                  await fetchOrphanTasks()
+                }
                 return data.newTaskId || null
               } catch (e) {
                 if (process.env.NODE_ENV === 'development') console.error(e)
@@ -1951,10 +2395,7 @@ export default function Home() {
                 return null
               }
             }}
-            onTaskCreated={async () => {
-              await fetchProjects()
-              await fetchOrphanTasks()
-            }}
+            onTaskCreated={async () => {}}
             onOpenGmpRecord={(gmpRecordId) => {
               const record = gmpRecords.find((r: any) => r.id === gmpRecordId)
               if (!record) return
@@ -2168,11 +2609,14 @@ export default function Home() {
                   if (!response.ok) {
                     throw new Error('Failed to update task')
                   }
+                  const data = await response.json().catch(() => ({}))
+                  applyProjectsPayload(data.projects)
                 }
                 // 데이터 새로고침 (내 일감 탭도 자동 업데이트됨)
-                await fetchProjects()
                 await fetchGmpRecords()
-                await fetchOrphanTasks()
+                if (newProjectId === null) {
+                  await fetchOrphanTasks()
+                }
                 setIsTaskEditing(false)
                 setSelectedTask(null)
                 setTaskEditMode('edit')

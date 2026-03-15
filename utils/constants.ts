@@ -1,16 +1,50 @@
-export type TabKey = 'dashboard' | 'gmp-record' | 'list' | 'val-pkg' | 'tasks' | 'personal' | 'gantt' | 'gantt-history' | 'issues' | 'search' | 'voc' | 'backup' | 'meetings' | 'action-items'
+export type TabKey =
+  | 'dashboard'
+  | 'gmp-record'
+  | 'list'
+  | 'val-pkg'
+  | 'tasks'
+  | 'personal'
+  | 'gantt'
+  | 'gantt-history'
+  | 'issues'
+  | 'request'
+  | 'incident'
+  | 'problem'
+  | 'change'
+  | 'approval-inbox'
+  | 'notifications'
+  | 'audit-log'
+  | 'priority-policy'
+  | 'sla-policy'
+  | 'search'
+  | 'voc'
+  | 'backup'
+  | 'meetings'
+  | 'action-items'
 
 export const TABS: { key: TabKey; label: string }[] = [
-  { key: 'dashboard', label: 'Dashboard' },
+  { key: 'dashboard', label: '대시보드' },
   { key: 'gmp-record', label: 'GMP Record' },
-  { key: 'tasks', label: '개발 일감' },
+  { key: 'tasks', label: '일감' },
   { key: 'list', label: '프로젝트' },
   { key: 'val-pkg', label: 'VAL Pkg' },
-  { key: 'personal', label: '개인별 일감' },
-  { key: 'gantt', label: 'Gantt Chart' },
-  { key: 'issues', label: '이슈 관리' },
+  { key: 'personal', label: '내 일감' },
+  { key: 'gantt', label: 'WBS 관리' },
+  { key: 'gantt-history', label: 'WBS 변경 이력' },
+  { key: 'issues', label: '이슈' },
+  { key: 'request', label: 'Service Request' },
+  { key: 'incident', label: 'Incident' },
+  { key: 'problem', label: 'Problem' },
+  { key: 'change', label: 'Change' },
+  { key: 'approval-inbox', label: '승인 Inbox' },
+  { key: 'notifications', label: '알림' },
+  { key: 'audit-log', label: '감사 로그' },
+  { key: 'priority-policy', label: '우선순위 정책' },
+  { key: 'sla-policy', label: 'SLA 정책' },
   { key: 'meetings', label: '회의록' },
-  { key: 'search', label: 'search' },
+  { key: 'action-items', label: '액션 아이템' },
+  { key: 'search', label: '검색' },
   { key: 'voc', label: 'VOC 관리' },
   { key: 'backup', label: '백업' },
 ]

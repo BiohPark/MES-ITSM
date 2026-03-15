@@ -1,8 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { TabKey } from '@/utils/constants'
-import { TABS } from '@/utils/constants'
 
 interface SidebarProps {
   activeTab: TabKey
@@ -15,70 +14,96 @@ interface SidebarProps {
 interface MenuItem {
   key: TabKey
   label: string
-  icon?: React.ReactNode
-  children?: MenuItem[]
+}
+
+interface MenuSection {
+  id: string
+  label: string
+  defaultTab: TabKey
+  adminOnly?: boolean
+  items: MenuItem[]
 }
 
 export function Sidebar({ activeTab, onTabChange, user, isCollapsed = false, onToggleCollapse }: SidebarProps) {
-  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['main', 'gantt']))
+  const isAdmin = user?.role === 'admin' || !!user?.isAdmin
+  const menuStructure = useMemo<MenuSection[]>(
+    () => [
+      {
+        id: 'home',
+        label: '홈',
+        defaultTab: 'dashboard',
+        items: [
+          { key: 'dashboard', label: '대시보드' },
+          { key: 'personal', label: '내 일감' },
+          { key: 'search', label: '검색' },
+        ],
+      },
+      {
+        id: 'project-execution',
+        label: '프로젝트 실행',
+        defaultTab: 'list',
+        items: [
+          { key: 'list', label: '프로젝트' },
+          { key: 'tasks', label: '일감' },
+          { key: 'gmp-record', label: 'GMP Record' },
+          { key: 'val-pkg', label: 'VAL Pkg' },
+          { key: 'gantt', label: 'WBS 관리' },
+          { key: 'gantt-history', label: 'WBS 변경 이력' },
+        ],
+      },
+      {
+        id: 'itsm-ops',
+        label: 'ITSM 운영',
+        defaultTab: 'request',
+        items: [
+          { key: 'request', label: 'Service Request' },
+          { key: 'incident', label: 'Incident' },
+          { key: 'problem', label: 'Problem' },
+          { key: 'change', label: 'Change' },
+          { key: 'approval-inbox', label: '승인 Inbox' },
+          { key: 'notifications', label: '알림' },
+          { key: 'issues', label: '이슈' },
+        ],
+      },
+      {
+        id: 'collaboration',
+        label: '협업',
+        defaultTab: 'meetings',
+        items: [
+          { key: 'meetings', label: '회의록' },
+          { key: 'action-items', label: '액션 아이템' },
+          { key: 'voc', label: 'VOC 관리' },
+        ],
+      },
+      {
+        id: 'admin',
+        label: '관리자',
+        defaultTab: 'priority-policy',
+        adminOnly: true,
+        items: [
+          { key: 'priority-policy', label: '우선순위 정책' },
+          { key: 'sla-policy', label: 'SLA 정책' },
+          { key: 'audit-log', label: '감사 로그' },
+          { key: 'backup', label: '백업' },
+        ],
+      },
+    ],
+    []
+  )
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['home', 'project-execution', 'itsm-ops']))
+  const [lastVisitedBySection, setLastVisitedBySection] = useState<Record<string, TabKey>>({})
 
-  // 메뉴 구조 정의 (ServiceNow 스타일 계층 구조)
-  const menuStructure: MenuItem[] = [
-    {
-      key: 'dashboard',
-      label: '대시보드',
-    },
-    {
-      key: 'list',
-      label: '프로젝트',
-    },
-    {
-      key: 'tasks',
-      label: '일감',
-    },
-    {
-      key: 'gmp-record',
-      label: 'GMP Record',
-    },
-    {
-      key: 'val-pkg',
-      label: 'VAL Package',
-    },
-    {
-      key: 'issues',
-      label: '이슈',
-    },
-    {
-      key: 'meetings',
-      label: '회의록',
-      children: [
-        {
-          key: 'action-items',
-          label: '액션 아이템',
-        },
-      ],
-    },
-    {
-      key: 'personal',
-      label: '내 일감',
-    },
-    {
-      key: 'gantt',
-      label: '간트 차트',
-      children: [
-        { key: 'gantt-history' as TabKey, label: 'History' },
-      ],
-    },
-    {
-      key: 'search',
-      label: '검색',
-    },
-    {
-      key: 'voc',
-      label: 'VOC 관리',
-    },
-    ...((user?.role === 'admin' || user?.isAdmin) ? [{ key: 'backup' as TabKey, label: '백업' }] : []),
-  ]
+  const getSectionForTab = useCallback(
+    (tab: TabKey) => menuStructure.find((section) => section.items.some((item) => item.key === tab)),
+    [menuStructure]
+  )
+
+  useEffect(() => {
+    const section = getSectionForTab(activeTab)
+    if (!section) return
+    setExpandedSections((prev) => new Set(prev).add(section.id))
+    setLastVisitedBySection((prev) => ({ ...prev, [section.id]: activeTab }))
+  }, [activeTab, getSectionForTab])
 
   const toggleSection = (section: string) => {
     setExpandedSections((prev) => {
@@ -94,6 +119,11 @@ export function Sidebar({ activeTab, onTabChange, user, isCollapsed = false, onT
 
   const handleMenuClick = (key: TabKey) => {
     onTabChange(key)
+  }
+
+  const handleSectionClick = (section: MenuSection) => {
+    const targetTab = lastVisitedBySection[section.id] || section.defaultTab
+    onTabChange(targetTab)
   }
 
   return (
@@ -113,33 +143,29 @@ export function Sidebar({ activeTab, onTabChange, user, isCollapsed = false, onT
 
       <nav className="servicenow-sidebar__nav">
         <ul className="servicenow-sidebar__menu">
-          {menuStructure.map((item) => {
-            // Admin만 백업 탭 보기
-            if (item.key === 'backup' && (!user || user.role !== 'admin')) {
+          {menuStructure.map((section) => {
+            if (section.adminOnly && !isAdmin) {
               return null
             }
-
-            const isActive = activeTab === item.key
-            const hasChildren = item.children && item.children.length > 0
-            const isExpanded = expandedSections.has(item.key)
+            const isExpanded = expandedSections.has(section.id)
+            const isSectionActive = section.items.some((item) => item.key === activeTab)
 
             return (
-              <li key={item.key} className="servicenow-sidebar__menu-item">
-                <div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+              <li key={section.id} className="servicenow-sidebar__menu-item">
+                <div style={{ display: 'flex', alignItems: 'center', width: '100%', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
                   <button
-                    className={`servicenow-sidebar__menu-link ${isActive ? 'servicenow-sidebar__menu-link--active' : ''}`}
-                    onClick={() => handleMenuClick(item.key)}
-                    title={isCollapsed ? item.label : undefined}
-                    style={{ flex: 1 }}
+                    className={`servicenow-sidebar__menu-link ${isSectionActive ? 'servicenow-sidebar__menu-link--active' : ''}`}
+                    onClick={() => handleSectionClick(section)}
+                    title={isCollapsed ? section.label : undefined}
+                    style={{ flex: 1, fontWeight: 600 }}
                   >
-                    {item.icon && <span className="servicenow-sidebar__menu-icon">{item.icon}</span>}
-                    {!isCollapsed && <span className="servicenow-sidebar__menu-text">{item.label}</span>}
+                    {!isCollapsed && <span className="servicenow-sidebar__menu-text">{section.label}</span>}
                   </button>
-                  {hasChildren && !isCollapsed && (
+                  {!isCollapsed && (
                     <button
                       onClick={(e) => {
                         e.stopPropagation()
-                        toggleSection(item.key)
+                        toggleSection(section.id)
                       }}
                       style={{
                         background: 'none',
@@ -154,9 +180,9 @@ export function Sidebar({ activeTab, onTabChange, user, isCollapsed = false, onT
                     </button>
                   )}
                 </div>
-                {hasChildren && isExpanded && !isCollapsed && (
+                {isExpanded && !isCollapsed && (
                   <ul style={{ paddingLeft: '1.5rem', marginTop: '0.25rem' }}>
-                    {item.children!.map((child) => {
+                    {section.items.map((child) => {
                       const isChildActive = activeTab === child.key
                       return (
                         <li key={child.key} style={{ marginBottom: '0.25rem' }}>

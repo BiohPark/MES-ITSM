@@ -179,18 +179,8 @@ export function PersonalTasksView({
         })
         if (response.ok) {
           const data = await response.json()
-          if (process.env.NODE_ENV === 'development') {
-            console.log('[PersonalTasksView] 액션 아이템 조회 결과:', {
-              currentUser: currentUser.name,
-              totalItems: data.length,
-              items: data,
-            })
-          }
           // 진행 중인 액션 아이템만 필터링 (status가 'in_progress'인 것만)
           const inProgressItems = data.filter((item: any) => item.status === 'in_progress')
-          if (process.env.NODE_ENV === 'development') {
-            console.log('[PersonalTasksView] 진행 중인 액션 아이템:', inProgressItems)
-          }
           setMyActionItems(inProgressItems)
         } else {
           console.error('[PersonalTasksView] 액션 아이템 조회 실패:', response.status, response.statusText)

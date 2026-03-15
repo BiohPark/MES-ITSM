@@ -106,7 +106,6 @@ export async function POST(req: NextRequest) {
       )
     } finally {
       conn.release()
-      await pool.end()
     }
   } catch (error: any) {
     console.error('[gantt/events][POST] 치명적 오류:', error)

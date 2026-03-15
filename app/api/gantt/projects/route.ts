@@ -2,20 +2,57 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getPool } from '@/lib/db'
 import { getSession } from '@/lib/auth'
 
+type GanttProjectRow = {
+  id: number
+  name: string
+  description?: string | null
+  ownerId?: string | null
+  createdAt?: string
+  updatedAt?: string
+}
+
+type GanttProjectsCacheEntry = {
+  cachedAt: number
+  projects: GanttProjectRow[]
+}
+
+type GanttProjectsCacheState = typeof globalThis & {
+  __itsmGanttProjectsCache?: GanttProjectsCacheEntry
+}
+
+const ganttProjectsCacheState = globalThis as GanttProjectsCacheState
+const GANTT_PROJECTS_CACHE_TTL_MS = 15_000
+
 // Gantt 프로젝트 목록 조회 / 생성 / 수정 / 삭제
 
 export async function GET() {
   try {
-    const pool = getPool()
-    const [rows] = await pool.query<any[]>(`
-      SELECT id, name, description, owner_id as ownerId, created_at as createdAt, updated_at as updatedAt
-      FROM gantt_projects
-      ORDER BY id DESC
-    `)
+    const cached = ganttProjectsCacheState.__itsmGanttProjectsCache
+    if (cached && Date.now() - cached.cachedAt < GANTT_PROJECTS_CACHE_TTL_MS) {
+      return NextResponse.json({ projects: cached.projects, cached: true })
+    }
 
+    const pool = getPool()
+    const [rawRows] = await pool.query(
+      `SELECT id, name, description, owner_id as ownerId, created_at as createdAt, updated_at as updatedAt
+       FROM gantt_projects
+       ORDER BY id DESC`
+    )
+    const rows = rawRows as GanttProjectRow[]
+
+    ganttProjectsCacheState.__itsmGanttProjectsCache = {
+      cachedAt: Date.now(),
+      projects: rows,
+    }
     return NextResponse.json({ projects: rows })
   } catch (error: any) {
     console.error('[gantt/projects][GET] 오류:', error)
+    if (error?.code === 'ER_CON_COUNT_ERROR') {
+      const cached = ganttProjectsCacheState.__itsmGanttProjectsCache
+      if (cached) {
+        return NextResponse.json({ projects: cached.projects, stale: true }, { status: 200 })
+      }
+    }
     return NextResponse.json(
       { error: 'Failed to load Gantt projects', details: error.message },
       { status: 500 }
@@ -43,12 +80,14 @@ export async function POST(req: NextRequest) {
         `UPDATE gantt_projects SET name = ?, description = ? WHERE id = ?`,
         [name, description ?? null, id]
       )
+      ganttProjectsCacheState.__itsmGanttProjectsCache = undefined
       return NextResponse.json({ success: true, id })
     } else {
       const [result] = await pool.query<any>(
         `INSERT INTO gantt_projects (name, description, owner_id) VALUES (?, ?, ?)`,
         [name, description ?? null, session?.userId ?? null]
       )
+      ganttProjectsCacheState.__itsmGanttProjectsCache = undefined
       return NextResponse.json({ success: true, id: result.insertId })
     }
   } catch (error: any) {
@@ -85,6 +124,7 @@ export async function DELETE(req: NextRequest) {
       await conn.query(`DELETE FROM gantt_projects WHERE id = ?`, [id])
 
       await conn.commit()
+      ganttProjectsCacheState.__itsmGanttProjectsCache = undefined
       return NextResponse.json({ success: true })
     } catch (error: any) {
       await conn.rollback()
