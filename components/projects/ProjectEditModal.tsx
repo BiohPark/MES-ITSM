@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import type { Project, ProjectChild } from '@/types/project'
 import { CommentsSection } from '../common/CommentsSection'
+import { useI18n } from '@/lib/i18n'
 
 export function ProjectEditModal({
   project,
@@ -18,6 +19,7 @@ export function ProjectEditModal({
   onSave: (project: Project) => Promise<void> | void
   currentUser?: { name: string; username: string }
 }) {
+  const { t } = useI18n()
   const [formData, setFormData] = useState<any>({ ...project, description: (project as any).description || '', start: (project as any).start || new Date().toISOString().slice(0, 10), srb_ver: (project as any).srb_ver || '' })
   const [saving, setSaving] = useState(false)
   const [users, setUsers] = useState<Array<{ id: string; name: string }>>([])
@@ -63,7 +65,7 @@ export function ProjectEditModal({
     e.preventDefault()
     
     if (formData.owner && !users.some(u => u.name === formData.owner)) {
-      alert('등록되지 않은 사용자입니다.')
+      alert(t('comp.projectEditModal.unknownUser'))
       return
     }
     
@@ -99,7 +101,7 @@ export function ProjectEditModal({
       <div className="modal-overlay side-panel" onClick={onClose} />
       <div className="modal-content side-panel" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>{mode === 'edit' ? '프로젝트 수정' : '새 프로젝트 추가'}</h2>
+          <h2>{mode === 'edit' ? t('comp.projectEditModal.titleEdit') : t('comp.projectEditModal.titleCreate')}</h2>
           <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
             {mode === 'edit' && (
               <div style={{ display: 'flex', gap: '0.25rem', marginRight: '0.5rem' }}>
@@ -108,14 +110,14 @@ export function ProjectEditModal({
                   className={activeTab === 'info' ? 'btn btn-primary' : 'btn btn-secondary'}
                   style={{ padding: '0.375rem 0.75rem', fontSize: '0.875rem' }}
                 >
-                  정보
+                  {t('comp.projectEditModal.tabInfo')}
                 </button>
                 <button
                   onClick={() => setActiveTab('comments')}
                   className={activeTab === 'comments' ? 'btn btn-primary' : 'btn btn-secondary'}
                   style={{ padding: '0.375rem 0.75rem', fontSize: '0.875rem' }}
                 >
-                  댓글
+                  {t('comp.projectEditModal.tabComments')}
                 </button>
               </div>
             )}
@@ -127,7 +129,7 @@ export function ProjectEditModal({
                 className="btn btn-primary"
                 style={{ margin: 0 }}
               >
-                {saving ? '저장 중...' : 'Save'}
+                {saving ? t('comp.ui.saving') : t('comp.ui.save')}
               </button>
             )}
             <button className="modal-close" onClick={onClose}>
@@ -139,7 +141,7 @@ export function ProjectEditModal({
         {activeTab === 'info' && (
         <form id="project-form" onSubmit={handleSubmit} className="project-form">
           <div className="form-group">
-            <label htmlFor="id">프로젝트 ID</label>
+            <label htmlFor="id">{t('comp.projectEditModal.projectId')}</label>
             <input
               type="text"
               id="id"
@@ -165,7 +167,7 @@ export function ProjectEditModal({
           </div>
 
           <div className="form-group">
-            <label htmlFor="owner">담당 리더</label>
+            <label htmlFor="owner">{t('comp.projectEditModal.owner')}</label>
             <select
               id="owner"
               name="owner"
@@ -174,7 +176,7 @@ export function ProjectEditModal({
               required
               className="form-input"
             >
-              <option value="">선택하세요</option>
+              <option value="">{t('comp.projectEditModal.select')}</option>
               {users.map((user) => (
                 <option key={user.id} value={user.name}>
                   {user.name}
@@ -185,7 +187,7 @@ export function ProjectEditModal({
 
           <div className="form-row">
             <div className="form-group">
-              <label htmlFor="members">팀원 수</label>
+              <label htmlFor="members">{t('comp.projectEditModal.members')}</label>
               <input
                 type="number"
                 id="members"
@@ -215,7 +217,7 @@ export function ProjectEditModal({
 
           <div className="form-row">
             <div className="form-group">
-              <label htmlFor="status">상태</label>
+              <label htmlFor="status">{t('comp.projectEditModal.status')}</label>
               <select
                 id="status"
                 name="status"
@@ -232,7 +234,7 @@ export function ProjectEditModal({
             </div>
 
             <div className="form-group">
-              <label htmlFor="srb_ver">SRB Ver.</label>
+              <label htmlFor="srb_ver">{t('comp.projectEditModal.srbVer')}</label>
               <input
                 type="text"
                 id="srb_ver"
@@ -240,7 +242,7 @@ export function ProjectEditModal({
                 value={formData.srb_ver || ''}
                 onChange={handleChange}
                 className="form-input"
-                placeholder="예: SRB 26.1"
+                placeholder={t('comp.projectEditModal.srbPh')}
               />
             </div>
 
@@ -258,13 +260,13 @@ export function ProjectEditModal({
                   }}
                   style={{ cursor: 'pointer' }}
                 />
-                현업 CC 존재
+                {t('comp.projectEditModal.ccExists')}
               </label>
             </div>
 
             {formData.has_cc && (
               <div className="form-group">
-                <label htmlFor="cc_number">CC 번호</label>
+                <label htmlFor="cc_number">{t('comp.projectEditModal.ccNumber')}</label>
                 <input
                   type="text"
                   id="cc_number"
@@ -272,16 +274,16 @@ export function ProjectEditModal({
                   value={formData.cc_number || ''}
                   onChange={handleChange}
                   className="form-input"
-                  placeholder="예: CC-00001"
+                  placeholder={t('comp.projectEditModal.ccNumberPh')}
                 />
                 <small style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.25rem', display: 'block' }}>
-                  프로젝트에 연결된 CC 번호를 입력하세요. 이 프로젝트 하위의 모든 일감에서 CC 연결로 인식됩니다.
+                  {t('comp.projectEditModal.ccHint')}
                 </small>
               </div>
             )}
 
             <div className="form-group">
-              <label htmlFor="start">시작일</label>
+              <label htmlFor="start">{t('comp.projectEditModal.start')}</label>
               <input
                 type="date"
                 id="start"
@@ -293,7 +295,7 @@ export function ProjectEditModal({
             </div>
 
             <div className="form-group">
-              <label htmlFor="due">마감일</label>
+              <label htmlFor="due">{t('comp.projectEditModal.due')}</label>
               <input
                 type="date"
                 id="due"
@@ -307,7 +309,7 @@ export function ProjectEditModal({
           </div>
 
           <div className="form-group">
-            <label htmlFor="description">상세 내용</label>
+            <label htmlFor="description">{t('comp.projectEditModal.detail')}</label>
             <textarea
               id="description"
               name="description"
@@ -322,13 +324,13 @@ export function ProjectEditModal({
                 fontSize: '0.875rem',
                 lineHeight: '1.4',
               }}
-              placeholder="프로젝트의 상세 내용을 입력하세요..."
+              placeholder={t('comp.projectEditModal.detailPh')}
             />
           </div>
 
           {formData.children?.length ? (
             <div className="child-preview">
-              <p>하위 아이템</p>
+              <p>{t('comp.projectEditModal.childrenHeading')}</p>
               <ul>
                 {formData.children.map((child: ProjectChild, index: number) => (
                   <li key={`${formData.id}-${child.id}-${index}`}>

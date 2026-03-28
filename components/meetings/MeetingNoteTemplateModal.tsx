@@ -1,6 +1,8 @@
 'use client'
 
+import { useMemo } from 'react'
 import type { MeetingNote } from '@/types/meeting'
+import { useI18n } from '@/lib/i18n'
 
 export function MeetingNoteTemplateModal({
   meetingNote,
@@ -9,52 +11,64 @@ export function MeetingNoteTemplateModal({
   meetingNote: MeetingNote
   onClose: () => void
 }) {
+  const { t } = useI18n()
+
   const formatDate = (value?: string | null) => value || '-'
 
-  const templateText = [
-    `회의 제목: ${meetingNote.title || '-'}`,
-    `회의 일시: ${formatDate(meetingNote.meeting_date)}`,
-    `작성자: ${meetingNote.created_by || '-'}`,
-    '',
-    `참석자: ${
-      meetingNote.attendees && meetingNote.attendees.length > 0
-        ? meetingNote.attendees.join(', ')
-        : '-'
-    }`,
-    '',
-    '[안건]',
-    ...(meetingNote.agenda && meetingNote.agenda.length > 0
-      ? meetingNote.agenda.map((item, idx) => `  ${idx + 1}. ${item}`)
-      : ['  -']),
-    '',
-    '[논의 내용]',
-    meetingNote.discussion || '-',
-    '',
-    '[결정 사항]',
-    meetingNote.decisions || '-',
-    '',
-    '[Action Items]',
-    ...(meetingNote.action_items && meetingNote.action_items.length > 0
-      ? meetingNote.action_items.map((item, idx) => {
-          const due = item.due_date ? ` (Due: ${formatDate(item.due_date)})` : ''
-          const status =
-            item.status === 'completed'
-              ? '완료'
-              : item.status === 'in_progress'
-                ? '진행 중'
-                : '대기'
-          return `  ${idx + 1}. ${item.description} - 담당자: ${item.assignee}${due} [${status}]`
-        })
-      : ['  -']),
-  ].join('\n')
+  const templateText = useMemo(() => {
+    return [
+      t('comp.meetingTemplate.lineTitle', { v: meetingNote.title || '-' }),
+      t('comp.meetingTemplate.lineDate', { v: formatDate(meetingNote.meeting_date) }),
+      t('comp.meetingTemplate.lineAuthor', { v: meetingNote.created_by || '-' }),
+      '',
+      `${t('comp.meetingTemplate.attendees')} ${
+        meetingNote.attendees && meetingNote.attendees.length > 0
+          ? meetingNote.attendees.join(', ')
+          : '-'
+      }`,
+      '',
+      t('comp.meetingTemplate.sectionAgenda'),
+      ...(meetingNote.agenda && meetingNote.agenda.length > 0
+        ? meetingNote.agenda.map((item, idx) => `  ${idx + 1}. ${item}`)
+        : ['  -']),
+      '',
+      t('comp.meetingTemplate.sectionDiscussion'),
+      meetingNote.discussion || '-',
+      '',
+      t('comp.meetingTemplate.sectionDecisions'),
+      meetingNote.decisions || '-',
+      '',
+      t('comp.meetingTemplate.sectionActions'),
+      ...(meetingNote.action_items && meetingNote.action_items.length > 0
+        ? meetingNote.action_items.map((item, idx) => {
+            const due = item.due_date
+              ? t('comp.meetingTemplate.dueSuffix', { v: formatDate(item.due_date) })
+              : ''
+            const status =
+              item.status === 'completed'
+                ? t('comp.meetingTemplate.stDone')
+                : item.status === 'in_progress'
+                  ? t('comp.meetingTemplate.stProgress')
+                  : t('comp.meetingTemplate.stPending')
+            return t('comp.meetingTemplate.actionLine', {
+              n: idx + 1,
+              desc: item.description,
+              assignee: item.assignee,
+              due,
+              status,
+            })
+          })
+        : ['  -']),
+    ].join('\n')
+  }, [meetingNote, t])
 
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(templateText)
-      alert('회의록 템플릿이 클립보드에 복사되었습니다.\n이메일 본문에 Ctrl+V로 붙여넣기 하세요.')
+      alert(t('comp.meetingTemplate.copyOk'))
     } catch (error) {
       console.error('Failed to copy meeting template:', error)
-      alert('클립보드 복사에 실패했습니다. 텍스트를 직접 선택해서 복사해 주세요.')
+      alert(t('comp.meetingTemplate.copyFail'))
     }
   }
 
@@ -66,7 +80,7 @@ export function MeetingNoteTemplateModal({
         style={{ maxWidth: '1024px', maxHeight: '95vh', overflowY: 'auto' }}
       >
         <div className="modal-header">
-          <h2>회의록 템플릿 보기</h2>
+          <h2>{t('comp.meetingTemplate.title')}</h2>
           <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
             <button
               type="button"
@@ -74,7 +88,7 @@ export function MeetingNoteTemplateModal({
               style={{ margin: 0 }}
               onClick={handleCopy}
             >
-              복사
+              {t('comp.meetingTemplate.copyBtn')}
             </button>
             <button className="modal-close" onClick={onClose}>
               ×
@@ -84,7 +98,7 @@ export function MeetingNoteTemplateModal({
 
         <div className="project-form">
           <div className="form-group">
-            <label>이메일에 붙여넣을 회의록 템플릿</label>
+            <label>{t('comp.meetingTemplate.label')}</label>
             <textarea
               readOnly
               value={templateText}
@@ -101,4 +115,3 @@ export function MeetingNoteTemplateModal({
     </div>
   )
 }
-

@@ -3,8 +3,10 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { useI18n } from '@/lib/i18n'
 
 export default function RegisterPage() {
+  const { t } = useI18n()
   const router = useRouter()
   const [formData, setFormData] = useState({
     username: '',
@@ -30,12 +32,12 @@ export default function RegisterPage() {
     setError('')
 
     if (formData.password !== formData.confirmPassword) {
-      setError('비밀번호가 일치하지 않습니다.')
+      setError(t('auth.register.errorPasswordMismatch'))
       return
     }
 
     if (formData.password.length < 8) {
-      setError('비밀번호는 최소 8자 이상이어야 합니다.')
+      setError(t('auth.register.errorPasswordLength'))
       return
     }
 
@@ -60,7 +62,7 @@ export default function RegisterPage() {
       const data = await response.json()
 
       if (!response.ok) {
-        setError(data.error || '회원가입에 실패했습니다.')
+        setError(data.error || t('auth.register.errorRegister'))
         setLoading(false)
         return
       }
@@ -70,7 +72,7 @@ export default function RegisterPage() {
       router.refresh()
     } catch (error) {
       console.error('Register error:', error)
-      setError('회원가입 중 오류가 발생했습니다.')
+      setError(t('auth.register.errorGeneric'))
       setLoading(false)
     }
   }
@@ -99,7 +101,7 @@ export default function RegisterPage() {
           textAlign: 'center',
           color: '#111827',
         }}>
-          회원가입
+          {t('auth.register.title')}
         </h1>
         <p style={{
           fontSize: '0.875rem',
@@ -107,7 +109,7 @@ export default function RegisterPage() {
           textAlign: 'center',
           marginBottom: '2rem',
         }}>
-          새 계정을 만드세요
+          {t('auth.register.subtitle')}
         </p>
 
         {error && (
@@ -133,7 +135,7 @@ export default function RegisterPage() {
               color: '#374151',
               marginBottom: '0.5rem',
             }}>
-              권한 *
+              {t('auth.register.role')}
             </label>
             <select
               id="role"
@@ -149,10 +151,10 @@ export default function RegisterPage() {
                 boxSizing: 'border-box',
               }}
             >
-              <option value="user">일반 사용자</option>
-              <option value="Viewonly">Viewonly (읽기 전용)</option>
-              <option value="그룹 매니저">그룹 매니저</option>
-              <option value="파트 매니저">파트 매니저</option>
+              <option value="user">{t('auth.register.roleUser')}</option>
+              <option value="Viewonly">{t('auth.register.roleViewonly')}</option>
+              <option value="그룹 매니저">{t('auth.register.roleGroupManager')}</option>
+              <option value="파트 매니저">{t('auth.register.rolePartManager')}</option>
             </select>
           </div>
 
@@ -164,7 +166,7 @@ export default function RegisterPage() {
               color: '#374151',
               marginBottom: '0.5rem',
             }}>
-              ID *
+              {t('auth.register.username')}
             </label>
             <input
               type="text"
@@ -181,7 +183,7 @@ export default function RegisterPage() {
                 fontSize: '1rem',
                 boxSizing: 'border-box',
               }}
-              placeholder="ID를 입력하세요"
+              placeholder={t('auth.register.placeholderUsername')}
             />
           </div>
 
@@ -193,7 +195,7 @@ export default function RegisterPage() {
               color: '#374151',
               marginBottom: '0.5rem',
             }}>
-              이름 *
+              {t('auth.register.name')}
             </label>
             <input
               type="text"
@@ -210,7 +212,7 @@ export default function RegisterPage() {
                 fontSize: '1rem',
                 boxSizing: 'border-box',
               }}
-              placeholder="이름을 입력하세요"
+              placeholder={t('auth.register.placeholderName')}
             />
           </div>
 
@@ -222,7 +224,7 @@ export default function RegisterPage() {
               color: '#374151',
               marginBottom: '0.5rem',
             }}>
-              이메일 *
+              {t('auth.register.email')}
             </label>
             <input
               type="email"
@@ -239,7 +241,7 @@ export default function RegisterPage() {
                 fontSize: '1rem',
                 boxSizing: 'border-box',
               }}
-              placeholder="이메일을 입력하세요"
+              placeholder={t('auth.register.placeholderEmail')}
             />
           </div>
 
@@ -251,7 +253,7 @@ export default function RegisterPage() {
               color: '#374151',
               marginBottom: '0.5rem',
             }}>
-              비밀번호 * (최소 8자, 영문자와 숫자 포함)
+              {t('auth.register.password')}
             </label>
             <input
               type="password"
@@ -268,7 +270,7 @@ export default function RegisterPage() {
                 fontSize: '1rem',
                 boxSizing: 'border-box',
               }}
-              placeholder="비밀번호를 입력하세요"
+              placeholder={t('auth.register.placeholderPassword')}
             />
           </div>
 
@@ -280,7 +282,7 @@ export default function RegisterPage() {
               color: '#374151',
               marginBottom: '0.5rem',
             }}>
-              비밀번호 확인 *
+              {t('auth.register.confirmPassword')}
             </label>
             <input
               type="password"
@@ -297,7 +299,7 @@ export default function RegisterPage() {
                 fontSize: '1rem',
                 boxSizing: 'border-box',
               }}
-              placeholder="비밀번호를 다시 입력하세요"
+              placeholder={t('auth.register.placeholderConfirm')}
             />
           </div>
 
@@ -317,7 +319,7 @@ export default function RegisterPage() {
               marginBottom: '1rem',
             }}
           >
-            {loading ? '가입 중...' : '회원가입'}
+            {loading ? t('auth.register.submitting') : t('auth.register.submit')}
           </button>
         </form>
 
@@ -325,7 +327,7 @@ export default function RegisterPage() {
           textAlign: 'center',
           fontSize: '0.875rem',
         }}>
-          <span style={{ color: '#6b7280' }}>이미 계정이 있으신가요? </span>
+          <span style={{ color: '#6b7280' }}>{t('auth.register.hasAccount')}</span>
           <Link
             href="/login"
             style={{
@@ -334,7 +336,7 @@ export default function RegisterPage() {
               fontWeight: 500,
             }}
           >
-            로그인
+            {t('auth.register.loginLink')}
           </Link>
         </div>
       </div>

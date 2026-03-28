@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { formatFileSize } from '@/utils/file-utils'
+import { useI18n } from '@/lib/i18n'
 
 interface Attachment {
   id: string
@@ -31,6 +32,8 @@ export function AttachmentSection({
   onUploadComplete,
   titleHint,
 }: AttachmentSectionProps) {
+  const { t, locale } = useI18n()
+  const dateLocale = locale.startsWith('en') ? 'en-US' : 'ko-KR'
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
@@ -57,15 +60,15 @@ export function AttachmentSection({
         setAttachments(data.attachments || [])
       } else {
         const errorData = await response.json().catch(() => ({}))
-        setError(errorData.error || '첨부파일 목록을 불러오는데 실패했습니다.')
+        setError(errorData.error || t('comp.attachmentSection.loadFail'))
       }
     } catch (err) {
       console.error('Error fetching attachments:', err)
-      setError('첨부파일 목록을 불러오는데 실패했습니다.')
+      setError(t('comp.attachmentSection.loadFail'))
     } finally {
       setLoading(false)
     }
-  }, [recordId, recordType])
+  }, [recordId, recordType, t])
 
   useEffect(() => {
     fetchAttachments()
@@ -80,7 +83,7 @@ export function AttachmentSection({
 
   const uploadFiles = async (files: File[]) => {
     if (!currentUser) {
-      setError('로그인이 필요합니다.')
+      setError(t('comp.attachmentSection.loginRequired'))
       return
     }
 
@@ -141,7 +144,7 @@ export function AttachmentSection({
         onUploadComplete()
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : '파일 업로드에 실패했습니다.')
+      setError(err instanceof Error ? err.message : t('comp.attachmentSection.uploadFail'))
     } finally {
       setUploading(false)
       setUploadProgress({})
@@ -149,7 +152,7 @@ export function AttachmentSection({
   }
 
   const handleDelete = async (attachmentId: string) => {
-    if (!confirm('이 첨부파일을 삭제하시겠습니까?')) {
+    if (!confirm(t('comp.attachmentSection.deleteConfirm'))) {
       return
     }
 
@@ -163,11 +166,11 @@ export function AttachmentSection({
         await fetchAttachments()
       } else {
         const errorData = await response.json().catch(() => ({}))
-        setError(errorData.error || '첨부파일 삭제에 실패했습니다.')
+        setError(errorData.error || t('comp.attachmentSection.deleteFail'))
       }
     } catch (err) {
       console.error('Error deleting attachment:', err)
-      setError('첨부파일 삭제에 실패했습니다.')
+      setError(t('comp.attachmentSection.deleteFail'))
     }
   }
 
@@ -203,7 +206,7 @@ export function AttachmentSection({
   return (
     <div className="servicenow-attachment-section">
       <h3 className="servicenow-attachment-section__title">
-        첨부파일
+        {t('comp.attachmentSection.title')}
         {titleHint && <span style={{ fontWeight: 400, color: '#64748b', fontSize: '0.9em' }}> — {titleHint}</span>}
       </h3>
 
@@ -218,7 +221,7 @@ export function AttachmentSection({
       >
         <div className="servicenow-attachment-upload__content">
           <p className="servicenow-attachment-upload__text">
-            파일을 여기에 드래그하거나 클릭하여 선택하세요
+            {t('comp.attachmentSection.dropHint')}
           </p>
           <button
             type="button"
@@ -226,7 +229,7 @@ export function AttachmentSection({
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading || !currentUser}
           >
-            파일 선택
+            {t('comp.attachmentSection.chooseFile')}
           </button>
           <input
             ref={fileInputRef}
@@ -238,7 +241,7 @@ export function AttachmentSection({
         </div>
         {uploading && (
           <div className="servicenow-attachment-upload__progress">
-            <p>업로드 중...</p>
+            <p>{t('comp.attachmentSection.uploading')}</p>
             {Object.entries(uploadProgress).map(([fileName, progress]) => (
               <div key={fileName} className="servicenow-attachment-upload__progress-item">
                 <span>{fileName}</span>
@@ -262,18 +265,18 @@ export function AttachmentSection({
 
       {/* 첨부파일 목록 */}
       {loading ? (
-        <div className="servicenow-attachment-section__loading">로딩 중...</div>
+        <div className="servicenow-attachment-section__loading">{t('comp.attachmentSection.loading')}</div>
       ) : attachments.length > 0 ? (
         <div className="servicenow-attachment-list">
           <table className="servicenow-table">
             <thead>
               <tr>
-                <th style={{ width: '72px' }}>미리보기</th>
-                <th>파일명</th>
-                <th>크기</th>
-                <th>업로더</th>
-                <th>업로드 날짜</th>
-                <th>작업</th>
+                <th style={{ width: '72px' }}>{t('comp.attachmentSection.colPreview')}</th>
+                <th>{t('comp.attachmentSection.colName')}</th>
+                <th>{t('comp.attachmentSection.colSize')}</th>
+                <th>{t('comp.attachmentSection.colUploader')}</th>
+                <th>{t('comp.attachmentSection.colUploadedAt')}</th>
+                <th>{t('comp.attachmentSection.colActions')}</th>
               </tr>
             </thead>
             <tbody>
@@ -287,7 +290,7 @@ export function AttachmentSection({
                           href={`/api/attachments/${attachment.id}/download`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          title="크게 보기"
+                          title={t('comp.attachmentSection.previewLarge')}
                           style={{ display: 'inline-block', lineHeight: 0 }}
                         >
                           <img
@@ -315,7 +318,7 @@ export function AttachmentSection({
                     <td>{formatFileSize(attachment.file_size)}</td>
                     <td>{attachment.uploader_name || 'Unknown'}</td>
                     <td>
-                      {new Date(attachment.upload_date).toLocaleString('ko-KR', {
+                      {new Date(attachment.upload_date).toLocaleString(dateLocale, {
                         year: 'numeric',
                         month: '2-digit',
                         day: '2-digit',
@@ -329,18 +332,18 @@ export function AttachmentSection({
                           type="button"
                           className="servicenow-button servicenow-button--link"
                           onClick={() => handleDownload(attachment.id, attachment.file_name)}
-                          title="다운로드"
+                          title={t('comp.attachmentSection.download')}
                         >
-                          다운로드
+                          {t('comp.attachmentSection.download')}
                         </button>
                         {canDelete(attachment) && (
                           <button
                             type="button"
                             className="servicenow-button servicenow-button--link servicenow-button--danger"
                             onClick={() => handleDelete(attachment.id)}
-                            title="삭제"
+                            title={t('comp.attachmentSection.delete')}
                           >
-                            삭제
+                            {t('comp.attachmentSection.delete')}
                           </button>
                         )}
                       </div>
@@ -353,7 +356,7 @@ export function AttachmentSection({
         </div>
       ) : (
         <div className="servicenow-attachment-section__empty">
-          첨부된 파일이 없습니다.
+          {t('comp.attachmentSection.empty')}
         </div>
       )}
     </div>

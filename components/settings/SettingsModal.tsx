@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { UserManagementModal } from '@/components/users/UserManagementModal'
 import { SystemSettingsPanel } from './SystemSettingsPanel'
+import { useI18n } from '@/lib/i18n'
 
 type SettingsView = 'list' | 'users' | 'system'
 
@@ -12,6 +13,7 @@ interface SettingsModalProps {
 }
 
 export function SettingsModal({ onClose, currentUser }: SettingsModalProps) {
+  const { t } = useI18n()
   const [view, setView] = useState<SettingsView>('list')
 
   return (
@@ -28,7 +30,7 @@ export function SettingsModal({ onClose, currentUser }: SettingsModalProps) {
         }}
       >
         <div className="modal-header" style={{ flexShrink: 0 }}>
-          <h2>설정</h2>
+          <h2>{t('comp.settingsPanel.title')}</h2>
           <button className="modal-close" onClick={onClose}>
             ×
           </button>
@@ -44,7 +46,7 @@ export function SettingsModal({ onClose, currentUser }: SettingsModalProps) {
                   style={{ width: '100%', textAlign: 'left', padding: '0.75rem 1rem' }}
                   onClick={() => setView('users')}
                 >
-                  사용자 관리
+                  {t('comp.settingsPanel.userMgmt')}
                 </button>
               </li>
               <li>
@@ -54,7 +56,7 @@ export function SettingsModal({ onClose, currentUser }: SettingsModalProps) {
                   style={{ width: '100%', textAlign: 'left', padding: '0.75rem 1rem' }}
                   onClick={() => setView('system')}
                 >
-                  시스템 설정
+                  {t('comp.settingsPanel.system')}
                 </button>
               </li>
             </ul>

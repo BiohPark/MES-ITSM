@@ -1,7 +1,8 @@
 'use client'
 
+import { useMemo } from 'react'
 import type { TabKey } from '@/utils/constants'
-import { getGuideForTab } from '@/utils/guide-content'
+import { getGuideForTab, useI18n } from '@/lib/i18n'
 
 interface GuideModalProps {
   activeTab: TabKey
@@ -9,7 +10,8 @@ interface GuideModalProps {
 }
 
 export function GuideModal({ activeTab, onClose }: GuideModalProps) {
-  const guide = getGuideForTab(activeTab)
+  const { locale, t } = useI18n()
+  const guide = useMemo(() => getGuideForTab(activeTab, locale), [activeTab, locale])
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -22,7 +24,7 @@ export function GuideModal({ activeTab, onClose }: GuideModalProps) {
           <section>
             <div style={{ fontSize: '0.92rem', color: '#64748b', marginBottom: '0.5rem' }}>{guide.summary}</div>
             <div style={{ padding: '0.85rem 1rem', border: '1px solid #e5e7eb', borderRadius: 8, background: '#f8fafc' }}>
-              <strong>목적</strong>
+              <strong>{t('guide.purposeLabel')}</strong>
               <div style={{ marginTop: '0.35rem' }}>{guide.purpose}</div>
             </div>
           </section>

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import type { Project, ProjectChild } from '@/types/project'
 import { buildNewChild } from '@/utils/project-utils'
+import { useI18n } from '@/lib/i18n/I18nProvider'
 
 export function ChildItemModal({
   project,
@@ -14,6 +15,7 @@ export function ChildItemModal({
   onClose: () => void
   onSave: (child: ProjectChild) => Promise<void> | void
 }) {
+  const { t } = useI18n()
   const [formData, setFormData] = useState<ProjectChild>({
     id: 'TASK-00000',
     title: '',
@@ -69,7 +71,7 @@ export function ChildItemModal({
     e.preventDefault()
     
     if (formData.owner && !users.some(u => u.name === formData.owner)) {
-      alert('등록되지 않은 사용자입니다.')
+      alert(t('comp.childModal.unknownUser'))
       return
     }
     
@@ -93,7 +95,7 @@ export function ChildItemModal({
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>{project.name} - 하위 아이템 추가</h2>
+          <h2>{t('comp.childModal.titleWithProject', { name: project.name })}</h2>
           <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
             <button
               type="submit"
@@ -102,7 +104,7 @@ export function ChildItemModal({
               className="btn btn-primary"
               style={{ margin: 0 }}
             >
-              {saving ? '저장 중...' : 'Save'}
+              {saving ? t('comp.childModal.saving') : t('comp.childModal.save')}
             </button>
             <button className="modal-close" onClick={onClose}>
               ×
@@ -112,7 +114,7 @@ export function ChildItemModal({
 
         <form id="child-form" onSubmit={handleSubmit} className="project-form">
           <div className="form-group">
-            <label htmlFor="childTitle">아이템 이름</label>
+            <label htmlFor="childTitle">{t('comp.childModal.itemName')}</label>
             <input
               id="childTitle"
               name="title"
@@ -125,7 +127,7 @@ export function ChildItemModal({
           </div>
 
           <div className="form-group">
-            <label htmlFor="childOwner">담당자</label>
+            <label htmlFor="childOwner">{t('comp.childModal.owner')}</label>
             <select
               id="childOwner"
               name="owner"
@@ -134,7 +136,7 @@ export function ChildItemModal({
               required
               className="form-input"
             >
-              <option value="">선택하세요</option>
+              <option value="">{t('comp.childModal.select')}</option>
               {users.map((user) => (
                 <option key={user.id} value={user.name}>
                   {user.name}
@@ -145,7 +147,7 @@ export function ChildItemModal({
 
           <div className="form-row">
             <div className="form-group">
-              <label htmlFor="childStatus">상태</label>
+              <label htmlFor="childStatus">{t('comp.childModal.status')}</label>
               <select
                 id="childStatus"
                 name="status"
@@ -161,7 +163,7 @@ export function ChildItemModal({
             </div>
 
             <div className="form-group">
-              <label htmlFor="childStart">시작일</label>
+              <label htmlFor="childStart">{t('comp.childModal.start')}</label>
               <input
                 id="childStart"
                 name="start"
@@ -173,7 +175,7 @@ export function ChildItemModal({
             </div>
 
             <div className="form-group">
-              <label htmlFor="childDue">마감일</label>
+              <label htmlFor="childDue">{t('comp.childModal.due')}</label>
               <input
                 id="childDue"
                 name="due"

@@ -1,11 +1,11 @@
 'use client'
 
-import type { Project } from '@/types/project'
+import { useI18n } from '@/lib/i18n'
 
 export function ContextMenu({
   x,
   y,
-  projectName,
+  projectName: _projectName,
   onAddChild,
 }: {
   x: number
@@ -13,6 +13,8 @@ export function ContextMenu({
   projectName: string
   onAddChild: () => void
 }) {
+  const { t } = useI18n()
+  void _projectName
   return (
     <div
       style={{
@@ -47,9 +49,8 @@ export function ContextMenu({
           e.currentTarget.style.backgroundColor = 'transparent'
         }}
       >
-        하위 아이템 추가
+        {t('comp.contextMenu.addChild')}
       </button>
     </div>
   )
 }
-

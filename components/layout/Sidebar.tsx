@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { TabKey } from '@/utils/constants'
+import { useI18n, tabTranslationPath } from '@/lib/i18n'
 
 interface SidebarProps {
   activeTab: TabKey
@@ -13,79 +14,66 @@ interface SidebarProps {
 
 interface MenuItem {
   key: TabKey
-  label: string
 }
 
 interface MenuSection {
   id: string
-  label: string
+  sectionLabelKey: string
   defaultTab: TabKey
   adminOnly?: boolean
   items: MenuItem[]
 }
 
 export function Sidebar({ activeTab, onTabChange, user, isCollapsed = false, onToggleCollapse }: SidebarProps) {
+  const { t } = useI18n()
   const isAdmin = user?.role === 'admin' || !!user?.isAdmin
   const menuStructure = useMemo<MenuSection[]>(
     () => [
       {
         id: 'home',
-        label: '홈',
+        sectionLabelKey: 'sidebar.sections.home',
         defaultTab: 'dashboard',
-        items: [
-          { key: 'dashboard', label: '대시보드' },
-          { key: 'personal', label: '내 일감' },
-          { key: 'search', label: '검색' },
-        ],
+        items: [{ key: 'dashboard' }, { key: 'personal' }, { key: 'search' }],
       },
       {
         id: 'project-execution',
-        label: '프로젝트 실행',
+        sectionLabelKey: 'sidebar.sections.projectExecution',
         defaultTab: 'list',
         items: [
-          { key: 'list', label: '프로젝트' },
-          { key: 'tasks', label: '일감' },
-          { key: 'gmp-record', label: 'GMP Record' },
-          { key: 'val-pkg', label: 'VAL Pkg' },
-          { key: 'gantt', label: 'WBS 관리' },
-          { key: 'gantt-history', label: 'WBS 변경 이력' },
+          { key: 'list' },
+          { key: 'tasks' },
+          { key: 'gmp-record' },
+          { key: 'val-pkg' },
+          { key: 'gantt' },
+          { key: 'gantt-history' },
         ],
       },
       {
         id: 'itsm-ops',
-        label: 'ITSM 운영',
+        sectionLabelKey: 'sidebar.sections.itsmOps',
         defaultTab: 'request',
         items: [
-          { key: 'request', label: 'Service Request' },
-          { key: 'incident', label: 'Incident' },
-          { key: 'problem', label: 'Problem' },
-          { key: 'change', label: 'Change' },
-          { key: 'approval-inbox', label: '승인 Inbox' },
-          { key: 'notifications', label: '알림' },
-          { key: 'issues', label: '이슈' },
+          { key: 'request' },
+          { key: 'incident' },
+          { key: 'problem' },
+          { key: 'change' },
+          { key: 'approval-inbox' },
+          { key: 'notifications' },
+          { key: 'issues' },
         ],
       },
       {
         id: 'collaboration',
-        label: '협업',
+        sectionLabelKey: 'sidebar.sections.collaboration',
         defaultTab: 'meetings',
-        items: [
-          { key: 'meetings', label: '회의록' },
-          { key: 'action-items', label: '액션 아이템' },
-          { key: 'voc', label: 'VOC 관리' },
-        ],
+        items: [{ key: 'meetings' }, { key: 'action-items' }, { key: 'voc' }],
       },
       {
         id: 'admin',
-        label: '관리자',
+        sectionLabelKey: 'sidebar.sections.admin',
         defaultTab: 'priority-policy',
         adminOnly: true,
-        items: [
-          { key: 'priority-policy', label: '우선순위 정책' },
-          { key: 'sla-policy', label: 'SLA 정책' },
-          { key: 'audit-log', label: '감사 로그' },
-          { key: 'backup', label: '백업' },
-        ],
+        items: [{ key: 'priority-policy' }, { key: 'sla-policy' }, { key: 'audit-log' }, { key: 'backup' }],
       },
     ],
     []
@@ -129,12 +117,12 @@ export function Sidebar({ activeTab, onTabChange, user, isCollapsed = false, onT
   return (
     <aside className={`servicenow-sidebar ${isCollapsed ? 'servicenow-sidebar--collapsed' : ''}`}>
       <div className="servicenow-sidebar__header">
-        {!isCollapsed && <h2 className="servicenow-sidebar__title">메뉴</h2>}
+        {!isCollapsed && <h2 className="servicenow-sidebar__title">{t('sidebar.menuTitle')}</h2>}
         {onToggleCollapse && (
           <button
             className="servicenow-sidebar__toggle"
             onClick={onToggleCollapse}
-            aria-label={isCollapsed ? '메뉴 확장' : '메뉴 접기'}
+            aria-label={isCollapsed ? t('sidebar.expandMenu') : t('sidebar.collapseMenu')}
           >
             {isCollapsed ? '→' : '←'}
           </button>
@@ -156,10 +144,10 @@ export function Sidebar({ activeTab, onTabChange, user, isCollapsed = false, onT
                   <button
                     className={`servicenow-sidebar__menu-link ${isSectionActive ? 'servicenow-sidebar__menu-link--active' : ''}`}
                     onClick={() => handleSectionClick(section)}
-                    title={isCollapsed ? section.label : undefined}
+                    title={isCollapsed ? t(section.sectionLabelKey) : undefined}
                     style={{ flex: 1, fontWeight: 600 }}
                   >
-                    {!isCollapsed && <span className="servicenow-sidebar__menu-text">{section.label}</span>}
+                    {!isCollapsed && <span className="servicenow-sidebar__menu-text">{t(section.sectionLabelKey)}</span>}
                   </button>
                   {!isCollapsed && (
                     <button
@@ -191,7 +179,7 @@ export function Sidebar({ activeTab, onTabChange, user, isCollapsed = false, onT
                             onClick={() => handleMenuClick(child.key)}
                             style={{ fontSize: '0.875rem', padding: '0.5rem 1rem', width: '100%', textAlign: 'left' }}
                           >
-                            {child.label}
+                            {t(tabTranslationPath(child.key))}
                           </button>
                         </li>
                       )

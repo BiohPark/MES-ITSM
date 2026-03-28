@@ -1,5 +1,6 @@
 'use client'
 
+import { useI18n } from '@/lib/i18n'
 import { useMemo, useState, useEffect } from 'react'
 import type { Project } from '@/types/project'
 
@@ -39,6 +40,8 @@ export function GanttChartView({
   error: string | null
   onRefresh: () => void | Promise<void>
 }) {
+  const { t, locale } = useI18n()
+  const dateLocale = locale.startsWith('en') ? 'en-US' : 'ko-KR'
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
   const [schedules, setSchedules] = useState<TaskSchedule[]>([])
   const [predecessors, setPredecessors] = useState<Map<string, Predecessor[]>>(new Map())
@@ -198,17 +201,18 @@ export function GanttChartView({
       })
 
       if (!response.ok) {
-        let errorMessage = 'Failed to save predecessors'
+        let errorMessage = t('comp.ganttChart.predSaveFail')
         let errorDetails = ''
         try {
           const errorData = await response.json()
           errorMessage = errorData.error || errorMessage
           errorDetails = errorData.details || ''
         } catch (e) {
-          // JSON 파싱 실패 시 상태 텍스트 사용
           errorMessage = `HTTP ${response.status}: ${response.statusText}`
         }
-        const fullErrorMessage = errorDetails ? `${errorMessage}\n\n상세: ${errorDetails}` : errorMessage
+        const fullErrorMessage = errorDetails
+          ? t('comp.ganttChart.errorDetailBlock', { message: errorMessage, details: errorDetails })
+          : errorMessage
         throw new Error(fullErrorMessage)
       }
 
@@ -226,8 +230,10 @@ export function GanttChartView({
         error: err,
         stack: err.stack,
       })
-      const errorMessage = err.message || err.toString() || 'Failed to save predecessors'
-      alert(`선행 작업 저장 실패\n\n${errorMessage}\n\n입력값: ${predString || '(없음)'}\n\n종속성 형식: IndexType[±Lag]\n예: 2FS+5, 3SS-1`)
+      const errorMessage = err.message || err.toString() || t('comp.ganttChart.predSaveFail')
+      alert(
+        `${t('comp.ganttChart.predSaveFail')}\n\n${errorMessage}\n\n${t('comp.ganttChart.inputLabel')} ${predString || t('comp.ganttChart.none')}\n\n${t('comp.ganttChart.depFormat')} ${t('comp.ganttChart.depFormatLine')}\n${t('comp.ganttChart.depExample')}`
+      )
     } finally {
       setScheduleLoading(false)
     }
@@ -278,7 +284,7 @@ export function GanttChartView({
     return (
       <div className="table-wrapper">
         <div className="placeholder">
-          <p>데이터를 불러오는 중...</p>
+          <p>{t('comp.ganttChart.loading')}</p>
         </div>
       </div>
     )
@@ -288,9 +294,11 @@ export function GanttChartView({
     return (
       <div className="table-wrapper">
         <div className="placeholder">
-          <p>에러 발생: {error}</p>
+          <p>
+            {t('comp.ganttChart.error')} {error}
+          </p>
           <button onClick={onRefresh} className="refresh-button">
-            새로고침
+            {t('comp.ui.refresh')}
           </button>
         </div>
       </div>
@@ -300,7 +308,7 @@ export function GanttChartView({
   return (
     <div className="table-wrapper">
       <div className="table-header">
-        <h2>Gantt Chart & 일정 관리</h2>
+        <h2>{t('comp.ganttChart.title')}</h2>
         <div className="table-actions" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
           <select
             value={selectedProjectId || ''}
@@ -314,7 +322,7 @@ export function GanttChartView({
               cursor: 'pointer',
             }}
           >
-            <option value="">프로젝트 선택...</option>
+            <option value="">{t('comp.ganttChart.selectProject')}</option>
             {projects.map((project) => (
               <option key={project.id} value={project.id}>
                 {project.name} ({project.id})
@@ -322,28 +330,28 @@ export function GanttChartView({
             ))}
           </select>
           <button onClick={onRefresh} className="refresh-button">
-            새로고침
+            {t('comp.ui.refresh')}
           </button>
         </div>
       </div>
 
       {!selectedProjectId ? (
         <div className="placeholder">
-          <p>일정을 보려면 프로젝트를 선택하세요.</p>
+          <p>{t('comp.ganttChart.pickProject')}</p>
         </div>
       ) : scheduleLoading && schedules.length === 0 ? (
         <div className="placeholder">
-          <p>일정을 불러오는 중...</p>
+          <p>{t('comp.ganttChart.loadingSchedule')}</p>
         </div>
       ) : (
         <>
           <div style={{ marginBottom: '1rem', padding: '1rem', backgroundColor: '#F4F6F8', borderRadius: '4px' }}>
-            <h3 style={{ marginTop: 0, fontSize: '0.875rem', fontWeight: 600, color: '#333' }}>사용 방법</h3>
+            <h3 style={{ marginTop: 0, fontSize: '0.875rem', fontWeight: 600, color: '#333' }}>{t('comp.ganttChart.usage')}</h3>
             <ul style={{ margin: '0.5rem 0', paddingLeft: '1.5rem', fontSize: '0.875rem', color: '#666' }}>
-              <li>종속성 형식: <code>IndexType[±Lag]</code> (예: <code>2FS+5</code>, <code>3SS-1</code>)</li>
-              <li>타입: FS (Finish-to-Start), SS (Start-to-Start), FF (Finish-to-Finish), SF (Start-to-Finish)</li>
-              <li>여러 종속성은 쉼표로 구분 (예: <code>2FS+5, 3SS-1</code>)</li>
-              <li>빨간색 작업은 Critical Path (주요 경로)입니다</li>
+              <li>{t('comp.ganttChart.usageB1')}</li>
+              <li>{t('comp.ganttChart.usageB2')}</li>
+              <li>{t('comp.ganttChart.usageB3')}</li>
+              <li>{t('comp.ganttChart.usageB4')}</li>
             </ul>
           </div>
 
@@ -352,12 +360,12 @@ export function GanttChartView({
               {/* 헤더 */}
               <div style={{ display: 'flex', borderBottom: '2px solid #e2e8f0', marginBottom: '1rem' }}>
                 <div style={{ width: '600px', padding: '0.75rem', fontWeight: 600, borderRight: '1px solid #e2e8f0', display: 'flex', gap: '1rem', fontSize: '0.8125rem' }}>
-                  <div style={{ width: '50px', textAlign: 'center' }}>Index</div>
-                  <div style={{ flex: 1 }}>작업명</div>
-                  <div style={{ width: '180px' }}>선행 작업</div>
-                  <div style={{ width: '60px', textAlign: 'center' }}>기간</div>
-                  <div style={{ width: '80px', textAlign: 'center' }}>Float</div>
-                  <div style={{ width: '40px', textAlign: 'center' }}>CP</div>
+                  <div style={{ width: '50px', textAlign: 'center' }}>{t('comp.ganttChart.colIndex')}</div>
+                  <div style={{ flex: 1 }}>{t('comp.ganttChart.colName')}</div>
+                  <div style={{ width: '180px' }}>{t('comp.ganttChart.colPred')}</div>
+                  <div style={{ width: '60px', textAlign: 'center' }}>{t('comp.ganttChart.colDuration')}</div>
+                  <div style={{ width: '80px', textAlign: 'center' }}>{t('comp.ganttChart.colFloat')}</div>
+                  <div style={{ width: '40px', textAlign: 'center' }}>{t('comp.ganttChart.colCp')}</div>
                 </div>
                 <div style={{ flex: 1, display: 'flex', position: 'relative' }}>
                   {days.map((day, idx) => {
@@ -373,7 +381,7 @@ export function GanttChartView({
                             borderRight: '1px solid #e2e8f0',
                           }}
                         >
-                          {day.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })}
+                          {day.toLocaleDateString(dateLocale, { month: 'short', day: 'numeric' })}
                         </div>
                       )
                     }
@@ -424,7 +432,7 @@ export function GanttChartView({
                                 type="text"
                                 value={predString}
                                 onChange={(e) => handlePredecessorChange(task.id, e.target.value)}
-                                placeholder="2FS+5"
+                                placeholder={t('comp.ganttChart.predInputPh')}
                                 style={{
                                   flex: 1,
                                   padding: '0.25rem 0.375rem',
@@ -463,23 +471,23 @@ export function GanttChartView({
                           ) : (
                             <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>
                               <span style={{ fontSize: '0.75rem', color: predString ? '#333' : '#999', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {predString || '(없음)'}
+                                {predString || t('comp.ganttChart.none')}
                               </span>
                               <button
                                 onClick={() => setEditingTaskId(task.id)}
                                 className="refresh-button"
                                 style={{ padding: '0.125rem 0.375rem', fontSize: '0.7rem' }}
                               >
-                                편집
+                                {t('comp.ganttChart.edit')}
                               </button>
                             </div>
                           )}
                         </div>
                         <div style={{ width: '60px', textAlign: 'center', fontSize: '0.75rem' }}>
-                          {schedule ? `${schedule.durationDays}일` : '-'}
+                          {schedule ? t('comp.gantt.dayCount', { n: String(schedule.durationDays) }) : '-'}
                         </div>
                         <div style={{ width: '80px', textAlign: 'center', fontSize: '0.75rem', color: schedule?.totalFloat === 0 ? '#c62828' : '#333' }}>
-                          {schedule ? `${schedule.totalFloat}일` : '-'}
+                          {schedule ? t('comp.gantt.dayCount', { n: String(schedule.totalFloat) }) : '-'}
                         </div>
                         <div style={{ width: '40px', textAlign: 'center' }}>
                           {schedule?.isCritical ? (
@@ -513,7 +521,7 @@ export function GanttChartView({
                                 cursor: 'pointer',
                                 zIndex: 2,
                               }}
-                              title={`${schedule.taskName} (${schedule.startDate} ~ ${new Date(new Date(schedule.startDate || '').getTime() + schedule.durationDays * 24 * 60 * 60 * 1000).toLocaleDateString('ko-KR')})`}
+                              title={`${schedule.taskName} (${schedule.startDate} ~ ${new Date(new Date(schedule.startDate || '').getTime() + schedule.durationDays * 24 * 60 * 60 * 1000).toLocaleDateString(dateLocale)})`}
                             >
                               {position.width > 5 && schedule.taskName}
                             </div>
@@ -585,7 +593,7 @@ export function GanttChartView({
 
               {tasks.length === 0 && (
                 <div style={{ padding: '3rem', textAlign: 'center', color: '#94a3b8' }}>
-                  <p>표시할 작업이 없습니다.</p>
+                  <p>{t('comp.ganttChart.empty')}</p>
                 </div>
               )}
             </div>

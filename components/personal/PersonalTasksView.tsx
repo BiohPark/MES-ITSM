@@ -1,5 +1,6 @@
 'use client'
 
+import { useI18n } from '@/lib/i18n'
 import { useMemo, useState, useEffect } from 'react'
 import type { Project, ProjectChild } from '@/types/project'
 import { StatusBadge } from '../common/StatusBadge'
@@ -45,6 +46,7 @@ export function PersonalTasksView({
   onGanttTaskClick?: (projectId: number, projectName: string) => void
   currentUser?: { name: string; username: string }
 }) {
+  const { t } = useI18n()
   const allOwners = useMemo(() => {
     const owners = new Set<string>()
     projects.forEach((project) => {
@@ -271,7 +273,7 @@ export function PersonalTasksView({
   if (loading) {
     return (
       <div className="placeholder">
-        <p>데이터를 불러오는 중...</p>
+        <p>{t('comp.ui.loading')}</p>
       </div>
     )
   }
@@ -279,9 +281,11 @@ export function PersonalTasksView({
   if (error) {
     return (
       <div className="placeholder">
-        <p style={{ color: '#e74c3c' }}>오류: {error}</p>
+        <p style={{ color: '#e74c3c' }}>
+          {t('comp.ui.errorPrefix')} {error}
+        </p>
         <button onClick={onRefresh} className="refresh-button">
-          다시 시도
+          {t('comp.ui.retry')}
         </button>
       </div>
     )
@@ -290,29 +294,29 @@ export function PersonalTasksView({
   return (
     <div className="table-wrapper">
       <div className="table-header">
-        <h2>개인별 일감</h2>
+        <h2>{t('comp.personal.title')}</h2>
         <div className="table-actions">
           <input
             type="text"
-            placeholder="담당자 이름 검색..."
+            placeholder={t('comp.personal.ownerSearchPh')}
             value={searchOwner}
             onChange={(e) => onSearchOwnerChange(e.target.value)}
             className="form-input"
             style={{ width: '200px', marginRight: '0.75rem' }}
           />
           <button onClick={onRefresh} className="refresh-button">
-            새로고침
+            {t('comp.ui.refresh')}
           </button>
         </div>
       </div>
 
       {filteredOwners.length === 0 && allOwners.length === 0 ? (
         <div className="placeholder">
-          <p>담당자가 할당된 일감이 없습니다.</p>
+          <p>{t('comp.personal.noTasksForOwner')}</p>
         </div>
       ) : filteredOwners.length === 0 ? (
         <div className="placeholder">
-          <p>검색 결과가 없습니다.</p>
+          <p>{t('comp.personal.noSearchResults')}</p>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
@@ -321,17 +325,17 @@ export function PersonalTasksView({
             <div style={{ border: '2px solid #3b82f6', borderRadius: '0.75rem', padding: '1.5rem', backgroundColor: '#eff6ff' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                 <h3 style={{ fontSize: '1.25rem', fontWeight: 600, color: '#1e40af' }}>
-                  My 진행 중 일감 ({currentUser?.name})
+                  {t('comp.personal.myInProgressWithName', { name: currentUser?.name ?? '' })}
                 </h3>
                 <div style={{ display: 'flex', gap: '1rem', fontSize: '0.875rem' }}>
                   {myTasksData.statusCounts['In Progress'] > 0 && (
                     <span style={{ color: '#15803d' }}>
-                      일감: {myTasksData.statusCounts['In Progress']} (Planning / Issued / In Progress)
+                      {t('comp.personal.taskCountLine', { n: String(myTasksData.statusCounts['In Progress']) })}
                     </span>
                   )}
                   {ganttMyTasks.length > 0 && (
                     <span style={{ color: '#1d4ed8' }}>
-                      간트 담당: {ganttMyTasks.length}
+                      {t('comp.personal.ganttAssignCount', { n: String(ganttMyTasks.length) })}
                     </span>
                   )}
                 </div>
@@ -341,16 +345,16 @@ export function PersonalTasksView({
               {ganttMyTasks.length > 0 && onGanttTaskClick && (
                 <div style={{ marginBottom: '1.5rem' }}>
                   <h4 style={{ marginBottom: '0.75rem', fontSize: '1rem', fontWeight: 500, color: '#475569' }}>
-                    간트 차트 담당 작업 ({ganttMyTasks.length})
+                    {t('comp.personal.ganttTasksTitleCount', { n: String(ganttMyTasks.length) })}
                   </h4>
                   <table style={{ width: '100%' }}>
                     <thead>
                       <tr>
-                        <th>작업명</th>
-                        <th>프로젝트</th>
-                        <th>WBS</th>
-                        <th>기간</th>
-                        <th>진척</th>
+                        <th>{t('comp.personal.colTaskName')}</th>
+                        <th>{t('comp.personal.colProject')}</th>
+                        <th>{t('comp.personal.colWbs')}</th>
+                        <th>{t('comp.personal.colPeriod')}</th>
+                        <th>{t('comp.personal.colProgressShort')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -383,17 +387,17 @@ export function PersonalTasksView({
               {myTasksData.projects.length > 0 && (
                 <div style={{ marginBottom: '1.5rem' }}>
                   <h4 style={{ marginBottom: '0.75rem', fontSize: '1rem', fontWeight: 500, color: '#475569' }}>
-                    프로젝트 ({myTasksData.projects.length})
+                    {t('comp.personal.projectsHeading', { n: String(myTasksData.projects.length) })}
                   </h4>
                   <table style={{ width: '100%' }}>
                     <thead>
                       <tr>
-                        <th>프로젝트</th>
-                        <th>인원</th>
-                        <th>상태</th>
-                        <th>진척도(계획/실적)</th>
-                        <th>시작일</th>
-                        <th>마감일</th>
+                        <th>{t('comp.personal.colProject')}</th>
+                        <th>{t('comp.personal.colPeople')}</th>
+                        <th>{t('comp.personal.colStatus')}</th>
+                        <th>{t('comp.personal.colProgressFull')}</th>
+                        <th>{t('comp.personal.colStart')}</th>
+                        <th>{t('comp.personal.colDue')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -408,7 +412,7 @@ export function PersonalTasksView({
                             <p className="project-name">{project.name}</p>
                             <span className="project-id">{project.id}</span>
                           </td>
-                          <td>{project.members}명</td>
+                          <td>{t('comp.personal.membersCount', { n: String(project.members) })}</td>
                           <td>
                             <StatusBadge status={project.status} />
                           </td>
@@ -431,16 +435,16 @@ export function PersonalTasksView({
               {myTasksData.tasks.length > 0 && (
                 <div>
                   <h4 style={{ marginBottom: '0.75rem', fontSize: '1rem', fontWeight: 500, color: '#475569' }}>
-                    일감 ({myTasksData.tasks.length})
+                    {t('comp.personal.tasksHeading', { n: String(myTasksData.tasks.length) })}
                   </h4>
                   <table style={{ width: '100%' }}>
                     <thead>
                       <tr>
-                        <th>일감</th>
-                        <th>프로젝트</th>
-                        <th>상태</th>
-                        <th>시작일</th>
-                        <th>마감일</th>
+                        <th>{t('comp.personal.colTask')}</th>
+                        <th>{t('comp.personal.colProject')}</th>
+                        <th>{t('comp.personal.colStatus')}</th>
+                        <th>{t('comp.personal.colStart')}</th>
+                        <th>{t('comp.personal.colDue')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -481,21 +485,21 @@ export function PersonalTasksView({
               {/* 액션 아이템 섹션 */}
               {actionItemsLoading ? (
                 <div style={{ marginTop: '1.5rem', padding: '1rem', textAlign: 'center', color: '#666' }}>
-                  액션 아이템 로딩 중...
+                  {t('comp.personal.actionLoading')}
                 </div>
               ) : myActionItems.length > 0 ? (
                 <div style={{ marginTop: '1.5rem' }}>
                   <h4 style={{ marginBottom: '0.75rem', fontSize: '1rem', fontWeight: 500, color: '#475569' }}>
-                    회의록 액션 아이템 ({myActionItems.length})
+                    {t('comp.personal.actionTitleCount', { n: String(myActionItems.length) })}
                   </h4>
                   <table style={{ width: '100%' }}>
                     <thead>
                       <tr>
-                        <th>설명</th>
-                        <th>마감일</th>
-                        <th>상태</th>
-                        <th>회의록</th>
-                        <th>회의 일시</th>
+                        <th>{t('comp.actionItems.colDescription')}</th>
+                        <th>{t('comp.actionItems.colDue')}</th>
+                        <th>{t('comp.personal.colStatus')}</th>
+                        <th>{t('comp.actionItems.colMeeting')}</th>
+                        <th>{t('comp.actionItems.colMeetingAt')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -543,17 +547,17 @@ export function PersonalTasksView({
                 {data.projects.length > 0 && (
                   <div style={{ marginBottom: '1.5rem' }}>
                     <h4 style={{ marginBottom: '0.75rem', fontSize: '1rem', fontWeight: 500, color: '#475569' }}>
-                      프로젝트 ({data.projects.length})
+                      {t('comp.personal.projectsHeading', { n: String(data.projects.length) })}
                     </h4>
                     <table style={{ width: '100%' }}>
                       <thead>
                         <tr>
-                          <th>프로젝트</th>
-                          <th>인원</th>
-                          <th>상태</th>
-                          <th>진척도(계획/실적)</th>
-                          <th>시작일</th>
-                          <th>마감일</th>
+                          <th>{t('comp.personal.colProject')}</th>
+                          <th>{t('comp.personal.colPeople')}</th>
+                          <th>{t('comp.personal.colStatus')}</th>
+                          <th>{t('comp.personal.colProgressFull')}</th>
+                          <th>{t('comp.personal.colStart')}</th>
+                          <th>{t('comp.personal.colDue')}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -568,7 +572,7 @@ export function PersonalTasksView({
                               <p className="project-name">{project.name}</p>
                               <span className="project-id">{project.id}</span>
                             </td>
-                            <td>{project.members}명</td>
+                            <td>{t('comp.personal.membersCount', { n: String(project.members) })}</td>
                             <td>
                               <StatusBadge status={project.status} />
                             </td>
@@ -591,16 +595,16 @@ export function PersonalTasksView({
                 {data.tasks.length > 0 && (
                   <div>
                     <h4 style={{ marginBottom: '0.75rem', fontSize: '1rem', fontWeight: 500, color: '#475569' }}>
-                      일감 ({data.tasks.length})
+                      {t('comp.personal.tasksHeading', { n: String(data.tasks.length) })}
                     </h4>
                     <table style={{ width: '100%' }}>
                       <thead>
                         <tr>
-                          <th>일감</th>
-                          <th>프로젝트</th>
-                          <th>상태</th>
-                          <th>시작일</th>
-                          <th>마감일</th>
+                          <th>{t('comp.personal.colTask')}</th>
+                          <th>{t('comp.personal.colProject')}</th>
+                          <th>{t('comp.personal.colStatus')}</th>
+                          <th>{t('comp.personal.colStart')}</th>
+                          <th>{t('comp.personal.colDue')}</th>
                         </tr>
                       </thead>
                       <tbody>

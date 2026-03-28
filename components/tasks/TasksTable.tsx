@@ -4,6 +4,16 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import type { Project, ProjectChild } from '@/types/project'
 import { StatusBadge } from '../common/StatusBadge'
 import { Progress } from '../common/Progress'
+import { useI18n } from '@/lib/i18n'
+
+type TaskSectionKey = 'pim' | 'dev' | 'completed' | 'dropped'
+
+const SECTION_TITLE_I18N_KEYS: Record<TaskSectionKey, string> = {
+  pim: 'comp.tasks.sectionPim',
+  dev: 'comp.tasks.sectionDev',
+  completed: 'comp.tasks.sectionDone',
+  dropped: 'comp.tasks.sectionDropped',
+}
 
 export function TasksTable({
   projects,
@@ -18,7 +28,7 @@ export function TasksTable({
   onToggleTaskSelection,
   onDeleteModeChange,
   onBatchDelete,
-  title = '일감 목록',
+  title: titleProp,
 }: {
   projects?: Project[]
   records?: ProjectChild[]
@@ -34,6 +44,8 @@ export function TasksTable({
   onBatchDelete: () => void
   title?: string
 }) {
+  const { t } = useI18n()
+  const title = titleProp ?? t('comp.tasks.defaultTitle')
   const [orphanTasks, setOrphanTasks] = useState<ProjectChild[]>([])
   const [orphanLoading, setOrphanLoading] = useState(false)
   const [filterStatus, setFilterStatus] = useState<string>('')
@@ -239,7 +251,7 @@ export function TasksTable({
           cursor: 'pointer',
         }}
       >
-        <option value="">전체 상태</option>
+        <option value="">{t('comp.tasks.filterAllStatus')}</option>
         {uniqueStatuses.map((status) => (
           <option key={status} value={status}>
             {status}
@@ -258,7 +270,7 @@ export function TasksTable({
           cursor: 'pointer',
         }}
       >
-        <option value="">전체 담당자</option>
+        <option value="">{t('comp.tasks.filterAllOwners')}</option>
         {uniqueOwners.map((owner) => (
           <option key={owner} value={owner}>
             {owner}
@@ -277,7 +289,7 @@ export function TasksTable({
           cursor: 'pointer',
         }}
       >
-        <option value="">전체 프로젝트</option>
+        <option value="">{t('comp.tasks.filterAllProjects')}</option>
         {uniqueProjects.map((project) => (
           <option key={project} value={project}>
             {project}
@@ -297,7 +309,7 @@ export function TasksTable({
             cursor: 'pointer',
           }}
         >
-          <option value="">전체 종류</option>
+          <option value="">{t('comp.tasks.filterAllKinds')}</option>
           {uniqueKinds.map((kind) => (
             <option key={kind} value={kind}>
               {kind}
@@ -322,7 +334,7 @@ export function TasksTable({
             cursor: 'pointer',
           }}
         >
-          필터 초기화
+          {t('comp.tasks.resetFilters')}
         </button>
       )}
     </div>
@@ -341,14 +353,14 @@ export function TasksTable({
         <thead>
           <tr>
             {isDeleteMode && <th style={{ width: '40px' }}></th>}
-            <th>일감</th>
-            {isGmpRecords && <th>종류-번호</th>}
-            <th>프로젝트</th>
-            <th>담당자</th>
-            <th>상태</th>
-            <th>진척도(계획/실적)</th>
-            <th>시작일</th>
-            <th>마감일</th>
+            <th>{t('comp.tasks.colTask')}</th>
+            {isGmpRecords && <th>{t('comp.tasks.colKindNo')}</th>}
+            <th>{t('comp.tasks.colProject')}</th>
+            <th>{t('comp.tasks.colOwner')}</th>
+            <th>{t('comp.tasks.colStatus')}</th>
+            <th>{t('comp.tasks.colProgress')}</th>
+            <th>{t('comp.tasks.colStart')}</th>
+            <th>{t('comp.tasks.colDue')}</th>
           </tr>
         </thead>
         <tbody>
@@ -458,7 +470,7 @@ export function TasksTable({
                         <span>
                         </span>
                         <span>
-                          <strong style={{ color: '#374151' }}>개발:</strong> {devStatus}
+                          <strong style={{ color: '#374151' }}>{t('comp.ui.devLabel')}</strong> {devStatus}
                         </span>
                       </div>
                     </td>
@@ -475,13 +487,16 @@ export function TasksTable({
 
   // Accordion 섹션 렌더링 함수
   const renderAccordionSection = (
-    title: string,
+    sectionKey: TaskSectionKey,
     count: number,
     isOpen: boolean,
     onToggle: () => void,
     tasks: Array<{ task: ProjectChild; projectId: string | null; projectName: string }>,
     color: string
   ) => {
+    const sectionTitle = t(SECTION_TITLE_I18N_KEYS[sectionKey])
+    const showPhase = sectionKey === 'pim' || sectionKey === 'dev'
+    const isTaskListRow = sectionKey === 'pim' || sectionKey === 'dev' || sectionKey === 'completed'
     if (tasks.length === 0 && !filterStatus && !filterOwner && !filterProject && !filterKind) {
       return null
     }
@@ -502,7 +517,7 @@ export function TasksTable({
           }}
         >
           <span>
-            {title} ({count}개)
+            {t('comp.tasks.accordionCount', { title: sectionTitle, count })}
           </span>
           <span style={{ fontSize: '1.2rem' }}>
             {isOpen ? '▼' : '▶'}
@@ -512,14 +527,10 @@ export function TasksTable({
           <div style={{ padding: '1rem', backgroundColor: '#f9fafb' }}>
             {tasks.length === 0 ? (
               <div className="placeholder">
-                <p>필터 조건에 맞는 일감이 없습니다.</p>
+                <p>{t('comp.tasks.noMatch')}</p>
               </div>
             ) : (
-              renderTable(
-                tasks, 
-                title === 'PIM일감' || title === '개발일감',
-                title === 'PIM일감' || title === '개발일감' || title === '완료일감'
-              )
+              renderTable(tasks, showPhase, isTaskListRow)
             )}
           </div>
         )}
@@ -530,7 +541,7 @@ export function TasksTable({
   if (loading || orphanLoading) {
     return (
       <div className="placeholder">
-        <p>데이터를 불러오는 중...</p>
+        <p>{t('comp.ui.loading')}</p>
       </div>
     )
   }
@@ -538,9 +549,9 @@ export function TasksTable({
   if (error) {
     return (
       <div className="placeholder">
-        <p style={{ color: '#e74c3c' }}>오류: {error}</p>
+        <p style={{ color: '#e74c3c' }}>{t('comp.ui.errorPrefix')} {error}</p>
         <button onClick={onRefresh} className="refresh-button">
-          다시 시도
+          {t('comp.ui.retry')}
         </button>
       </div>
     )
@@ -554,7 +565,7 @@ export function TasksTable({
         <h2>
           {title} 
           <span style={{ fontSize: '0.875rem', fontWeight: 'normal', color: '#64748b' }}>
-            ({totalCount}개)
+            ({totalCount}{t('comp.ui.countSuffix')})
           </span>
         </h2>
         <div className="table-actions">
@@ -566,7 +577,7 @@ export function TasksTable({
             }}
             className="refresh-button"
           >
-            새로고침
+            {t('comp.ui.refresh')}
           </button>
           {!isDeleteMode ? (
             <>
@@ -578,7 +589,7 @@ export function TasksTable({
                 className="primary-button"
                 style={{ backgroundColor: '#e74c3c' }}
               >
-                삭제
+                {t('comp.ui.delete')}
               </button>
             </>
           ) : (
@@ -589,7 +600,7 @@ export function TasksTable({
                 }}
                 className="refresh-button"
               >
-                취소
+                {t('comp.ui.cancel')}
               </button>
               {selectedTaskIds.size > 0 && (
                 <button
@@ -597,7 +608,7 @@ export function TasksTable({
                   className="primary-button"
                   style={{ backgroundColor: '#e74c3c' }}
                 >
-                  선택 삭제 ({selectedTaskIds.size})
+                  {t('comp.tasks.batchDelete', { n: selectedTaskIds.size })}
                 </button>
               )}
             </>
@@ -609,7 +620,7 @@ export function TasksTable({
         // 일반 일감: 4개 목록으로 분리 (PIM일감, 개발일감, 완료일감, Dropped일감)
         <div>
           {renderAccordionSection(
-            'PIM일감',
+            'pim',
             filteredPimTasks.length,
             isPimTasksOpen,
             () => setIsPimTasksOpen(!isPimTasksOpen),
@@ -617,7 +628,7 @@ export function TasksTable({
             '#3b82f6'
           )}
           {renderAccordionSection(
-            '개발일감',
+            'dev',
             filteredDevelopmentTasks.length,
             isDevelopmentTasksOpen,
             () => setIsDevelopmentTasksOpen(!isDevelopmentTasksOpen),
@@ -625,7 +636,7 @@ export function TasksTable({
             '#10b981'
           )}
           {renderAccordionSection(
-            '완료일감',
+            'completed',
             filteredCompletedTasks.length,
             isCompletedTasksOpen,
             () => setIsCompletedTasksOpen(!isCompletedTasksOpen),
@@ -633,7 +644,7 @@ export function TasksTable({
             '#6b7280'
           )}
           {renderAccordionSection(
-            'Dropped일감',
+            'dropped',
             filteredDroppedTasks.length,
             isDroppedTasksOpen,
             () => setIsDroppedTasksOpen(!isDroppedTasksOpen),
@@ -642,7 +653,7 @@ export function TasksTable({
           )}
           {totalCount === 0 && (
             <div className="placeholder">
-              <p>필터 조건에 맞는 일감이 없습니다.</p>
+              <p>{t('comp.tasks.noMatch')}</p>
             </div>
           )}
         </div>
@@ -653,7 +664,7 @@ export function TasksTable({
           {filteredCompletedTasks.length > 0 && renderTable(filteredCompletedTasks)}
           {totalCount === 0 && (
             <div className="placeholder">
-              <p>필터 조건에 맞는 GMP Record가 없습니다.</p>
+              <p>{t('comp.tasks.noMatchGmp')}</p>
             </div>
           )}
         </div>

@@ -5,6 +5,7 @@ import type { MouseEvent } from 'react'
 import type { Project, ProjectChild } from '@/types/project'
 import { StatusBadge } from '../common/StatusBadge'
 import { Progress } from '../common/Progress'
+import { useI18n } from '@/lib/i18n'
 
 export function ProjectsTable({
   projects,
@@ -41,6 +42,7 @@ export function ProjectsTable({
   onBatchDeleteChildren: () => void
   onChildClick: (child: ProjectChild, projectId: string, projectName: string) => void
 }) {
+  const { t } = useI18n()
   const [filterStatus, setFilterStatus] = useState<string>('')
   const [filterOwner, setFilterOwner] = useState<string>('')
   // Accordion: 각 프로젝트의 하위 아이템 표시/숨김 상태 관리
@@ -95,7 +97,7 @@ export function ProjectsTable({
   if (loading) {
     return (
       <div className="placeholder">
-        <p>데이터를 불러오는 중...</p>
+        <p>{t('comp.ui.loading')}</p>
       </div>
     )
   }
@@ -103,9 +105,9 @@ export function ProjectsTable({
   if (error) {
     return (
       <div className="placeholder">
-        <p style={{ color: '#e74c3c' }}>오류: {error}</p>
+        <p style={{ color: '#e74c3c' }}>{t('comp.ui.errorPrefix')} {error}</p>
         <button onClick={onRefresh} className="refresh-button">
-          다시 시도
+          {t('comp.ui.retry')}
         </button>
       </div>
     )
@@ -115,10 +117,10 @@ export function ProjectsTable({
   return (
     <div className="table-wrapper">
       <div className="table-header">
-        <h2>프로젝트 목록</h2>
+        <h2>{t('comp.projects.listTitle')}</h2>
         <div className="table-actions">
             <button onClick={onRefresh} className="refresh-button">
-              새로고침
+              {t('comp.ui.refresh')}
             </button>
             {!isDeleteMode ? (
               <>
@@ -130,7 +132,7 @@ export function ProjectsTable({
                   className="primary-button"
                   style={{ backgroundColor: '#e74c3c' }}
                 >
-                  삭제
+                  {t('comp.ui.delete')}
                 </button>
               </>
             ) : (
@@ -141,14 +143,14 @@ export function ProjectsTable({
                   }}
                   className="refresh-button"
                 >
-                  취소
+                  {t('comp.ui.cancel')}
                 </button>
               </>
             )}
           </div>
         </div>
         <div className="placeholder">
-          <p>등록된 프로젝트가 없습니다.</p>
+          <p>{t('comp.projects.noProjects')}</p>
         </div>
       </div>
     )
@@ -157,7 +159,14 @@ export function ProjectsTable({
   return (
     <div className="table-wrapper">
       <div className="table-header">
-        <h2>프로젝트 목록 {filteredProjects.length > 0 && <span style={{ fontSize: '0.875rem', fontWeight: 'normal', color: '#64748b' }}>({filteredProjects.length}개)</span>}</h2>
+        <h2>
+          {t('comp.projects.listTitle')}
+          {filteredProjects.length > 0 && (
+            <span style={{ fontSize: '0.875rem', fontWeight: 'normal', color: '#64748b' }}>
+              {t('comp.projects.listCount', { n: filteredProjects.length })}
+            </span>
+          )}
+        </h2>
         <div className="table-actions">
           <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginRight: '0.75rem' }}>
             <select
@@ -172,7 +181,7 @@ export function ProjectsTable({
                 cursor: 'pointer',
               }}
             >
-              <option value="">전체 상태</option>
+              <option value="">{t('comp.projects.filterAllStatus')}</option>
               {uniqueStatuses.map((status) => (
                 <option key={status} value={status}>
                   {status}
@@ -191,7 +200,7 @@ export function ProjectsTable({
                 cursor: 'pointer',
               }}
             >
-              <option value="">전체 담당 리더</option>
+              <option value="">{t('comp.projects.filterAllLeaders')}</option>
               {uniqueOwners.map((owner) => (
                 <option key={owner} value={owner}>
                   {owner}
@@ -213,12 +222,12 @@ export function ProjectsTable({
                   cursor: 'pointer',
                 }}
               >
-                필터 초기화
+                {t('comp.tasks.resetFilters')}
               </button>
             )}
           </div>
           <button onClick={onRefresh} className="refresh-button">
-            새로고침
+            {t('comp.ui.refresh')}
           </button>
           {!isDeleteMode ? (
             <>
@@ -230,7 +239,7 @@ export function ProjectsTable({
                 className="primary-button"
                 style={{ backgroundColor: '#e74c3c' }}
               >
-                삭제
+                {t('comp.ui.delete')}
               </button>
             </>
           ) : (
@@ -241,7 +250,7 @@ export function ProjectsTable({
                 }}
                 className="refresh-button"
               >
-                취소
+                {t('comp.ui.cancel')}
               </button>
               {(selectedProjectIds.size > 0 || selectedChildIds.size > 0) && (
                 <>
@@ -251,7 +260,7 @@ export function ProjectsTable({
                       className="primary-button"
                       style={{ backgroundColor: '#e74c3c' }}
                     >
-                      프로젝트 삭제 ({selectedProjectIds.size})
+                      {t('comp.projects.deleteProjects')} ({selectedProjectIds.size})
                     </button>
                   )}
                   {selectedChildIds.size > 0 && (
@@ -260,7 +269,7 @@ export function ProjectsTable({
                       className="primary-button"
                       style={{ backgroundColor: '#e74c3c' }}
                     >
-                      하위 아이템 삭제 ({selectedChildIds.size})
+                      {t('comp.projects.deleteChildren')} ({selectedChildIds.size})
                     </button>
                   )}
                 </>
@@ -271,7 +280,7 @@ export function ProjectsTable({
       </div>
       {filteredProjects.length === 0 ? (
         <div className="placeholder">
-          <p>필터 조건에 맞는 프로젝트가 없습니다.</p>
+          <p>{t('comp.projects.noMatch')}</p>
         </div>
       ) : (
       <table>
@@ -279,14 +288,14 @@ export function ProjectsTable({
           <tr>
             {isDeleteMode && <th style={{ width: '40px' }}></th>}
             <th style={{ width: '40px' }}></th>
-            <th>프로젝트</th>
-            <th>담당 리더</th>
-            <th>인원</th>
-            <th>상태</th>
-            <th>진척도(계획/실적)</th>
-            <th>SRB Ver.</th>
-            <th>시작일</th>
-            <th>마감일</th>
+            <th>{t('comp.projects.colProject')}</th>
+            <th>{t('comp.projects.colLeader')}</th>
+            <th>{t('comp.projects.colHeadcount')}</th>
+            <th>{t('comp.projects.colStatus')}</th>
+            <th>{t('comp.projects.colProgress')}</th>
+            <th>{t('comp.projects.colSrb')}</th>
+            <th>{t('comp.projects.colStart')}</th>
+            <th>{t('comp.projects.colDue')}</th>
           </tr>
         </thead>
         <tbody>
@@ -327,7 +336,7 @@ export function ProjectsTable({
                       color: '#666666',
                       fontSize: '0.875rem',
                     }}
-                    title={isExpanded ? '하위 아이템 숨기기' : '하위 아이템 보기'}
+                    title={isExpanded ? t('comp.projects.hideChildren') : t('comp.projects.showChildren')}
                   >
                     {isExpanded ? '▼' : '▶'}
                   </button>
@@ -344,7 +353,7 @@ export function ProjectsTable({
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <p className="project-name" title="오른쪽 클릭으로 메뉴 열기" style={{ margin: 0 }}>
+                  <p className="project-name" title={t('comp.projects.ctxHint')} style={{ margin: 0 }}>
                     {project.name}
                   </p>
                   {hasChildren && !isExpanded && (
@@ -362,7 +371,10 @@ export function ProjectsTable({
                 <span className="project-id">{project.id}</span>
               </td>
               <td>{project.owner}</td>
-              <td>{project.members}명</td>
+              <td>
+                {project.members}
+                {t('comp.ui.name')}
+              </td>
               <td>
                 <StatusBadge status={project.status} />
               </td>

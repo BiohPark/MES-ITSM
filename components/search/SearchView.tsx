@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import type { Project, ProjectChild } from '@/types/project'
 import type { GanttTaskSearchHit } from '@/lib/db'
 import { StatusBadge } from '../common/StatusBadge'
 import { Progress } from '../common/Progress'
 import { SearchIcon } from '../common/Icons'
+import { useI18n } from '@/lib/i18n'
 
 interface SearchResult {
   projects: Array<Project & { type: 'project' }>
@@ -21,6 +22,7 @@ interface SearchViewProps {
 }
 
 export function SearchView({ onProjectClick, onTaskClick, onGanttTaskClick }: SearchViewProps) {
+  const { t } = useI18n()
   const [keyword, setKeyword] = useState('')
   const [results, setResults] = useState<SearchResult>({
     projects: [],
@@ -46,7 +48,7 @@ export function SearchView({ onProjectClick, onTaskClick, onGanttTaskClick }: Se
       })
       if (signal?.aborted) return
       if (!response.ok) {
-        throw new Error('검색에 실패했습니다.')
+        throw new Error(t('comp.search.fail'))
       }
       const data = await response.json()
       if (signal?.aborted) return
@@ -54,13 +56,13 @@ export function SearchView({ onProjectClick, onTaskClick, onGanttTaskClick }: Se
     } catch (err) {
       if (signal?.aborted) return
       console.error('Search error:', err)
-      setError(err instanceof Error ? err.message : '검색 중 오류가 발생했습니다.')
+      setError(err instanceof Error ? err.message : t('comp.search.error'))
     } finally {
       if (!signal?.aborted) {
         setLoading(false)
       }
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     const abortController = new AbortController()
@@ -80,6 +82,15 @@ export function SearchView({ onProjectClick, onTaskClick, onGanttTaskClick }: Se
 
   const ganttTasks = results.ganttTasks ?? []
   const totalResults = results.projects.length + results.tasks.length + results.gmpRecords.length + ganttTasks.length
+
+  const metaSuffix = useMemo(() => {
+    const parts: string[] = []
+    if (results.projects.length > 0) parts.push(t('comp.search.metaProjects', { n: results.projects.length }))
+    if (results.tasks.length > 0) parts.push(t('comp.search.metaTasks', { n: results.tasks.length }))
+    if (results.gmpRecords.length > 0) parts.push(t('comp.search.metaGmp', { n: results.gmpRecords.length }))
+    if (ganttTasks.length > 0) parts.push(t('comp.search.metaGantt', { n: ganttTasks.length }))
+    return parts.length > 0 ? ` (${parts.join(', ')})` : ''
+  }, [results.projects.length, results.tasks.length, results.gmpRecords.length, ganttTasks.length, t])
 
   return (
     <div className="table-wrapper">
@@ -105,7 +116,7 @@ export function SearchView({ onProjectClick, onTaskClick, onGanttTaskClick }: Se
               type="text"
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
-              placeholder="키워드를 입력하세요 (프로젝트, 일감, GMP Record, 간트 작업 검색)"
+              placeholder={t('comp.search.ph')}
               className="form-input"
               style={{ flex: 1, padding: '0.75rem', fontSize: '1rem' }}
               onKeyPress={(e) => {
@@ -120,17 +131,12 @@ export function SearchView({ onProjectClick, onTaskClick, onGanttTaskClick }: Se
               className="primary-button"
               style={{ padding: '0.75rem 1.5rem' }}
             >
-              {loading ? '검색 중...' : '검색'}
+              {loading ? t('comp.search.searching') : t('comp.search.submit')}
             </button>
           </div>
           {keyword.trim() && (
             <div style={{ marginTop: '0.5rem', color: '#64748b', fontSize: '0.875rem' }}>
-              검색 결과: 총 {totalResults}건
-              {results.projects.length > 0 && ` (프로젝트: ${results.projects.length}건`}
-              {results.tasks.length > 0 && `, 일감: ${results.tasks.length}건`}
-              {results.gmpRecords.length > 0 && `, GMP Record: ${results.gmpRecords.length}건`}
-              {ganttTasks.length > 0 && `, 간트: ${ganttTasks.length}건`}
-              {totalResults > 0 && ')'}
+              {t('comp.search.metaTotal', { total: totalResults, suffix: metaSuffix })}
             </div>
           )}
         </div>
@@ -138,19 +144,19 @@ export function SearchView({ onProjectClick, onTaskClick, onGanttTaskClick }: Se
 
       {error && (
         <div className="placeholder">
-          <p style={{ color: '#e74c3c' }}>오류: {error}</p>
+          <p style={{ color: '#e74c3c' }}>{t('comp.ui.errorPrefix')} {error}</p>
         </div>
       )}
 
       {!keyword.trim() && (
         <div className="placeholder">
-          <p>검색할 키워드를 입력하세요.</p>
+          <p>{t('comp.search.needKeyword')}</p>
         </div>
       )}
 
       {keyword.trim() && !loading && totalResults === 0 && (
         <div className="placeholder">
-          <p>&quot;{keyword}&quot;에 대한 검색 결과가 없습니다.</p>
+          <p>{t('comp.search.noResults', { q: keyword })}</p>
         </div>
       )}
 
@@ -160,19 +166,19 @@ export function SearchView({ onProjectClick, onTaskClick, onGanttTaskClick }: Se
           {results.projects.length > 0 && (
             <div>
               <h3 style={{ marginBottom: '1rem', fontSize: '1.25rem', fontWeight: 600 }}>
-                프로젝트 ({results.projects.length}건)
+                {t('comp.search.headingProjects', { n: results.projects.length })}
               </h3>
               <table>
                 <thead>
                   <tr>
-                    <th>프로젝트</th>
-                    <th>담당 리더</th>
-                    <th>인원</th>
-                    <th>상태</th>
-                    <th>진척도(계획/실적)</th>
-                    <th>SRB Ver.</th>
-                    <th>시작일</th>
-                    <th>마감일</th>
+                    <th>{t('comp.projects.colProject')}</th>
+                    <th>{t('comp.search.colLeader')}</th>
+                    <th>{t('comp.search.colHeadcount')}</th>
+                    <th>{t('comp.projects.colStatus')}</th>
+                    <th>{t('comp.projects.colProgress')}</th>
+                    <th>{t('comp.projects.colSrb')}</th>
+                    <th>{t('comp.projects.colStart')}</th>
+                    <th>{t('comp.projects.colDue')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -188,7 +194,10 @@ export function SearchView({ onProjectClick, onTaskClick, onGanttTaskClick }: Se
                         <span className="project-id">{project.id}</span>
                       </td>
                       <td>{project.owner}</td>
-                      <td>{project.members}명</td>
+                      <td>
+                        {project.members}
+                        {t('comp.ui.name')}
+                      </td>
                       <td>
                         <StatusBadge status={project.status} />
                       </td>
@@ -213,18 +222,18 @@ export function SearchView({ onProjectClick, onTaskClick, onGanttTaskClick }: Se
           {results.tasks.length > 0 && (
             <div>
               <h3 style={{ marginBottom: '1rem', fontSize: '1.25rem', fontWeight: 600 }}>
-                일감 ({results.tasks.length}건)
+                {t('comp.search.headingTasks', { n: results.tasks.length })}
               </h3>
               <table>
                 <thead>
                   <tr>
-                    <th>일감</th>
-                    <th>프로젝트</th>
-                    <th>담당자</th>
-                    <th>상태</th>
-                    <th>진척도(계획/실적)</th>
-                    <th>시작일</th>
-                    <th>마감일</th>
+                    <th>{t('comp.tasks.colTask')}</th>
+                    <th>{t('comp.tasks.colProject')}</th>
+                    <th>{t('comp.tasks.colOwner')}</th>
+                    <th>{t('comp.tasks.colStatus')}</th>
+                    <th>{t('comp.tasks.colProgress')}</th>
+                    <th>{t('comp.tasks.colStart')}</th>
+                    <th>{t('comp.tasks.colDue')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -269,19 +278,19 @@ export function SearchView({ onProjectClick, onTaskClick, onGanttTaskClick }: Se
           {results.gmpRecords.length > 0 && (
             <div>
               <h3 style={{ marginBottom: '1rem', fontSize: '1.25rem', fontWeight: 600 }}>
-                GMP Record ({results.gmpRecords.length}건)
+                {t('comp.search.headingGmp', { n: results.gmpRecords.length })}
               </h3>
               <table>
                 <thead>
                   <tr>
-                    <th>일감</th>
-                    <th>종류-번호</th>
-                    <th>프로젝트</th>
-                    <th>담당자</th>
-                    <th>상태</th>
-                    <th>진척도(계획/실적)</th>
-                    <th>시작일</th>
-                    <th>마감일</th>
+                    <th>{t('comp.tasks.colTask')}</th>
+                    <th>{t('comp.tasks.colKindNo')}</th>
+                    <th>{t('comp.tasks.colProject')}</th>
+                    <th>{t('comp.tasks.colOwner')}</th>
+                    <th>{t('comp.tasks.colStatus')}</th>
+                    <th>{t('comp.tasks.colProgress')}</th>
+                    <th>{t('comp.tasks.colStart')}</th>
+                    <th>{t('comp.tasks.colDue')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -329,17 +338,17 @@ export function SearchView({ onProjectClick, onTaskClick, onGanttTaskClick }: Se
           {ganttTasks.length > 0 && onGanttTaskClick && (
             <div>
               <h3 style={{ marginBottom: '1rem', fontSize: '1.25rem', fontWeight: 600 }}>
-                간트 차트 작업 ({ganttTasks.length}건)
+                {t('comp.search.headingGantt', { n: ganttTasks.length })}
               </h3>
               <table>
                 <thead>
                   <tr>
-                    <th>작업명</th>
-                    <th>WBS</th>
-                    <th>프로젝트</th>
-                    <th>담당자</th>
-                    <th>시작일</th>
-                    <th>종료일</th>
+                    <th>{t('comp.ganttChart.colName')}</th>
+                    <th>{t('comp.search.colWbs')}</th>
+                    <th>{t('comp.tasks.colProject')}</th>
+                    <th>{t('comp.tasks.colOwner')}</th>
+                    <th>{t('comp.tasks.colStart')}</th>
+                    <th>{t('comp.search.colGanttEnd')}</th>
                   </tr>
                 </thead>
                 <tbody>

@@ -1,5 +1,6 @@
 'use client'
 
+import { useI18n } from '@/lib/i18n'
 import { useState, useEffect } from 'react'
 import { StatusBadge } from '../common/StatusBadge'
 
@@ -22,6 +23,7 @@ export function ActionItemsView({
   currentUser?: { name: string; username: string }
   onMeetingNoteClick?: (meetingNoteId: string) => void
 }) {
+  const { t } = useI18n()
   const [actionItems, setActionItems] = useState<ActionItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -36,7 +38,7 @@ export function ActionItemsView({
         cache: 'no-store',
       })
       if (!response.ok) {
-        throw new Error('액션 아이템 조회 실패')
+        throw new Error(t('comp.actionItems.fetchFail'))
       }
       const data = await response.json()
       setActionItems(data)
@@ -68,7 +70,7 @@ export function ActionItemsView({
       })
 
       if (!response.ok) {
-        throw new Error('상태 업데이트 실패')
+        throw new Error(t('comp.actionItems.updateFail'))
       }
 
       // 로컬 상태 업데이트
@@ -98,7 +100,7 @@ export function ActionItemsView({
   if (loading) {
     return (
       <div className="placeholder">
-        <p>데이터를 불러오는 중...</p>
+        <p>{t('comp.ui.loading')}</p>
       </div>
     )
   }
@@ -106,9 +108,11 @@ export function ActionItemsView({
   if (error) {
     return (
       <div className="placeholder">
-        <p style={{ color: '#e74c3c' }}>오류: {error}</p>
-        <button onClick={fetchActionItems} className="refresh-button">
-          다시 시도
+        <p style={{ color: '#e74c3c' }}>
+          {t('comp.ui.errorPrefix')} {error}
+        </p>
+        <button onClick={() => void fetchActionItems()} className="refresh-button">
+          {t('comp.ui.retry')}
         </button>
       </div>
     )
@@ -117,7 +121,7 @@ export function ActionItemsView({
   return (
     <div className="table-wrapper">
       <div className="table-header">
-        <h2>액션 아이템 목록</h2>
+        <h2>{t('comp.actionItems.title')}</h2>
         <div className="table-actions">
           <select
             value={filterAssignee}
@@ -130,7 +134,7 @@ export function ActionItemsView({
               marginRight: '0.5rem',
             }}
           >
-            <option value="">모든 담당자</option>
+            <option value="">{t('comp.actionItems.allOwners')}</option>
             {assignees.map((assignee) => (
               <option key={assignee} value={assignee}>
                 {assignee}
@@ -148,30 +152,30 @@ export function ActionItemsView({
               marginRight: '0.5rem',
             }}
           >
-            <option value="all">모든 상태</option>
-            <option value="pending">대기</option>
-            <option value="in_progress">진행중</option>
-            <option value="completed">완료</option>
+            <option value="all">{t('comp.actionItems.allStatus')}</option>
+            <option value="pending">{t('comp.actionItems.stPending')}</option>
+            <option value="in_progress">{t('comp.actionItems.stProgress')}</option>
+            <option value="completed">{t('comp.actionItems.stDone')}</option>
           </select>
-          <button onClick={fetchActionItems} className="refresh-button">
-            새로고침
+          <button onClick={() => void fetchActionItems()} className="refresh-button">
+            {t('comp.ui.refresh')}
           </button>
         </div>
       </div>
       {filteredItems.length === 0 ? (
         <div className="placeholder">
-          <p>액션 아이템이 없습니다.</p>
+          <p>{t('comp.actionItems.empty')}</p>
         </div>
       ) : (
         <table>
           <thead>
             <tr>
-              <th style={{ width: '300px' }}>설명</th>
-              <th style={{ width: '120px' }}>담당자</th>
-              <th style={{ width: '120px' }}>마감일</th>
-              <th style={{ width: '120px' }}>상태</th>
-              <th style={{ width: '200px' }}>회의록</th>
-              <th style={{ width: '120px' }}>회의 일시</th>
+              <th style={{ width: '300px' }}>{t('comp.actionItems.colDescription')}</th>
+              <th style={{ width: '120px' }}>{t('comp.actionItems.colAssigneeHeader')}</th>
+              <th style={{ width: '120px' }}>{t('comp.actionItems.colDue')}</th>
+              <th style={{ width: '120px' }}>{t('comp.personal.colStatus')}</th>
+              <th style={{ width: '200px' }}>{t('comp.actionItems.colMeeting')}</th>
+              <th style={{ width: '120px' }}>{t('comp.actionItems.colMeetingAt')}</th>
             </tr>
           </thead>
           <tbody>
@@ -197,9 +201,9 @@ export function ActionItemsView({
                       fontSize: '0.875rem',
                     }}
                   >
-                    <option value="pending">대기</option>
-                    <option value="in_progress">진행중</option>
-                    <option value="completed">완료</option>
+                    <option value="pending">{t('comp.actionItems.stPending')}</option>
+                    <option value="in_progress">{t('comp.actionItems.stProgress')}</option>
+                    <option value="completed">{t('comp.actionItems.stDone')}</option>
                   </select>
                 </td>
                 <td>

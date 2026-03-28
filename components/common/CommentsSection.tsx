@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import type { Comment, CommentEntityType } from '@/types/comment'
+import { useI18n } from '@/lib/i18n'
 
 interface CommentsSectionProps {
   entityType: CommentEntityType
@@ -10,6 +11,8 @@ interface CommentsSectionProps {
 }
 
 export function CommentsSection({ entityType, entityId, currentUser }: CommentsSectionProps) {
+  const { t, locale } = useI18n()
+  const dateLocale = locale === 'ko' ? 'ko-KR' : 'en-US'
   const [comments, setComments] = useState<Comment[]>([])
   const [newComment, setNewComment] = useState('')
   const [loading, setLoading] = useState(false)
@@ -73,11 +76,11 @@ export function CommentsSection({ entityType, entityId, currentUser }: CommentsS
           }
         }, 100)
       } else {
-        alert('댓글 추가에 실패했습니다.')
+        alert(t('comp.comments.addFailed'))
       }
     } catch (error) {
       console.error('Error adding comment:', error)
-      alert('댓글 추가 중 오류가 발생했습니다.')
+      alert(t('comp.comments.addError'))
     } finally {
       setSubmitting(false)
     }
@@ -118,16 +121,16 @@ export function CommentsSection({ entityType, entityId, currentUser }: CommentsS
         setEditingCommentId(null)
         setEditingContent('')
       } else {
-        alert('댓글 수정에 실패했습니다.')
+        alert(t('comp.comments.editFailed'))
       }
     } catch (error) {
       console.error('Error updating comment:', error)
-      alert('댓글 수정 중 오류가 발생했습니다.')
+      alert(t('comp.comments.editError'))
     }
   }
 
   const handleDelete = async (commentId: string) => {
-    if (!confirm('댓글을 삭제하시겠습니까?')) return
+    if (!confirm(t('comp.comments.deleteConfirm'))) return
 
     try {
       const response = await fetch('/api/comments', {
@@ -148,11 +151,11 @@ export function CommentsSection({ entityType, entityId, currentUser }: CommentsS
         const data = await response.json()
         setComments(data.comments || [])
       } else {
-        alert('댓글 삭제에 실패했습니다.')
+        alert(t('comp.comments.deleteFailed'))
       }
     } catch (error) {
       console.error('Error deleting comment:', error)
-      alert('댓글 삭제 중 오류가 발생했습니다.')
+      alert(t('comp.comments.deleteError'))
     }
   }
 
@@ -164,12 +167,12 @@ export function CommentsSection({ entityType, entityId, currentUser }: CommentsS
     const diffHours = Math.floor(diffMs / 3600000)
     const diffDays = Math.floor(diffMs / 86400000)
 
-    if (diffMins < 1) return '방금 전'
-    if (diffMins < 60) return `${diffMins}분 전`
-    if (diffHours < 24) return `${diffHours}시간 전`
-    if (diffDays < 7) return `${diffDays}일 전`
+    if (diffMins < 1) return t('comp.comments.justNow')
+    if (diffMins < 60) return t('comp.comments.minsAgo', { n: diffMins })
+    if (diffHours < 24) return t('comp.comments.hoursAgo', { n: diffHours })
+    if (diffDays < 7) return t('comp.comments.daysAgo', { n: diffDays })
 
-    return date.toLocaleDateString('ko-KR', {
+    return date.toLocaleDateString(dateLocale, {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
@@ -180,7 +183,7 @@ export function CommentsSection({ entityType, entityId, currentUser }: CommentsS
 
   const formatFullDate = (dateString: string) => {
     const date = new Date(dateString)
-    return date.toLocaleDateString('ko-KR', {
+    return date.toLocaleDateString(dateLocale, {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
@@ -192,7 +195,7 @@ export function CommentsSection({ entityType, entityId, currentUser }: CommentsS
   return (
     <div style={{ marginTop: '1rem', borderTop: '1px solid #e5e7eb', paddingTop: '1rem' }}>
       <h3 style={{ fontSize: '0.875rem', fontWeight: 600, marginBottom: '0.75rem', color: '#111827' }}>
-        진행 상황 기록
+        {t('comp.comments.sectionTitle')}
       </h3>
 
       {/* 댓글 목록 */}
@@ -201,9 +204,9 @@ export function CommentsSection({ entityType, entityId, currentUser }: CommentsS
         style={{ marginBottom: '0.75rem', maxHeight: '200px', overflowY: 'auto' }}
       >
         {loading ? (
-          <p style={{ color: '#6b7280', fontSize: '0.75rem' }}>로딩 중...</p>
+          <p style={{ color: '#6b7280', fontSize: '0.75rem' }}>{t('comp.comments.loading')}</p>
         ) : comments.length === 0 ? (
-          <p style={{ color: '#6b7280', fontSize: '0.75rem' }}>아직 기록이 없습니다.</p>
+          <p style={{ color: '#6b7280', fontSize: '0.75rem' }}>{t('comp.comments.empty')}</p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
             {comments.map((comment) => (
@@ -227,15 +230,15 @@ export function CommentsSection({ entityType, entityId, currentUser }: CommentsS
                       </span>
                       {comment.updated_at !== comment.created_at && (
                         <span style={{ fontSize: '0.65rem', color: '#9ca3af', marginLeft: '0.375rem' }}>
-                          (수정됨)
+                          {t('comp.comments.edited')}
                         </span>
                       )}
                     </div>
                     <div style={{ fontSize: '0.625rem', color: '#9ca3af' }}>
-                      작성: {formatFullDate(comment.created_at)}
+                      {t('comp.comments.created')} {formatFullDate(comment.created_at)}
                       {comment.updated_at !== comment.created_at && (
                         <span style={{ marginLeft: '0.375rem' }}>
-                          수정: {formatFullDate(comment.updated_at)}
+                          {t('comp.comments.updated')} {formatFullDate(comment.updated_at)}
                         </span>
                       )}
                     </div>
@@ -256,7 +259,7 @@ export function CommentsSection({ entityType, entityId, currentUser }: CommentsS
                               borderRadius: '0.25rem',
                             }}
                           >
-                            저장
+                            {t('comp.comments.saveBtn')}
                           </button>
                           <button
                             onClick={handleCancelEdit}
@@ -270,7 +273,7 @@ export function CommentsSection({ entityType, entityId, currentUser }: CommentsS
                               borderRadius: '0.25rem',
                             }}
                           >
-                            취소
+                            {t('comp.comments.cancelBtn')}
                           </button>
                         </>
                       ) : (
@@ -286,7 +289,7 @@ export function CommentsSection({ entityType, entityId, currentUser }: CommentsS
                               padding: '0.2rem 0.4rem',
                             }}
                           >
-                            수정
+                            {t('comp.comments.editBtn')}
                           </button>
                           <button
                             onClick={() => handleDelete(comment.id)}
@@ -299,7 +302,7 @@ export function CommentsSection({ entityType, entityId, currentUser }: CommentsS
                               padding: '0.2rem 0.4rem',
                             }}
                           >
-                            삭제
+                            {t('comp.comments.deleteBtn')}
                           </button>
                         </>
                       )}
@@ -344,7 +347,7 @@ export function CommentsSection({ entityType, entityId, currentUser }: CommentsS
               handleSubmit(e as any)
             }
           }}
-          placeholder="진행 상황을 기록하세요... (Ctrl+Enter로 등록)"
+          placeholder={t('comp.comments.inputPh')}
           rows={2}
           style={{
             width: '100%',
@@ -373,7 +376,7 @@ export function CommentsSection({ entityType, entityId, currentUser }: CommentsS
               cursor: submitting || !newComment.trim() ? 'not-allowed' : 'pointer',
             }}
           >
-            {submitting ? '등록 중...' : '등록'}
+            {submitting ? t('comp.comments.submitting') : t('comp.comments.submit')}
           </button>
         </div>
       </div>

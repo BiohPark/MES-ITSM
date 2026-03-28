@@ -164,6 +164,36 @@
   color: #ffffff;
 }
 
+.servicenow-header__lang {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-right: 0.25rem;
+}
+
+.servicenow-header__lang-btn {
+  padding: 0.35rem 0.55rem;
+  border: 1px solid #d1d5db;
+  border-radius: 2px;
+  background: #ffffff;
+  color: #4b5563;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  line-height: 1.2;
+}
+
+.servicenow-header__lang-btn:hover {
+  background: #f3f4f6;
+}
+
+.servicenow-header__lang-btn--active {
+  border-color: #2563eb;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
 /* Sidebar Styles */
 .servicenow-sidebar {
   width: 240px;

@@ -5,16 +5,18 @@ export const dynamic = 'force-dynamic'
 import { Suspense, useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import { useI18n } from '@/lib/i18n'
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<div>Loading...</div>}>
+    <Suspense fallback={<div style={{ padding: '2rem', textAlign: 'center' }}>Loading...</div>}>
       <LoginForm />
     </Suspense>
   )
 }
 
 function LoginForm() {
+  const { t } = useI18n()
   const router = useRouter()
   const searchParams = useSearchParams()
   const [username, setUsername] = useState('')
@@ -28,10 +30,10 @@ function LoginForm() {
 
   useEffect(() => {
     if (expired) {
-      setError('세션이 만료되었습니다. 다시 로그인해주세요.')
+      setError(t('auth.login.sessionExpired'))
       setShowErrorPopup(true)
     }
-  }, [expired])
+  }, [expired, t])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -56,7 +58,7 @@ function LoginForm() {
       const data = await response.json()
 
       if (!response.ok) {
-        const errorMessage = data.error || '로그인에 실패했습니다.'
+        const errorMessage = data.error || t('auth.login.errorDefault')
         setError(errorMessage)
         setShowErrorPopup(true)
         setLoading(false)
@@ -75,7 +77,7 @@ function LoginForm() {
         window.location.replace(from || '/')
       }, 100)
     } catch (error) {
-      const errorMessage = '로그인 중 오류가 발생했습니다.'
+      const errorMessage = t('auth.login.errorGeneric')
       setError(errorMessage)
       setShowErrorPopup(true)
       setLoading(false)
@@ -130,7 +132,7 @@ function LoginForm() {
                 color: '#991b1b',
                 margin: 0,
               }}>
-                로그인 실패
+                {t('auth.login.failureTitle')}
               </h2>
               <button
                 onClick={closeErrorPopup}
@@ -173,7 +175,7 @@ function LoginForm() {
                 cursor: 'pointer',
               }}
             >
-              확인
+              {t('common.ok')}
             </button>
           </div>
         </div>
@@ -202,7 +204,7 @@ function LoginForm() {
             textAlign: 'center',
             color: '#111827',
           }}>
-            로그인
+            {t('auth.login.title')}
           </h1>
           <p style={{
             fontSize: '0.875rem',
@@ -210,7 +212,7 @@ function LoginForm() {
             textAlign: 'center',
             marginBottom: '2rem',
           }}>
-            ITSM 시스템에 로그인하세요
+            {t('auth.login.subtitle')}
           </p>
 
         <form onSubmit={handleSubmit}>
@@ -222,7 +224,7 @@ function LoginForm() {
               color: '#374151',
               marginBottom: '0.5rem',
             }}>
-              ID
+              {t('auth.login.username')}
             </label>
             <input
               type="text"
@@ -238,7 +240,7 @@ function LoginForm() {
                 fontSize: '1rem',
                 boxSizing: 'border-box',
               }}
-              placeholder="ID를 입력하세요"
+              placeholder={t('auth.login.placeholderUsername')}
             />
           </div>
 
@@ -250,7 +252,7 @@ function LoginForm() {
               color: '#374151',
               marginBottom: '0.5rem',
             }}>
-              비밀번호
+              {t('auth.login.password')}
             </label>
             <input
               type="password"
@@ -266,7 +268,7 @@ function LoginForm() {
                 fontSize: '1rem',
                 boxSizing: 'border-box',
               }}
-              placeholder="비밀번호를 입력하세요"
+              placeholder={t('auth.login.placeholderPassword')}
             />
           </div>
 
@@ -286,7 +288,7 @@ function LoginForm() {
               marginBottom: '1rem',
             }}
           >
-            {loading ? '로그인 중...' : '로그인'}
+            {loading ? t('auth.login.submitting') : t('auth.login.submit')}
           </button>
         </form>
 
@@ -303,7 +305,7 @@ function LoginForm() {
               textDecoration: 'none',
             }}
           >
-            회원가입
+            {t('auth.login.register')}
           </Link>
           <Link
             href="/reset-password"
@@ -312,7 +314,7 @@ function LoginForm() {
               textDecoration: 'none',
             }}
           >
-            비밀번호 찾기
+            {t('auth.login.forgotPassword')}
           </Link>
         </div>
       </div>

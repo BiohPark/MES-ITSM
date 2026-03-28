@@ -1,5 +1,6 @@
 'use client'
 
+import { useI18n } from '@/lib/i18n'
 import { useState, useEffect, useCallback } from 'react'
 
 interface BackupMetadata {
@@ -13,6 +14,8 @@ interface BackupMetadata {
 }
 
 export function BackupView() {
+  const { t, locale } = useI18n()
+  const dateLocale = locale.startsWith('en') ? 'en-US' : 'ko-KR'
   const [backups, setBackups] = useState<BackupMetadata[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -25,23 +28,23 @@ export function BackupView() {
       setError(null)
       const response = await fetch('/api/backup')
       if (!response.ok) {
-        throw new Error('백업 목록 조회에 실패했습니다.')
+        throw new Error(t('comp.backup.listFail'))
       }
       const data = await response.json()
       setBackups(data)
     } catch (err) {
-      setError(err instanceof Error ? err.message : '오류가 발생했습니다.')
+      setError(err instanceof Error ? err.message : t('comp.backup.genericError'))
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
-    fetchBackups()
+    void fetchBackups()
   }, [fetchBackups])
 
   const handleCreateBackup = async () => {
-    if (!confirm('수동 백업을 생성하시겠습니까?')) {
+    if (!confirm(t('comp.backup.confirmManual'))) {
       return
     }
 
@@ -55,24 +58,28 @@ export function BackupView() {
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.error || '백업 생성에 실패했습니다.')
+        throw new Error(errorData.error || t('comp.backup.createFail'))
       }
 
       await fetchBackups()
-      alert('백업이 생성되었습니다.')
+      alert(t('comp.backup.created'))
     } catch (err) {
-      alert(err instanceof Error ? err.message : '오류가 발생했습니다.')
+      alert(err instanceof Error ? err.message : t('comp.backup.genericError'))
     } finally {
       setCreating(false)
     }
   }
 
   const handleRestore = async (backupId: number, filename: string) => {
-    if (!confirm(`정말로 "${filename}" 백업으로 데이터베이스를 복구하시겠습니까?\n\n주의: 현재 데이터는 모두 삭제되고 백업 데이터로 대체됩니다.`)) {
+    if (
+      !confirm(
+        `${t('comp.backup.confirmRestore', { name: filename })}\n\n${t('comp.backup.restoreWarn1')}`
+      )
+    ) {
       return
     }
 
-    if (!confirm('이 작업은 되돌릴 수 없습니다. 정말 진행하시겠습니까?')) {
+    if (!confirm(t('comp.backup.confirmRestoreFinal'))) {
       return
     }
 
@@ -86,13 +93,13 @@ export function BackupView() {
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.error || '복구에 실패했습니다.')
+        throw new Error(errorData.error || t('comp.backup.restoreFail'))
       }
 
-      alert('데이터베이스가 성공적으로 복구되었습니다. 페이지를 새로고침합니다.')
+      alert(t('comp.backup.restoreOkReload'))
       window.location.reload()
     } catch (err) {
-      alert(err instanceof Error ? err.message : '오류가 발생했습니다.')
+      alert(err instanceof Error ? err.message : t('comp.backup.genericError'))
     } finally {
       setRestoring(null)
     }
@@ -106,13 +113,13 @@ export function BackupView() {
 
   const formatDate = (date: Date | string) => {
     const d = typeof date === 'string' ? new Date(date) : date
-    return d.toLocaleString('ko-KR')
+    return d.toLocaleString(dateLocale)
   }
 
   if (loading) {
     return (
       <div className="placeholder">
-        <p>데이터를 불러오는 중...</p>
+        <p>{t('comp.ui.loading')}</p>
       </div>
     )
   }
@@ -120,53 +127,55 @@ export function BackupView() {
   return (
     <div className="table-wrapper">
       <div className="table-header">
-        <h2>백업 및 복구 관리</h2>
+        <h2>{t('comp.backup.title')}</h2>
         <div className="table-actions">
           <button
-            onClick={handleCreateBackup}
+            onClick={() => void handleCreateBackup()}
             className="primary-button"
             disabled={creating}
           >
-            {creating ? '백업 중...' : '수동 백업 생성'}
+            {creating ? t('comp.backup.backingUp') : t('comp.backup.manualBackup')}
           </button>
-          <button onClick={fetchBackups} className="refresh-button">
-            새로고침
+          <button onClick={() => void fetchBackups()} className="refresh-button">
+            {t('comp.ui.refresh')}
           </button>
         </div>
       </div>
 
       <div style={{ marginBottom: '1rem', padding: '1rem', background: '#eff6ff', borderRadius: '0.5rem', fontSize: '0.875rem' }}>
         <p style={{ margin: 0, marginBottom: '0.5rem' }}>
-          <strong>안내:</strong> 시스템은 1시간마다 자동으로 백업을 생성합니다.
+          <strong>{t('comp.backup.noticeLabel')}</strong> {t('comp.backup.intro1')}
         </p>
         <p style={{ margin: 0, marginBottom: '0.5rem' }}>
-          <strong>설정한 보관 기간이 지난 백업 파일은 자동으로 삭제</strong>됩니다. (설정 → 시스템 설정에서 보관 일수 변경 가능)
+          {t('comp.backup.intro2')}
         </p>
         <p style={{ margin: 0 }}>
-          복구 시 현재 데이터는 모두 삭제되고 선택한 백업 데이터로 대체됩니다.
+          {t('comp.backup.intro3')}
         </p>
       </div>
 
       {error && (
         <div className="placeholder">
-          <p style={{ color: '#e74c3c' }}>오류: {error}</p>
+          <p style={{ color: '#e74c3c' }}>
+            {t('comp.ui.errorPrefix')} {error}
+          </p>
         </div>
       )}
 
       {backups.length === 0 ? (
         <div className="placeholder">
-          <p>백업이 없습니다.</p>
+          <p>{t('comp.backup.noBackups')}</p>
         </div>
       ) : (
         <table>
           <thead>
             <tr>
-              <th>파일명</th>
-              <th>타입</th>
-              <th>크기</th>
-              <th>생성자</th>
-              <th>생성일</th>
-              <th>작업</th>
+              <th>{t('comp.backup.colFile')}</th>
+              <th>{t('comp.backup.colType')}</th>
+              <th>{t('comp.backup.colSize')}</th>
+              <th>{t('comp.backup.colCreator')}</th>
+              <th>{t('comp.backup.colCreated')}</th>
+              <th>{t('comp.backup.colActions')}</th>
             </tr>
           </thead>
           <tbody>
@@ -186,7 +195,7 @@ export function BackupView() {
                       backgroundColor: backup.backup_type === 'auto' ? '#3b82f6' : '#10b981',
                     }}
                   >
-                    {backup.backup_type === 'auto' ? '자동' : '수동'}
+                    {backup.backup_type === 'auto' ? t('comp.backup.typeAuto') : t('comp.backup.typeManual')}
                   </span>
                 </td>
                 <td>{formatFileSize(backup.file_size)}</td>
@@ -194,7 +203,7 @@ export function BackupView() {
                 <td>{formatDate(backup.created_at)}</td>
                 <td>
                   <button
-                    onClick={() => handleRestore(backup.id, backup.filename)}
+                    onClick={() => void handleRestore(backup.id, backup.filename)}
                     className="primary-button"
                     style={{
                       backgroundColor: '#ef4444',
@@ -203,7 +212,7 @@ export function BackupView() {
                     }}
                     disabled={restoring === backup.id}
                   >
-                    {restoring === backup.id ? '복구 중...' : '복구'}
+                    {restoring === backup.id ? t('comp.backup.restoring') : t('comp.backup.restore')}
                   </button>
                 </td>
               </tr>
@@ -214,4 +223,3 @@ export function BackupView() {
     </div>
   )
 }
-

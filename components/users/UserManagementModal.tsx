@@ -1,6 +1,16 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useI18n } from '@/lib/i18n/I18nProvider'
+
+/** DB에 저장된 role 값 → comp.userMgmt.* 표시 키 */
+const USER_ROLE_TO_I18N: Record<string, string> = {
+  user: 'comp.userMgmt.roleUser',
+  Viewonly: 'comp.userMgmt.roleViewonly',
+  '그룹 매니저': 'comp.userMgmt.roleGroup',
+  '파트 매니저': 'comp.userMgmt.rolePart',
+  admin: 'comp.userMgmt.roleAdmin',
+}
 
 interface UserManagementModalProps {
   onClose: () => void
@@ -12,6 +22,14 @@ interface UserManagementModalProps {
 }
 
 export function UserManagementModal({ onClose, currentUser, embedInPanel, onBack }: UserManagementModalProps) {
+  const { t } = useI18n()
+
+  const formatRoleForDisplay = (role: string | undefined) => {
+    const r = role || 'user'
+    const key = USER_ROLE_TO_I18N[r]
+    return key ? t(key) : r
+  }
+
   const [users, setUsers] = useState<Array<{ id: string; name: string; username?: string; email?: string; role?: string; is_admin?: boolean; can_edit_wbs?: boolean }>>([])
   const [loading, setLoading] = useState(true)
   const [newUserUsername, setNewUserUsername] = useState('')
@@ -53,33 +71,33 @@ export function UserManagementModal({ onClose, currentUser, embedInPanel, onBack
 
   const handleAddUser = async () => {
     if (!newUserUsername.trim()) {
-      alert('ID를 입력해주세요.')
+      alert(t('comp.userMgmt.idRequired'))
       return
     }
     if (!newUserName.trim()) {
-      alert('이름을 입력해주세요.')
+      alert(t('comp.userMgmt.nameRequired'))
       return
     }
     if (!newUserEmail.trim()) {
-      alert('이메일을 입력해주세요.')
+      alert(t('comp.userMgmt.emailRequired'))
       return
     }
     if (!newUserPassword.trim()) {
-      alert('비밀번호를 입력해주세요.')
+      alert(t('comp.userMgmt.passwordRequired'))
       return
     }
     if (newUserPassword.length < 8) {
-      alert('비밀번호는 최소 8자 이상이어야 합니다.')
+      alert(t('comp.userMgmt.passwordLen'))
       return
     }
     
     // 비밀번호 강도 검증 (영문자와 숫자 포함)
     if (!/[A-Za-z]/.test(newUserPassword)) {
-      alert('비밀번호는 영문자를 포함해야 합니다.')
+      alert(t('comp.userMgmt.passwordLetter'))
       return
     }
     if (!/[0-9]/.test(newUserPassword)) {
-      alert('비밀번호는 숫자를 포함해야 합니다.')
+      alert(t('comp.userMgmt.passwordDigit'))
       return
     }
 
@@ -106,7 +124,7 @@ export function UserManagementModal({ onClose, currentUser, embedInPanel, onBack
       const data = await response.json()
       
       if (response.ok) {
-        alert('사용자가 성공적으로 추가되었습니다.')
+        alert(t('comp.userMgmt.addOk'))
         setNewUserUsername('')
         setNewUserName('')
         setNewUserEmail('')
@@ -115,11 +133,11 @@ export function UserManagementModal({ onClose, currentUser, embedInPanel, onBack
         setNewUserIsAdmin(false)
         await fetchUsers()
       } else {
-        alert(data.error || '사용자 추가에 실패했습니다.')
+        alert(data.error || t('comp.userMgmt.addFail'))
       }
     } catch (error) {
       console.error('Error adding user:', error)
-      alert('사용자 추가에 실패했습니다. 네트워크 오류가 발생했을 수 있습니다.')
+      alert(t('comp.userMgmt.addFailNetwork'))
     } finally {
       setAddingUser(false)
     }
@@ -127,7 +145,7 @@ export function UserManagementModal({ onClose, currentUser, embedInPanel, onBack
 
   const handleRowClick = (user: { id: string; name: string; username?: string; email?: string; role?: string; is_admin?: boolean; can_edit_wbs?: boolean }) => {
     if (!isAdmin) {
-      alert('관리자만 사용자 정보를 수정할 수 있습니다.')
+      alert(t('comp.userMgmt.adminEditOnly'))
       return
     }
     
@@ -164,19 +182,19 @@ export function UserManagementModal({ onClose, currentUser, embedInPanel, onBack
     if (!editingUser) return
 
     if (!editUsername.trim()) {
-      alert('ID를 입력해주세요.')
+      alert(t('comp.userMgmt.idRequired'))
       return
     }
     if (!editName.trim()) {
-      alert('이름을 입력해주세요.')
+      alert(t('comp.userMgmt.nameRequired'))
       return
     }
     if (!editEmail.trim()) {
-      alert('이메일을 입력해주세요.')
+      alert(t('comp.userMgmt.emailRequired'))
       return
     }
     if (editPassword && editPassword.length < 8) {
-      alert('비밀번호는 최소 8자 이상이어야 합니다.')
+      alert(t('comp.userMgmt.passwordLen'))
       return
     }
 
@@ -206,11 +224,11 @@ export function UserManagementModal({ onClose, currentUser, embedInPanel, onBack
         await fetchUsers()
       } else {
         const data = await response.json()
-        alert(data.error || '사용자 수정에 실패했습니다.')
+        alert(data.error || t('comp.userMgmt.editFail'))
       }
     } catch (error) {
       console.error('Error updating user:', error)
-      alert('사용자 수정에 실패했습니다.')
+      alert(t('comp.userMgmt.editFail'))
     }
   }
 
@@ -218,11 +236,11 @@ export function UserManagementModal({ onClose, currentUser, embedInPanel, onBack
     e.stopPropagation() // row 클릭 이벤트 방지
     
     if (!isAdmin) {
-      alert('관리자만 사용자를 삭제할 수 있습니다.')
+      alert(t('comp.userMgmt.adminDeleteOnly'))
       return
     }
 
-    if (!confirm('정말 이 사용자를 삭제하시겠습니까?')) {
+    if (!confirm(t('comp.userMgmt.deleteConfirm'))) {
       return
     }
 
@@ -241,11 +259,11 @@ export function UserManagementModal({ onClose, currentUser, embedInPanel, onBack
         await fetchUsers()
       } else {
         const data = await response.json()
-        alert(data.error || '사용자 삭제에 실패했습니다.')
+        alert(data.error || t('comp.userMgmt.deleteFail'))
       }
     } catch (error) {
       console.error('Error deleting user:', error)
-      alert('사용자 삭제에 실패했습니다.')
+      alert(t('comp.userMgmt.deleteFail'))
     }
   }
 
@@ -257,10 +275,10 @@ export function UserManagementModal({ onClose, currentUser, embedInPanel, onBack
           onClick={onBack}
           style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#3b82f6', fontSize: '0.875rem', padding: '0.25rem 0' }}
         >
-          ← 설정 목록
+          {t('comp.userMgmt.back')}
         </button>
       ) : null}
-      <h2>사용자 관리</h2>
+      <h2>{t('comp.userMgmt.title')}</h2>
       {!embedInPanel && (
         <button className="modal-close" onClick={onClose}>
           ×
@@ -272,59 +290,59 @@ export function UserManagementModal({ onClose, currentUser, embedInPanel, onBack
   const content = (
     <div className="project-form" style={{ overflowY: 'auto', flex: 1, minHeight: 0 }}>
           <div className="form-group">
-            <label htmlFor="new-user-username">ID *</label>
+            <label htmlFor="new-user-username">{t('comp.userMgmt.idLabel')}</label>
             <input
               type="text"
               id="new-user-username"
               value={newUserUsername}
               onChange={(e) => setNewUserUsername(e.target.value)}
               className="form-input"
-              placeholder="ID를 입력하세요"
+              placeholder={t('comp.userMgmt.idPh')}
               required
             />
           </div>
 
           <div className="form-group">
-            <label htmlFor="new-user-name">이름 *</label>
+            <label htmlFor="new-user-name">{t('comp.userMgmt.nameLabel')}</label>
             <input
               type="text"
               id="new-user-name"
               value={newUserName}
               onChange={(e) => setNewUserName(e.target.value)}
               className="form-input"
-              placeholder="이름을 입력하세요"
+              placeholder={t('comp.userMgmt.namePh')}
               required
             />
           </div>
 
           <div className="form-group">
-            <label htmlFor="new-user-email">이메일 *</label>
+            <label htmlFor="new-user-email">{t('comp.userMgmt.emailLabel')}</label>
             <input
               type="email"
               id="new-user-email"
               value={newUserEmail}
               onChange={(e) => setNewUserEmail(e.target.value)}
               className="form-input"
-              placeholder="이메일을 입력하세요"
+              placeholder={t('comp.userMgmt.emailPh')}
               required
             />
           </div>
 
           <div className="form-group">
-            <label htmlFor="new-user-password">비밀번호 * (최소 8자, 영문자와 숫자 포함)</label>
+            <label htmlFor="new-user-password">{t('comp.userMgmt.passwordLabel')}</label>
             <input
               type="password"
               id="new-user-password"
               value={newUserPassword}
               onChange={(e) => setNewUserPassword(e.target.value)}
               className="form-input"
-              placeholder="비밀번호를 입력하세요"
+              placeholder={t('comp.userMgmt.passwordPh')}
               required
             />
           </div>
 
           <div className="form-group">
-            <label htmlFor="new-user-role">권한 *</label>
+            <label htmlFor="new-user-role">{t('comp.userMgmt.roleLabel')}</label>
             <select
               id="new-user-role"
               value={newUserRole}
@@ -336,10 +354,10 @@ export function UserManagementModal({ onClose, currentUser, embedInPanel, onBack
               className="form-input"
               required
             >
-              <option value="user">일반 사용자</option>
-              <option value="Viewonly">Viewonly (읽기 전용)</option>
-              <option value="그룹 매니저">그룹 매니저</option>
-              <option value="파트 매니저">파트 매니저</option>
+              <option value="user">{t('comp.userMgmt.roleUser')}</option>
+              <option value="Viewonly">{t('comp.userMgmt.roleViewonly')}</option>
+              <option value="그룹 매니저">{t('comp.userMgmt.roleGroup')}</option>
+              <option value="파트 매니저">{t('comp.userMgmt.rolePart')}</option>
             </select>
           </div>
           <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -351,7 +369,7 @@ export function UserManagementModal({ onClose, currentUser, embedInPanel, onBack
               onChange={(e) => setNewUserIsAdmin(e.target.checked)}
             />
             <label htmlFor="new-user-is-admin" style={{ marginBottom: 0 }}>
-              관리자 권한 부여 (Viewonly는 불가)
+              {t('comp.userMgmt.adminGrant')}
             </label>
           </div>
 
@@ -363,67 +381,67 @@ export function UserManagementModal({ onClose, currentUser, embedInPanel, onBack
               disabled={addingUser}
               style={{ opacity: addingUser ? 0.6 : 1, cursor: addingUser ? 'not-allowed' : 'pointer' }}
             >
-              {addingUser ? '추가 중...' : '사용자 추가'}
+              {addingUser ? t('comp.userMgmt.adding') : t('comp.userMgmt.addUser')}
             </button>
           </div>
 
           {editingUser && isAdmin && (
             <div style={{ marginTop: '2rem', borderTop: '1px solid #e2e8f0', paddingTop: '1.5rem', background: '#f8fafc', padding: '1.5rem', borderRadius: '0.5rem' }}>
-              <h3 style={{ marginBottom: '1rem', fontSize: '1.1rem', fontWeight: 600 }}>사용자 수정</h3>
+              <h3 style={{ marginBottom: '1rem', fontSize: '1.1rem', fontWeight: 600 }}>{t('comp.userMgmt.editUser')}</h3>
               
               <div className="form-group">
-                <label htmlFor="edit-user-username">ID *</label>
+                <label htmlFor="edit-user-username">{t('comp.userMgmt.idLabel')}</label>
                 <input
                   type="text"
                   id="edit-user-username"
                   value={editUsername}
                   onChange={(e) => setEditUsername(e.target.value)}
                   className="form-input"
-                  placeholder="ID를 입력하세요"
+                  placeholder={t('comp.userMgmt.idPh')}
                   required
                 />
               </div>
 
               <div className="form-group">
-                <label htmlFor="edit-user-name">이름 *</label>
+                <label htmlFor="edit-user-name">{t('comp.userMgmt.nameLabel')}</label>
                 <input
                   type="text"
                   id="edit-user-name"
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
                   className="form-input"
-                  placeholder="이름을 입력하세요"
+                  placeholder={t('comp.userMgmt.namePh')}
                   required
                 />
               </div>
 
               <div className="form-group">
-                <label htmlFor="edit-user-email">이메일 *</label>
+                <label htmlFor="edit-user-email">{t('comp.userMgmt.emailLabel')}</label>
                 <input
                   type="email"
                   id="edit-user-email"
                   value={editEmail}
                   onChange={(e) => setEditEmail(e.target.value)}
                   className="form-input"
-                  placeholder="이메일을 입력하세요"
+                  placeholder={t('comp.userMgmt.emailPh')}
                   required
                 />
               </div>
 
               <div className="form-group">
-                <label htmlFor="edit-user-password">비밀번호 (변경 시에만 입력, 최소 8자)</label>
+                <label htmlFor="edit-user-password">{t('comp.userMgmt.editPasswordHint')}</label>
                 <input
                   type="password"
                   id="edit-user-password"
                   value={editPassword}
                   onChange={(e) => setEditPassword(e.target.value)}
                   className="form-input"
-                  placeholder="비밀번호를 변경하려면 입력하세요"
+                  placeholder={t('comp.userMgmt.passwordChangePh')}
                 />
               </div>
 
               <div className="form-group">
-                <label htmlFor="edit-user-role">권한 *</label>
+                <label htmlFor="edit-user-role">{t('comp.userMgmt.roleLabel')}</label>
                 <select
                   id="edit-user-role"
                   value={editRole}
@@ -435,10 +453,10 @@ export function UserManagementModal({ onClose, currentUser, embedInPanel, onBack
                   className="form-input"
                   required
                 >
-                  <option value="user">일반 사용자</option>
-                  <option value="Viewonly">Viewonly (읽기 전용)</option>
-                  <option value="그룹 매니저">그룹 매니저</option>
-                  <option value="파트 매니저">파트 매니저</option>
+                  <option value="user">{t('comp.userMgmt.roleUser')}</option>
+                  <option value="Viewonly">{t('comp.userMgmt.roleViewonly')}</option>
+                  <option value="그룹 매니저">{t('comp.userMgmt.roleGroup')}</option>
+                  <option value="파트 매니저">{t('comp.userMgmt.rolePart')}</option>
                 </select>
               </div>
               <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -450,7 +468,7 @@ export function UserManagementModal({ onClose, currentUser, embedInPanel, onBack
                   onChange={(e) => setEditIsAdmin(e.target.checked)}
                 />
                 <label htmlFor="edit-user-is-admin" style={{ marginBottom: 0 }}>
-                  관리자 권한 부여 (Viewonly는 불가)
+                  {t('comp.userMgmt.adminGrant')}
                 </label>
               </div>
 
@@ -462,7 +480,7 @@ export function UserManagementModal({ onClose, currentUser, embedInPanel, onBack
                     checked={editCanEditWbs}
                     onChange={(e) => setEditCanEditWbs(e.target.checked)}
                   />
-                  <label htmlFor="edit-user-can-edit-wbs" style={{ marginBottom: 0 }}>WBS 수정 권한 부여 (간트 차트 WBS 편집 가능)</label>
+                  <label htmlFor="edit-user-can-edit-wbs" style={{ marginBottom: 0 }}>{t('comp.userMgmt.wbsGrant')}</label>
                 </div>
               )}
 
@@ -472,7 +490,7 @@ export function UserManagementModal({ onClose, currentUser, embedInPanel, onBack
                   onClick={handleUpdateUser}
                   className="btn btn-primary"
                 >
-                  저장
+                  {t('comp.userMgmt.save')}
                 </button>
                 <button
                   type="button"
@@ -480,29 +498,29 @@ export function UserManagementModal({ onClose, currentUser, embedInPanel, onBack
                   className="btn"
                   style={{ marginLeft: '0.5rem' }}
                 >
-                  취소
+                  {t('comp.userMgmt.cancel')}
                 </button>
               </div>
             </div>
           )}
 
           <div style={{ marginTop: '2rem', borderTop: '1px solid #e2e8f0', paddingTop: '1.5rem' }}>
-            <h3 style={{ marginBottom: '1rem', fontSize: '1.1rem', fontWeight: 600 }}>사용자 목록</h3>
+            <h3 style={{ marginBottom: '1rem', fontSize: '1.1rem', fontWeight: 600 }}>{t('comp.userMgmt.listTitle')}</h3>
             {loading ? (
-              <p>로딩 중...</p>
+              <p>{t('comp.userMgmt.loading')}</p>
             ) : users.length === 0 ? (
-              <p style={{ color: '#94a3b8' }}>등록된 사용자가 없습니다.</p>
+              <p style={{ color: '#94a3b8' }}>{t('comp.userMgmt.empty')}</p>
             ) : (
               <table style={{ width: '100%' }}>
                 <thead>
                   <tr>
-                    <th>계정 ID</th>
-                    <th>로그인 ID</th>
-                    <th>이름</th>
-                    <th>이메일</th>
-                    <th>권한</th>
-                    {isAdmin && <th>WBS 수정</th>}
-                    <th>작업</th>
+                    <th>{t('comp.userMgmt.colAccountId')}</th>
+                    <th>{t('comp.userMgmt.colLoginId')}</th>
+                    <th>{t('comp.userMgmt.colName')}</th>
+                    <th>{t('comp.userMgmt.colEmail')}</th>
+                    <th>{t('comp.userMgmt.colRole')}</th>
+                    {isAdmin && <th>{t('comp.userMgmt.colWbs')}</th>}
+                    <th>{t('comp.userMgmt.colActions')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -528,7 +546,7 @@ export function UserManagementModal({ onClose, currentUser, embedInPanel, onBack
                       <td>{user.username || '-'}</td>
                       <td>{user.name}</td>
                       <td>{user.email || '-'}</td>
-                      <td>{user.role || 'user'}</td>
+                      <td>{formatRoleForDisplay(user.role)}</td>
                       {isAdmin && <td>{user.can_edit_wbs ? '✓' : '-'}</td>}
                       <td>
                         <button
@@ -543,7 +561,7 @@ export function UserManagementModal({ onClose, currentUser, embedInPanel, onBack
                             fontSize: '0.85rem',
                           }}
                         >
-                          삭제
+                          {t('comp.userMgmt.delete')}
                         </button>
                       </td>
                     </tr>

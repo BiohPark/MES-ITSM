@@ -1,6 +1,9 @@
 'use client'
 
+import { useI18n } from '@/lib/i18n'
+
 export function StatusChart({ data }: { data: Record<string, number> }) {
+  const { t } = useI18n()
   const total = Object.values(data).reduce((sum, val) => sum + val, 0)
   const colors: Record<string, string> = {
     Planning: '#3b82f6',
@@ -12,7 +15,7 @@ export function StatusChart({ data }: { data: Record<string, number> }) {
   if (total === 0) {
     return (
       <div style={{ padding: '2rem', textAlign: 'center', color: '#94a3b8' }}>
-        <p>데이터가 없습니다.</p>
+        <p>{t('comp.charts.noData')}</p>
       </div>
     )
   }
@@ -53,4 +56,3 @@ export function StatusChart({ data }: { data: Record<string, number> }) {
     </div>
   )
 }
-

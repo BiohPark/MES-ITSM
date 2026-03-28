@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useI18n } from '@/lib/i18n'
 import { BellIcon } from '../common/Icons'
 import type { MyAssignmentItem, MyAssignmentsResponse } from '@/types/assignment'
 
@@ -13,6 +14,7 @@ export function AssignmentBell({
 }: {
   user?: { name: string; username: string; role: string; isAdmin?: boolean } | null
 }) {
+  const { t } = useI18n()
   const [items, setItems] = useState<MyAssignmentItem[]>([])
   const [loading, setLoading] = useState(false)
   const [open, setOpen] = useState(false)
@@ -57,7 +59,7 @@ export function AssignmentBell({
           credentials: 'include',
         })
         if (!response.ok) {
-          throw new Error('내 할당 업무를 불러오지 못했습니다.')
+          throw new Error(t('assignmentBell.loadFailed'))
         }
         const data = (await response.json()) as MyAssignmentsResponse
         setItems(data.items || [])
@@ -70,7 +72,7 @@ export function AssignmentBell({
       inFlightRef.current = null
       setLoading(false)
     }
-  }, [user])
+  }, [user, t])
 
   useEffect(() => {
     if (!storageKey) {
@@ -127,8 +129,8 @@ export function AssignmentBell({
       <button
         className="servicenow-header__icon-button"
         onClick={() => setOpen((prev) => !prev)}
-        aria-label="내 할당 업무"
-        title="내 할당 업무"
+        aria-label={t('assignmentBell.ariaLabel')}
+        title={t('assignmentBell.title')}
         style={{ position: 'relative' }}
       >
         <BellIcon size={20} color="#666" />
@@ -182,9 +184,9 @@ export function AssignmentBell({
             }}
           >
             <div>
-              <strong style={{ display: 'block', fontSize: '0.95rem' }}>내 할당 업무</strong>
+              <strong style={{ display: 'block', fontSize: '0.95rem' }}>{t('assignmentBell.panelTitle')}</strong>
               <span style={{ color: '#64748b', fontSize: '0.75rem' }}>
-                나에게 배정된 업무를 URL로 바로 열 수 있습니다.
+                {t('assignmentBell.panelHint')}
               </span>
             </div>
             <button
@@ -192,13 +194,13 @@ export function AssignmentBell({
               onClick={() => void loadAssignments(true)}
               className="servicenow-button servicenow-button--secondary servicenow-button--sm"
             >
-              새로고침
+              {t('assignmentBell.refresh')}
             </button>
           </div>
           {loading ? (
-            <div style={{ padding: '1rem', color: '#64748b' }}>불러오는 중...</div>
+            <div style={{ padding: '1rem', color: '#64748b' }}>{t('assignmentBell.loading')}</div>
           ) : items.length === 0 ? (
-            <div style={{ padding: '1rem', color: '#64748b' }}>현재 할당된 업무가 없습니다.</div>
+            <div style={{ padding: '1rem', color: '#64748b' }}>{t('assignmentBell.empty')}</div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               {items.map((item) => (
@@ -235,7 +237,7 @@ export function AssignmentBell({
                       <span style={{ color: '#64748b', fontSize: '0.75rem' }}>{item.status}</span>
                     )}
                     {item.dueDate && (
-                      <span style={{ color: '#b45309', fontSize: '0.75rem' }}>마감 {item.dueDate}</span>
+                      <span style={{ color: '#b45309', fontSize: '0.75rem' }}>{t('assignmentBell.duePrefix')} {item.dueDate}</span>
                     )}
                   </div>
                   <div style={{ fontWeight: 600, fontSize: '0.9rem', marginBottom: '0.15rem' }}>{item.title}</div>

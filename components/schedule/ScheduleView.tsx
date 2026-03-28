@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useI18n } from '@/lib/i18n'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import type { Project } from '@/types/project'
 
 interface TaskSchedule {
@@ -34,6 +35,8 @@ interface ScheduleViewProps {
 }
 
 export function ScheduleView({ project, onRefresh }: ScheduleViewProps) {
+  const { t, locale } = useI18n()
+  const dateLocale = locale.startsWith('en') ? 'en-US' : 'ko-KR'
   const [schedules, setSchedules] = useState<TaskSchedule[]>([])
   const [predecessors, setPredecessors] = useState<Map<string, Predecessor[]>>(new Map())
   const [predecessorStrings, setPredecessorStrings] = useState<Map<string, string>>(new Map())
@@ -42,7 +45,7 @@ export function ScheduleView({ project, onRefresh }: ScheduleViewProps) {
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
 
   // 일정 데이터 로드
-  const loadSchedule = async () => {
+  const loadSchedule = useCallback(async () => {
     if (!project.id) return
 
     setLoading(true)
@@ -89,16 +92,16 @@ export function ScheduleView({ project, onRefresh }: ScheduleViewProps) {
         setPredecessorStrings(predStringMap)
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to load schedule')
+      setError(err.message || t('comp.schedule.loadFail'))
       console.error('Error loading schedule:', err)
     } finally {
       setLoading(false)
     }
-  }
+  }, [project.id, t])
 
   useEffect(() => {
-    loadSchedule()
-  }, [project.id])
+    void loadSchedule()
+  }, [loadSchedule])
 
   // 종속성 문자열 업데이트
   const handlePredecessorChange = async (taskId: string, value: string) => {
@@ -131,7 +134,7 @@ export function ScheduleView({ project, onRefresh }: ScheduleViewProps) {
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to save predecessors')
+        throw new Error(errorData.error || t('comp.schedule.saveFail'))
       }
 
       setEditingTaskId(null)
@@ -140,7 +143,7 @@ export function ScheduleView({ project, onRefresh }: ScheduleViewProps) {
         onRefresh()
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to save predecessors')
+      setError(err.message || t('comp.schedule.saveFail'))
       console.error('Error saving predecessors:', err)
     } finally {
       setLoading(false)
@@ -155,7 +158,7 @@ export function ScheduleView({ project, onRefresh }: ScheduleViewProps) {
   if (loading && schedules.length === 0) {
     return (
       <div className="placeholder">
-        <p>일정을 불러오는 중...</p>
+        <p>{t('comp.schedule.loading')}</p>
       </div>
     )
   }
@@ -163,9 +166,11 @@ export function ScheduleView({ project, onRefresh }: ScheduleViewProps) {
   if (error) {
     return (
       <div className="placeholder">
-        <p style={{ color: '#e74c3c' }}>오류: {error}</p>
-        <button onClick={loadSchedule} className="refresh-button">
-          다시 시도
+        <p style={{ color: '#e74c3c' }}>
+          {t('comp.ui.errorPrefix')} {error}
+        </p>
+        <button onClick={() => void loadSchedule()} className="refresh-button">
+          {t('comp.ui.retry')}
         </button>
       </div>
     )
@@ -174,36 +179,36 @@ export function ScheduleView({ project, onRefresh }: ScheduleViewProps) {
   return (
     <div className="table-wrapper">
       <div className="table-header">
-        <h2>일정 관리 (MS Project 스타일)</h2>
+        <h2>{t('comp.schedule.title')}</h2>
         <div className="table-actions">
-          <button onClick={loadSchedule} className="refresh-button">
-            새로고침
+          <button onClick={() => void loadSchedule()} className="refresh-button">
+            {t('comp.ui.refresh')}
           </button>
         </div>
       </div>
 
       <div style={{ marginBottom: '1rem', padding: '1rem', backgroundColor: '#F4F6F8', borderRadius: '4px' }}>
-        <h3 style={{ marginTop: 0, fontSize: '0.875rem', fontWeight: 600, color: '#333' }}>사용 방법</h3>
+        <h3 style={{ marginTop: 0, fontSize: '0.875rem', fontWeight: 600, color: '#333' }}>{t('comp.schedule.usage')}</h3>
         <ul style={{ margin: '0.5rem 0', paddingLeft: '1.5rem', fontSize: '0.875rem', color: '#666' }}>
-          <li>Index: 프로젝트 내 작업 순서 번호</li>
-          <li>종속성 형식: <code>IndexType[±Lag]</code> (예: <code>2FS+5</code>, <code>3SS-1</code>)</li>
-          <li>타입: FS (Finish-to-Start), SS (Start-to-Start), FF (Finish-to-Finish), SF (Start-to-Finish)</li>
-          <li>여러 종속성은 쉼표로 구분 (예: <code>2FS+5, 3SS-1</code>)</li>
-          <li>빨간색 행은 Critical Path (주요 경로) 작업입니다</li>
+          <li>{t('comp.schedule.usageIndex')}</li>
+          <li>{t('comp.schedule.usageB1')}</li>
+          <li>{t('comp.schedule.usageB2')}</li>
+          <li>{t('comp.schedule.usageB3')}</li>
+          <li>{t('comp.schedule.usageB4')}</li>
         </ul>
       </div>
 
       <table>
         <thead>
           <tr>
-            <th style={{ width: '60px' }}>Index</th>
-            <th>작업명</th>
-            <th style={{ width: '200px' }}>선행 작업 (Predecessors)</th>
-            <th style={{ width: '80px' }}>기간</th>
-            <th style={{ width: '100px' }}>시작일</th>
-            <th style={{ width: '100px' }}>종료일</th>
-            <th style={{ width: '80px' }}>Total Float</th>
-            <th style={{ width: '80px' }}>Critical</th>
+            <th style={{ width: '60px' }}>{t('comp.schedule.colIndex')}</th>
+            <th>{t('comp.schedule.colName')}</th>
+            <th style={{ width: '200px' }}>{t('comp.schedule.colPred')}</th>
+            <th style={{ width: '80px' }}>{t('comp.schedule.colDuration')}</th>
+            <th style={{ width: '100px' }}>{t('comp.schedule.colStart')}</th>
+            <th style={{ width: '100px' }}>{t('comp.schedule.colEnd')}</th>
+            <th style={{ width: '80px' }}>{t('comp.schedule.colFloat')}</th>
+            <th style={{ width: '80px' }}>{t('comp.schedule.colCritical')}</th>
           </tr>
         </thead>
         <tbody>
@@ -237,7 +242,7 @@ export function ScheduleView({ project, onRefresh }: ScheduleViewProps) {
                         type="text"
                         value={predString}
                         onChange={(e) => handlePredecessorChange(task.id, e.target.value)}
-                        placeholder="예: 2FS+5, 3SS-1"
+                        placeholder={t('comp.schedule.predPh')}
                         style={{
                           flex: 1,
                           padding: '0.375rem 0.5rem',
@@ -260,7 +265,7 @@ export function ScheduleView({ project, onRefresh }: ScheduleViewProps) {
                         className="primary-button"
                         style={{ padding: '0.375rem 0.75rem', fontSize: '0.875rem' }}
                       >
-                        저장
+                        {t('comp.schedule.save')}
                       </button>
                       <button
                         onClick={() => {
@@ -270,35 +275,35 @@ export function ScheduleView({ project, onRefresh }: ScheduleViewProps) {
                         className="refresh-button"
                         style={{ padding: '0.375rem 0.75rem', fontSize: '0.875rem' }}
                       >
-                        취소
+                        {t('comp.ui.cancel')}
                       </button>
                     </div>
                   ) : (
                     <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                       <span style={{ fontSize: '0.875rem', color: predString ? '#333' : '#999' }}>
-                        {predString || '(없음)'}
+                        {predString || t('comp.schedule.none')}
                       </span>
                       <button
                         onClick={() => setEditingTaskId(task.id)}
                         className="refresh-button"
                         style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
                       >
-                        편집
+                        {t('comp.schedule.edit')}
                       </button>
                     </div>
                   )}
                 </td>
                 <td style={{ textAlign: 'center' }}>
-                  {schedule ? `${schedule.durationDays}일` : '-'}
+                  {schedule ? t('comp.gantt.dayCount', { n: String(schedule.durationDays) }) : '-'}
                 </td>
                 <td style={{ textAlign: 'center', fontSize: '0.875rem' }}>
                   {schedule?.startDate || '-'}
                 </td>
                 <td style={{ textAlign: 'center', fontSize: '0.875rem' }}>
-                  {schedule ? new Date(schedule.startDate || '').toLocaleDateString('ko-KR') : '-'}
+                  {schedule ? new Date(schedule.startDate || '').toLocaleDateString(dateLocale) : '-'}
                 </td>
                 <td style={{ textAlign: 'center', color: schedule?.totalFloat === 0 ? '#c62828' : '#333' }}>
-                  {schedule ? `${schedule.totalFloat}일` : '-'}
+                  {schedule ? t('comp.gantt.dayCount', { n: String(schedule.totalFloat) }) : '-'}
                 </td>
                 <td style={{ textAlign: 'center' }}>
                   {schedule?.isCritical ? (

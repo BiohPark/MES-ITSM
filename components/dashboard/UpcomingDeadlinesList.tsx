@@ -1,14 +1,19 @@
 'use client'
 
+import { useI18n } from '@/lib/i18n'
+
 export function UpcomingDeadlinesList({
   items,
 }: {
   items: Array<{ id: string; name: string; due: Date; type: 'project' | 'task'; owner: string }>
 }) {
+  const { t, locale } = useI18n()
+  const dateLocale = locale === 'ko' ? 'ko-KR' : 'en-US'
+
   if (items.length === 0) {
     return (
       <div style={{ padding: '2rem', textAlign: 'center', color: '#94a3b8' }}>
-        <p>다가오는 마감일이 없습니다.</p>
+        <p>{t('comp.upcoming.empty')}</p>
       </div>
     )
   }
@@ -19,6 +24,12 @@ export function UpcomingDeadlinesList({
     const diffTime = due.getTime() - today.getTime()
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
     return diffDays
+  }
+
+  const dueLabel = (daysUntil: number) => {
+    if (daysUntil === 0) return t('comp.upcoming.dueToday')
+    if (daysUntil === 1) return t('comp.upcoming.dueTomorrow')
+    return t('comp.upcoming.dueInDays', { n: daysUntil })
   }
 
   return (
@@ -46,7 +57,7 @@ export function UpcomingDeadlinesList({
                   <span style={{ fontSize: '0.875rem', fontWeight: 500, color: '#111827' }}>{item.name}</span>
                 </div>
                 <div style={{ fontSize: '0.75rem', color: '#64748b', marginLeft: '1.5rem' }}>
-                  담당자: {item.owner}
+                  {t('comp.upcoming.owner')} {item.owner}
                 </div>
               </div>
               <div style={{ textAlign: 'right' }}>
@@ -57,10 +68,10 @@ export function UpcomingDeadlinesList({
                     color: isUrgent ? '#dc2626' : isWarning ? '#d97706' : '#475569',
                   }}
                 >
-                  {daysUntil === 0 ? '오늘' : daysUntil === 1 ? '내일' : `${daysUntil}일 후`}
+                  {dueLabel(daysUntil)}
                 </div>
                 <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.25rem' }}>
-                  {item.due.toLocaleDateString('ko-KR')}
+                  {item.due.toLocaleDateString(dateLocale)}
                 </div>
               </div>
             </div>
@@ -70,4 +81,3 @@ export function UpcomingDeadlinesList({
     </div>
   )
 }
-

@@ -1,5 +1,6 @@
 'use client'
 
+import { useI18n } from '@/lib/i18n'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 /** 반응형 스타일 - 좁은 컬럼으로 더 많은 차트 표시 */
@@ -56,6 +57,8 @@ interface Props {
 }
 
 export function GanttTasksChart({ tasks, visibleRowIndices, events = [], issueTaskIds, onDoubleClickDate, onDeleteEvent }: Props) {
+  const { t: tr, locale } = useI18n()
+  const dateLocale = locale.startsWith('en') ? 'en-US' : 'ko-KR'
   const [timeScale, setTimeScale] = useState<'day' | 'week' | 'month'>('day')
   const [dateRange, setDateRange] = useState<{ start: Date; end: Date}>(() => {
     const today = new Date()
@@ -96,14 +99,14 @@ export function GanttTasksChart({ tasks, visibleRowIndices, events = [], issueTa
       sortedTasks.find((t) => t.startDate)?.startDate ??
       new Date().toISOString().split('T')[0]
 
-    const calcTasks: CalcTask[] = sortedTasks.map((t) => {
-      const id = t.id != null ? String(t.id) : `local-${t._rowIndex}`
+    const calcTasks: CalcTask[] = sortedTasks.map((row) => {
+      const id = row.id != null ? String(row.id) : `local-${row._rowIndex}`
 
       // duration 추론: 우선 durationDays, 없으면 start~finish 일수, 그래도 없으면 1일
-      let duration = t.durationDays ?? null
-      if (duration == null && t.startDate && t.finishDate) {
-        const s = new Date(t.startDate)
-        const f = new Date(t.finishDate)
+      let duration = row.durationDays ?? null
+      if (duration == null && row.startDate && row.finishDate) {
+        const s = new Date(row.startDate)
+        const f = new Date(row.finishDate)
         const diffDays = Math.max(
           1,
           Math.round((f.getTime() - s.getTime()) / (1000 * 60 * 60 * 24))
@@ -116,10 +119,10 @@ export function GanttTasksChart({ tasks, visibleRowIndices, events = [], issueTa
 
       return {
         taskId: id,
-        taskIndex: t._rowIndex,
-        taskName: t.name || `작업 ${t._rowIndex}`,
+        taskIndex: row._rowIndex,
+        taskName: row.name || tr('comp.ganttTasksChart.taskN', { n: String(row._rowIndex) }),
         durationDays: duration,
-        startDate: t.startDate ?? null,
+        startDate: row.startDate ?? null,
         projectStartDate: projectStart,
       }
     })
@@ -176,7 +179,7 @@ export function GanttTasksChart({ tasks, visibleRowIndices, events = [], issueTa
     }
 
     return { schedules: result, predecessors: preds, projectedRange: range }
-  }, [sortedTasks])
+  }, [sortedTasks, tr])
 
   useEffect(() => {
     if (projectedRange) {
@@ -332,7 +335,7 @@ export function GanttTasksChart({ tasks, visibleRowIndices, events = [], issueTa
   if (rowsToRender.length === 0) {
     return (
       <div className="placeholder">
-        <p>표시할 작업이 없습니다. 왼쪽 WBS에서 행을 추가하거나 접힌 행을 펼쳐 주세요.</p>
+        <p>{tr('comp.ganttTasksChart.empty')}</p>
       </div>
     )
   }
@@ -360,9 +363,10 @@ export function GanttTasksChart({ tasks, visibleRowIndices, events = [], issueTa
           backgroundColor: '#f9fafb',
         }}
       >
-        <span style={{ alignSelf: 'center', marginRight: '0.25rem' }}>시간 축:</span>
+        <span style={{ alignSelf: 'center', marginRight: '0.25rem' }}>{tr('comp.ganttTasksChart.timeAxis')}</span>
         {(['day', 'week', 'month'] as const).map((scale) => {
-          const label = scale === 'day' ? '일' : scale === 'week' ? '주' : '월'
+          const label =
+            scale === 'day' ? tr('comp.ganttTasksChart.day') : scale === 'week' ? tr('comp.ganttTasksChart.week') : tr('comp.ganttTasksChart.month')
           const active = timeScale === scale
           return (
             <button
@@ -424,11 +428,11 @@ export function GanttTasksChart({ tasks, visibleRowIndices, events = [], issueTa
                 alignItems: 'center',
               }}
             >
-              <div style={{ width: GANTT_CHART_SIZES.index, minWidth: GANTT_CHART_SIZES.index, textAlign: 'center' }}>Index</div>
-              <div style={{ width: GANTT_CHART_SIZES.wbs, minWidth: GANTT_CHART_SIZES.wbs }}>WBS</div>
-              <div style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap' }}>작업명</div>
-              <div style={{ width: GANTT_CHART_SIZES.duration, minWidth: GANTT_CHART_SIZES.duration, textAlign: 'center' }}>기간</div>
-              <div style={{ width: GANTT_CHART_SIZES.cp, minWidth: GANTT_CHART_SIZES.cp, textAlign: 'center' }}>CP</div>
+              <div style={{ width: GANTT_CHART_SIZES.index, minWidth: GANTT_CHART_SIZES.index, textAlign: 'center' }}>{tr('comp.ganttTasksChart.colIndex')}</div>
+              <div style={{ width: GANTT_CHART_SIZES.wbs, minWidth: GANTT_CHART_SIZES.wbs }}>{tr('comp.ganttTasksChart.colWbs')}</div>
+              <div style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap' }}>{tr('comp.ganttTasksChart.colName')}</div>
+              <div style={{ width: GANTT_CHART_SIZES.duration, minWidth: GANTT_CHART_SIZES.duration, textAlign: 'center' }}>{tr('comp.ganttTasksChart.colDuration')}</div>
+              <div style={{ width: GANTT_CHART_SIZES.cp, minWidth: GANTT_CHART_SIZES.cp, textAlign: 'center' }}>{tr('comp.ganttTasksChart.colCp')}</div>
             </div>
             {/* 행들 */}
             {rowsToRender.map((task) => {
@@ -480,10 +484,10 @@ export function GanttTasksChart({ tasks, visibleRowIndices, events = [], issueTa
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
                       }}
-                      title={task.name || '(이름 없음)'}
+                      title={task.name || tr('comp.ganttTasksChart.noName')}
                     >
                       {issueTaskIds && task.id != null && issueTaskIds.has(task.id) && '❗ '}
-                      {task.name || '(이름 없음)'}
+                      {task.name || tr('comp.ganttTasksChart.noName')}
                     </span>
                     {task.assignee && (
                       <span style={{ fontSize: '0.6rem', color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '4rem' }}>
@@ -498,7 +502,7 @@ export function GanttTasksChart({ tasks, visibleRowIndices, events = [], issueTa
                     fontWeight: isLevel1 ? 600 : 400,
                     color: isLevel1 ? '#1e40af' : '#475569',
                   }}>
-                    {schedule ? `${schedule.durationDays}일` : '-'}
+                    {schedule ? tr('comp.gantt.dayCount', { n: String(schedule.durationDays) }) : '-'}
                   </div>
                   <div style={{ width: GANTT_CHART_SIZES.cp, minWidth: GANTT_CHART_SIZES.cp, textAlign: 'center' }}>
                     {schedule?.isCritical ? <span style={{ color: '#c62828', fontWeight: 700 }}>●</span> : '-'}
@@ -563,7 +567,9 @@ export function GanttTasksChart({ tasks, visibleRowIndices, events = [], issueTa
                     }
                   }
 
-                  return segments.map((seg, segIdx) => (
+                  return segments.map((seg, segIdx) => {
+                    const monthDate = new Date(seg.year, seg.month - 1, 1)
+                    return (
                     <div
                       key={seg.key}
                       style={{
@@ -577,11 +583,12 @@ export function GanttTasksChart({ tasks, visibleRowIndices, events = [], issueTa
                         borderRight: '1px solid #e2e8f0',
                         backgroundColor: segIdx % 2 === 0 ? '#f8fafc' : '#eef2ff',
                       }}
-                      title={`${seg.year}년 ${seg.month}월`}
+                      title={monthDate.toLocaleDateString(dateLocale, { month: 'long', year: 'numeric' })}
                     >
-                      {`${seg.month}월`}
+                      {monthDate.toLocaleDateString(dateLocale, { month: 'short' })}
                     </div>
-                  ))
+                    )
+                  })
                 })()}
               </div>
 
@@ -594,7 +601,7 @@ export function GanttTasksChart({ tasks, visibleRowIndices, events = [], issueTa
                   cursor: onDoubleClickDate ? 'pointer' : undefined,
                 }}
                 onDoubleClick={handleDateHeaderDoubleClick}
-                title={onDoubleClickDate ? '날짜 셀 더블클릭: 이벤트 추가' : undefined}
+                title={onDoubleClickDate ? tr('comp.ganttTasksChart.dblClickHint') : undefined}
               >
                 {days.map((day, idx) => {
                   const dd = String(day.getDate()).padStart(2, '0')
@@ -609,7 +616,7 @@ export function GanttTasksChart({ tasks, visibleRowIndices, events = [], issueTa
                         fontSize: '0.75rem',
                         borderRight: idx % 7 === 6 ? '1px solid #cbd5e1' : '1px solid #e2e8f0',
                       }}
-                      title={day.toLocaleDateString('ko-KR', {
+                      title={day.toLocaleDateString(dateLocale, {
                         year: 'numeric',
                         month: 'long',
                         day: 'numeric',
@@ -651,7 +658,13 @@ export function GanttTasksChart({ tasks, visibleRowIndices, events = [], issueTa
                       boxSizing: 'border-box',
                       cursor: onDeleteEvent ? 'pointer' : undefined,
                     }}
-                    title={onDeleteEvent ? `클릭하여 삭제: ${ev.name || '(이벤트)'}` : ev.name}
+                    title={
+                      onDeleteEvent
+                        ? tr('comp.ganttTasksChart.eventClickDelete', {
+                            name: ev.name || tr('comp.ganttTasksChart.eventDefault'),
+                          })
+                        : ev.name
+                    }
                     onClick={onDeleteEvent ? () => onDeleteEvent(ev) : undefined}
                   >
                     <div style={{ position: 'absolute', left: onDeleteEvent ? 6 : 0, top: 0, width: 2, height: chartBodyHeight, backgroundColor: '#16a34a' }} />
@@ -675,7 +688,7 @@ export function GanttTasksChart({ tasks, visibleRowIndices, events = [], issueTa
                         pointerEvents: 'none',
                       }}
                     >
-                      {ev.name || '(이벤트)'}
+                      {ev.name || tr('comp.ganttTasksChart.eventDefault')}
                     </span>
                   </div>
                 )
@@ -703,7 +716,7 @@ export function GanttTasksChart({ tasks, visibleRowIndices, events = [], issueTa
                       zIndex: 4,
                       boxSizing: 'border-box',
                     }}
-                    title="오늘"
+                    title={tr('comp.ganttTasksChart.today')}
                   >
                     <div style={{ position: 'absolute', left: 0, top: 0, right: 0, height: 2, backgroundColor: '#dc2626' }} />
                     <div style={{ position: 'absolute', left: 0, bottom: 0, right: 0, height: 2, backgroundColor: '#dc2626' }} />
@@ -748,7 +761,7 @@ export function GanttTasksChart({ tasks, visibleRowIndices, events = [], issueTa
                         strokeDasharray={a.depType === 'SS' || a.depType === 'FF' ? '4,3' : 'none'}
                         markerEnd={`url(#gantt-arrow-pred${a.isCritical ? '-critical' : ''})`}
                       />
-                      <title>{`선행: ${a.predName} (${a.depType})`}</title>
+                      <title>{tr('comp.ganttTasksChart.predTitle', { name: a.predName, type: a.depType })}</title>
                     </g>
                   ))}
                 </svg>
@@ -804,7 +817,13 @@ export function GanttTasksChart({ tasks, visibleRowIndices, events = [], issueTa
                         boxShadow: '0 1px 2px rgba(15, 23, 42, 0.25)',
                         overflow: 'hidden',
                       }}
-                      title={`${schedule.taskName} (${schedule.startDate} ~ ${new Date(new Date(schedule.startDate || '').getTime() + schedule.durationDays * 24 * 60 * 60 * 1000).toLocaleDateString('ko-KR')})${(task as any).progressPercent != null ? ` · 실적 ${Math.round((task as any).progressPercent)}%` : ''}`}
+                      title={`${schedule.taskName} (${schedule.startDate} ~ ${new Date(new Date(schedule.startDate || '').getTime() + schedule.durationDays * 24 * 60 * 60 * 1000).toLocaleDateString(dateLocale)})${
+                        (task as any).progressPercent != null
+                          ? tr('comp.ganttTasksChart.barActualSuffix', {
+                              n: String(Math.round((task as any).progressPercent)),
+                            })
+                          : ''
+                      }`}
                     >
                       {(task as any).progressPercent != null && (task as any).progressPercent > 0 && (
                         <div

@@ -1,5 +1,6 @@
 'use client'
 
+import { useI18n } from '@/lib/i18n'
 import { useEffect, useState } from 'react'
 
 interface HistoryEntry {
@@ -13,6 +14,7 @@ interface HistoryEntry {
 }
 
 export function GanttHistoryView() {
+  const { t, locale } = useI18n()
   const [history, setHistory] = useState<HistoryEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -29,25 +31,30 @@ export function GanttHistoryView() {
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
         const details = data.details ?? data.error ?? ''
-        throw new Error(details ? `이력 조회 실패: ${details}` : '이력 조회 실패')
+        throw new Error(
+          details
+            ? t('comp.ganttHistory.fetchFailDetail', { details: String(details) })
+            : t('comp.ganttHistory.fetchFail')
+        )
       }
       setHistory(data.history ?? [])
       if (data.message) setError(null)
     } catch (e: any) {
-      setError(e.message ?? '이력을 불러올 수 없습니다.')
+      setError(e.message ?? t('comp.ganttHistory.loadFail'))
     } finally {
       setLoading(false)
     }
   }
 
   useEffect(() => {
-    loadHistory()
+    void loadHistory()
   }, [projectIdFilter])
 
   const formatDate = (iso: string) => {
     if (!iso) return '-'
     const d = new Date(iso)
-    return d.toLocaleString('ko-KR', {
+    const dateLocale = locale.startsWith('en') ? 'en-US' : 'ko-KR'
+    return d.toLocaleString(dateLocale, {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
@@ -59,12 +66,12 @@ export function GanttHistoryView() {
   return (
     <div className="table-wrapper">
       <div className="table-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-        <h2>WBS 수정 이력</h2>
+        <h2>{t('comp.ganttHistory.title')}</h2>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <label style={{ fontSize: '0.875rem' }}>프로젝트 ID 필터:</label>
+          <label style={{ fontSize: '0.875rem' }}>{t('comp.ganttHistory.filterLabel')}</label>
           <input
             type="text"
-            placeholder="비우면 전체"
+            placeholder={t('comp.ganttHistory.filterHint')}
             value={projectIdFilter}
             onChange={(e) => setProjectIdFilter(e.target.value)}
             style={{
@@ -77,24 +84,26 @@ export function GanttHistoryView() {
           <button
             type="button"
             className="servicenow-button servicenow-button--secondary"
-            onClick={loadHistory}
+            onClick={() => void loadHistory()}
           >
-            새로고침
+            {t('comp.ui.refresh')}
           </button>
         </div>
       </div>
 
       {loading ? (
         <div className="placeholder">
-          <p>이력을 불러오는 중...</p>
+          <p>{t('comp.ganttHistory.loading')}</p>
         </div>
       ) : error ? (
         <div className="placeholder">
-          <p>에러: {error}</p>
+          <p>
+            {t('comp.ganttChart.error')} {error}
+          </p>
         </div>
       ) : history.length === 0 ? (
         <div className="placeholder">
-          <p>수정 이력이 없습니다.</p>
+          <p>{t('comp.ganttHistory.empty')}</p>
         </div>
       ) : (
         <div
@@ -108,10 +117,10 @@ export function GanttHistoryView() {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
             <thead>
               <tr style={{ background: 'linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%)', borderBottom: '2px solid #e2e8f0' }}>
-                <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left' }}>일시</th>
-                <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left' }}>프로젝트</th>
-                <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left' }}>수정자</th>
-                <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left' }}>작업</th>
+                <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left' }}>{t('comp.ganttHistory.colAt')}</th>
+                <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left' }}>{t('comp.ganttHistory.colProject')}</th>
+                <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left' }}>{t('comp.ganttHistory.colUser')}</th>
+                <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left' }}>{t('comp.ganttHistory.colAction')}</th>
               </tr>
             </thead>
             <tbody>
@@ -131,7 +140,9 @@ export function GanttHistoryView() {
                     {entry.userName}
                     <span style={{ color: '#94a3b8', marginLeft: '0.35rem', fontSize: '0.8rem' }}>({entry.userId})</span>
                   </td>
-                  <td style={{ padding: '0.5rem 0.75rem' }}>{entry.action === 'save' ? '저장' : entry.action}</td>
+                  <td style={{ padding: '0.5rem 0.75rem' }}>
+                    {entry.action === 'save' ? t('comp.ganttHistory.actionSave') : entry.action}
+                  </td>
                 </tr>
               ))}
             </tbody>

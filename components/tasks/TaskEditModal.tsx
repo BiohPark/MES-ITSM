@@ -6,6 +6,24 @@ import type { Project, ProjectChild } from '@/types/project'
 import { CommentsSection } from '../common/CommentsSection'
 import { DevelopmentPhaseStatusActions } from './DevelopmentPhaseStatusActions'
 import { AttachmentSection } from '../attachments/AttachmentSection'
+import { useI18n } from '@/lib/i18n'
+
+/** DB/API에 저장되는 한글 상태값 → comp.taskModal.* 표시용 키 접미사 */
+const TASK_PHASE_STATUS_TO_KEY: Record<string, string> = {
+  '요구사항 접수': 'phasePiReceived',
+  '진행여부 확정': 'phasePiConfirmed',
+  'URS 분석': 'phasePiUrs',
+  '설계 확정': 'phasePiDesign',
+  '설계 리뷰': 'phaseDevDesignReview',
+  '개발': 'phaseDevDev',
+  '유닛 테스트': 'phaseDevUnit',
+  '통합테스트': 'phaseDevInt',
+  '테스트 산출물 리뷰': 'phaseDevTestReview',
+  '코드리뷰': 'phaseDevCodeReview',
+  'Val서버 이관': 'phaseDevVal',
+  'Val 및 CC확정': 'phaseDevValCc',
+  '설계': 'phaseDevDesignOnly',
+}
 
 export function TaskEditModal({
   task,
@@ -31,6 +49,11 @@ export function TaskEditModal({
   /** 연결된 이슈로 이동 (해결용 일감 / Deviation GMP Record) */
   onOpenIssue?: (issueId: string) => void
 }) {
+  const { t } = useI18n()
+  const phaseStatusLabel = (status: string) => {
+    const key = TASK_PHASE_STATUS_TO_KEY[status]
+    return key ? t(`comp.taskModal.${key}`) : status
+  }
   const [formData, setFormData] = useState<any>({ ...task, description: (task as any).description || '', progress: (task as any).progress || 0 })
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(projectId || null)
   const [saving, setSaving] = useState(false)
@@ -268,7 +291,7 @@ export function TaskEditModal({
     e.preventDefault()
     
     if (formData.owner && !users.some(u => u.name === formData.owner)) {
-      alert('등록되지 않은 사용자입니다.')
+      alert(t('comp.taskModal.alertUnknownUser'))
       return
     }
     
@@ -284,7 +307,7 @@ export function TaskEditModal({
         if (response.ok) {
           const taskData = await response.json()
           if (taskData && taskData.status !== 'Completed') {
-            alert('Link된 일감이 Completed 상태가 아니면 GMP Record를 Completed로 변경할 수 없습니다.')
+            alert(t('comp.taskModal.alertCpaLinkedIncomplete'))
             return
           }
         }
@@ -323,7 +346,7 @@ export function TaskEditModal({
         if (piProgress >= 100 && isPimTask) {
           // 저장 성공 후 알림 (다음 렌더링에서 개발일감 목록으로 이동됨)
           setTimeout(() => {
-            alert('PI 단계가 100% 완료되어 개발일감 목록으로 이동되었습니다.')
+            alert(t('comp.taskModal.alertPiComplete'))
           }, 100)
         }
       }
@@ -440,7 +463,13 @@ export function TaskEditModal({
       <div className="modal-content side-panel" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2>
-            {mode === 'edit' ? (isGmpRecord ? 'GMP Record 수정' : '일감 수정') : (isGmpRecord ? '새 GMP Record 추가' : '새 일감 추가')}
+            {mode === 'edit'
+              ? isGmpRecord
+                ? t('comp.taskModal.titleEditGmp')
+                : t('comp.taskModal.titleEditTask')
+              : isGmpRecord
+                ? t('comp.taskModal.titleCreateGmp')
+                : t('comp.taskModal.titleCreateTask')}
             {isGmpRecord && (formData as any).linked_task_id && (
               <span style={{ fontSize: '0.875rem', fontWeight: 'normal', color: '#3b82f6', marginLeft: '0.5rem' }}>
                 🔗 Link: {(formData as any).linked_task_id}
@@ -460,7 +489,7 @@ export function TaskEditModal({
               className="btn btn-primary"
               style={{ margin: 0 }}
             >
-              {saving ? '저장 중...' : 'Save'}
+              {saving ? t('comp.ui.saving') : t('comp.ui.save')}
             </button>
             <button className="modal-close" onClick={onClose}>
               ×
@@ -470,7 +499,7 @@ export function TaskEditModal({
 
         <form id="task-form" onSubmit={handleSubmit} className="project-form">
           <div className="form-group">
-            <label htmlFor="task-id">일감 ID</label>
+            <label htmlFor="task-id">{t('comp.taskModal.taskId')}</label>
             <input
               type="text"
               id="task-id"
@@ -484,7 +513,7 @@ export function TaskEditModal({
 
           {((formData as any).linked_issue_id && onOpenIssue) && (
             <div className="form-group">
-              <label>연결된 이슈</label>
+              <label>{t('comp.taskModal.linkedIssue')}</label>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                 <span className="form-input" style={{ flex: 1, minWidth: 0 }}>
                   {(formData as any).linked_issue_id}
@@ -495,21 +524,21 @@ export function TaskEditModal({
                   style={{ backgroundColor: '#2563eb', color: '#fff', borderColor: '#2563eb' }}
                   onClick={() => onOpenIssue((formData as any).linked_issue_id)}
                 >
-                  이슈로 이동
+                  {t('comp.taskModal.openIssue')}
                 </button>
               </div>
             </div>
           )}
 
           <div className="form-group">
-            <label htmlFor="project-select">프로젝트</label>
+            <label htmlFor="project-select">{t('comp.taskModal.project')}</label>
             <select
               id="project-select"
               value={selectedProjectId || 'N/A'}
               onChange={(e) => setSelectedProjectId(e.target.value === 'N/A' ? null : e.target.value)}
               className="form-input"
             >
-              <option value="N/A">N/A (프로젝트 없음)</option>
+              <option value="N/A">{t('comp.taskModal.noProject')}</option>
               {projects.map((project) => (
                 <option key={project.id} value={project.id}>
                   {project.name} ({project.id})
@@ -519,7 +548,7 @@ export function TaskEditModal({
           </div>
 
           <div className="form-group">
-            <label htmlFor="title">일감 제목</label>
+            <label htmlFor="title">{t('comp.taskModal.taskTitle')}</label>
             <input
               type="text"
               id="title"
@@ -534,7 +563,7 @@ export function TaskEditModal({
           {isGmpRecord && (
             <div className="form-row">
               <div className="form-group">
-                <label htmlFor="kind">종류</label>
+                <label htmlFor="kind">{t('comp.taskModal.kind')}</label>
                 <select
                   id="kind"
                   name="kind"
@@ -551,7 +580,7 @@ export function TaskEditModal({
               </div>
 
               <div className="form-group">
-                <label htmlFor="number">번호</label>
+                <label htmlFor="number">{t('comp.taskModal.number')}</label>
                 <input
                   type="text"
                   id="number"
@@ -574,7 +603,7 @@ export function TaskEditModal({
           )}
 
           <div className="form-group">
-            <label htmlFor="description">상세 내용</label>
+            <label htmlFor="description">{t('comp.taskModal.detail')}</label>
             <textarea
               id="description"
               name="description"
@@ -589,13 +618,13 @@ export function TaskEditModal({
                 fontSize: '0.875rem',
                 lineHeight: '1.4',
               }}
-              placeholder="일감의 상세 내용을 입력하세요..."
+              placeholder={t('comp.taskModal.detailPh')}
             />
           </div>
 
           <div className="form-row">
             <div className="form-group">
-              <label htmlFor="owner">{isGmpRecord ? '대표 담당자' : '대표 담당자(PI)'}</label>
+              <label htmlFor="owner">{isGmpRecord ? t('comp.taskModal.ownerGmp') : t('comp.taskModal.ownerPi')}</label>
               <select
                 id="owner"
                 name="owner"
@@ -609,7 +638,7 @@ export function TaskEditModal({
                   cursor: !isGmpRecord ? 'not-allowed' : 'pointer'
                 }}
               >
-                <option value="">선택하세요</option>
+                <option value="">{t('comp.taskModal.select')}</option>
                 {users.map((user) => (
                   <option key={user.id} value={user.name}>
                     {user.name}
@@ -617,12 +646,12 @@ export function TaskEditModal({
                 ))}
               </select>
               <small style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.25rem', display: 'block' }}>
-                {isGmpRecord ? '담당자를 선택하세요' : 'PI 단계 담당자로 자동 설정됩니다'}
+                {isGmpRecord ? t('comp.taskModal.ownerHintGmp') : t('comp.taskModal.ownerHintPi')}
               </small>
             </div>
 
             <div className="form-group">
-              <label htmlFor="status">상태</label>
+              <label htmlFor="status">{t('comp.taskModal.status')}</label>
               <select
                 id="status"
                 name="status"
@@ -644,15 +673,15 @@ export function TaskEditModal({
               </select>
               <small style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.25rem', display: 'block' }}>
                 {isGmpRecord && (formData as any).kind === 'CPA' && (formData as any).linked_task_id
-                  ? 'Link된 일감이 Completed되기 전까지 Completed로 변경할 수 없습니다'
+                  ? t('comp.taskModal.statusHintCpa')
                   : isGmpRecord
-                  ? '상태를 선택하세요'
-                  : '단계별 상태에서 자동 계산됩니다'}
+                  ? t('comp.taskModal.statusHintGmp')
+                  : t('comp.taskModal.statusHintTask')}
               </small>
             </div>
 
             <div className="form-group">
-              <label htmlFor="progress">진행률 (%)</label>
+              <label htmlFor="progress">{t('comp.taskModal.progressPct')}</label>
               <input
                 type="number"
                 id="progress"
@@ -669,14 +698,14 @@ export function TaskEditModal({
                 }}
               />
               <small style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.25rem', display: 'block' }}>
-                {isGmpRecord ? '진행률을 입력하세요 (0-100)' : 'PI, 개발 단계 진행률의 평균으로 자동 계산됩니다'}
+                {isGmpRecord ? t('comp.taskModal.progressHintGmp') : t('comp.taskModal.progressHintTask')}
               </small>
             </div>
           </div>
 
           <div className="form-row">
             <div className="form-group">
-              <label htmlFor="start">시작일</label>
+              <label htmlFor="start">{t('comp.taskModal.start')}</label>
               <input
                 type="date"
                 id="start"
@@ -691,12 +720,12 @@ export function TaskEditModal({
                 }}
               />
               <small style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.25rem', display: 'block' }}>
-                {isGmpRecord ? '시작일을 선택하세요' : '단계별 시작일 중 가장 빠른 날짜로 자동 설정됩니다'}
+                {isGmpRecord ? t('comp.taskModal.startHintGmp') : t('comp.taskModal.startHintTask')}
               </small>
             </div>
 
             <div className="form-group">
-              <label htmlFor="due">마감일</label>
+              <label htmlFor="due">{t('comp.taskModal.due')}</label>
               <input
                 type="date"
                 id="due"
@@ -711,7 +740,7 @@ export function TaskEditModal({
                 }}
               />
               <small style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.25rem', display: 'block' }}>
-                {isGmpRecord ? '마감일을 선택하세요' : '단계별 마감일 중 가장 느린 날짜로 자동 설정됩니다'}
+                {isGmpRecord ? t('comp.taskModal.dueHintGmp') : t('comp.taskModal.dueHintTask')}
               </small>
             </div>
           </div>
@@ -719,7 +748,7 @@ export function TaskEditModal({
           {/* VAL Pkg 연결 */}
           {!isGmpRecord && (
             <div className="form-group">
-              <label htmlFor="val-package-select">VAL Pkg 연결</label>
+              <label htmlFor="val-package-select">{t('comp.taskModal.valPkgLink')}</label>
               <select
                 id="val-package-select"
                 multiple
@@ -738,7 +767,7 @@ export function TaskEditModal({
                 ))}
               </select>
               <small style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.25rem', display: 'block' }}>
-                Ctrl(또는 Cmd) 키를 누른 채로 여러 개 선택할 수 있습니다
+                {t('comp.taskModal.valPkgMultiHint')}
               </small>
             </div>
           )}
@@ -746,7 +775,7 @@ export function TaskEditModal({
           {/* Issue 상태 설명 */}
           {!isGmpRecord && formData.status === 'Issue' && (formData as any).issue_reason && (
             <div className="form-group" style={{ marginTop: '1rem' }}>
-              <label>Issue 해결 가이드</label>
+              <label>{t('comp.taskModal.issueGuide')}</label>
               <div style={{
                 padding: '1rem',
                 backgroundColor: '#fef3c7',
@@ -762,7 +791,7 @@ export function TaskEditModal({
               <button
                 type="button"
                 onClick={() => {
-                  if (confirm('Issue가 해결되었나요? 설명을 삭제하시겠습니까?')) {
+                  if (confirm(t('comp.taskModal.confirmClearIssueReason'))) {
                     setFormData((prev: any) => ({
                       ...prev,
                       issue_reason: null,
@@ -780,7 +809,7 @@ export function TaskEditModal({
                   fontSize: '0.875rem'
                 }}
               >
-                Issue 해결됨 (설명 삭제)
+                {t('comp.taskModal.issueResolvedClear')}
               </button>
             </div>
           )}
@@ -788,43 +817,43 @@ export function TaskEditModal({
           {/* 2단계 입력 섹션 - GMP Record가 아닐 때만 표시 */}
           {!isGmpRecord && (
           <div style={{ marginTop: '1.5rem', padding: '1rem', backgroundColor: '#f9fafb', borderRadius: '0.5rem', border: '1px solid #e5e7eb' }}>
-            <h3 style={{ fontSize: '0.95rem', fontWeight: 600, marginBottom: '1rem', color: '#111827' }}>업무 단계별 관리</h3>
+            <h3 style={{ fontSize: '0.95rem', fontWeight: 600, marginBottom: '1rem', color: '#111827' }}>{t('comp.taskModal.phaseSection')}</h3>
             
             {/* PI 단계 */}
             <div style={{ marginBottom: '1rem' }}>
-              <label style={{ fontSize: '0.85rem', fontWeight: 500, color: '#374151', marginBottom: '0.5rem', display: 'block' }}>PI 단계</label>
+              <label style={{ fontSize: '0.85rem', fontWeight: 500, color: '#374151', marginBottom: '0.5rem', display: 'block' }}>{t('comp.taskModal.piPhase')}</label>
               <div className="form-row" style={{ marginBottom: '0.5rem' }}>
                 <div className="form-group" style={{ flex: 1 }}>
-                  <label style={{ fontSize: '0.75rem', color: '#6b7280' }}>담당자</label>
+                  <label style={{ fontSize: '0.75rem', color: '#6b7280' }}>{t('comp.taskModal.subOwner')}</label>
                   <select
                     value={(formData.phases?.pi?.owner || '')}
                     onChange={(e) => handlePhaseChange('pi', 'owner', e.target.value)}
                     className="form-input"
                     style={{ fontSize: '0.8rem', padding: '0.5rem' }}
                   >
-                    <option value="">선택</option>
+                    <option value="">{t('comp.taskModal.selectShort')}</option>
                     {users.map((user) => (
                       <option key={user.id} value={user.name}>{user.name}</option>
                     ))}
                   </select>
                 </div>
                 <div className="form-group" style={{ flex: 1 }}>
-                  <label style={{ fontSize: '0.75rem', color: '#6b7280' }}>상태</label>
+                  <label style={{ fontSize: '0.75rem', color: '#6b7280' }}>{t('comp.taskModal.subStatus')}</label>
                   <select
                     value={(formData.phases?.pi?.status || '요구사항 접수')}
                     onChange={(e) => handlePhaseChange('pi', 'status', e.target.value)}
                     className="form-input"
                     style={{ fontSize: '0.8rem', padding: '0.5rem' }}
                   >
-                    <option value="요구사항 접수">요구사항 접수</option>
-                    <option value="진행여부 확정">진행여부 확정</option>
-                    <option value="URS 분석">URS 분석</option>
-                    <option value="설계 확정">설계 확정</option>
+                    <option value="요구사항 접수">{phaseStatusLabel('요구사항 접수')}</option>
+                    <option value="진행여부 확정">{phaseStatusLabel('진행여부 확정')}</option>
+                    <option value="URS 분석">{phaseStatusLabel('URS 분석')}</option>
+                    <option value="설계 확정">{phaseStatusLabel('설계 확정')}</option>
                     <option value="Dropped">Dropped</option>
                   </select>
                 </div>
                 <div className="form-group" style={{ flex: 1 }}>
-                  <label style={{ fontSize: '0.75rem', color: '#6b7280' }}>진행률 (계획/실적)</label>
+                  <label style={{ fontSize: '0.75rem', color: '#6b7280' }}>{t('comp.taskModal.subProgress')}</label>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <input
                       type="number"
@@ -847,7 +876,7 @@ export function TaskEditModal({
               </div>
               <div className="form-row">
                 <div className="form-group" style={{ flex: 1 }}>
-                  <label style={{ fontSize: '0.75rem', color: '#6b7280' }}>시작일</label>
+                  <label style={{ fontSize: '0.75rem', color: '#6b7280' }}>{t('comp.taskModal.subStart')}</label>
                   <input
                     type="date"
                     value={(formData.phases?.pi?.start || new Date().toISOString().slice(0, 10))}
@@ -857,7 +886,7 @@ export function TaskEditModal({
                   />
                 </div>
                 <div className="form-group" style={{ flex: 1 }}>
-                  <label style={{ fontSize: '0.75rem', color: '#6b7280' }}>마감일</label>
+                  <label style={{ fontSize: '0.75rem', color: '#6b7280' }}>{t('comp.taskModal.subDue')}</label>
                   <input
                     type="date"
                     value={(formData.phases?.pi?.due || '')}
@@ -871,10 +900,10 @@ export function TaskEditModal({
 
             {/* 개발 단계 */}
             <div>
-              <label style={{ fontSize: '0.85rem', fontWeight: 500, color: '#374151', marginBottom: '0.5rem', display: 'block' }}>개발 단계</label>
+              <label style={{ fontSize: '0.85rem', fontWeight: 500, color: '#374151', marginBottom: '0.5rem', display: 'block' }}>{t('comp.taskModal.devPhase')}</label>
               <div className="form-row" style={{ marginBottom: '0.5rem' }}>
                 <div className="form-group" style={{ flex: 1 }}>
-                  <label style={{ fontSize: '0.75rem', color: '#6b7280' }}>담당자</label>
+                  <label style={{ fontSize: '0.75rem', color: '#6b7280' }}>{t('comp.taskModal.subOwner')}</label>
                   <select
                     value={(formData.phases?.development?.owner || '')}
                     onChange={(e) => handlePhaseChange('development', 'owner', e.target.value)}
@@ -882,17 +911,17 @@ export function TaskEditModal({
                     style={{ fontSize: '0.8rem', padding: '0.5rem' }}
                     disabled={isPimTask}
                   >
-                    <option value="">선택</option>
+                    <option value="">{t('comp.taskModal.selectShort')}</option>
                     {users.map((user) => (
                       <option key={user.id} value={user.name}>{user.name}</option>
                     ))}
                   </select>
                 </div>
                 <div className="form-group" style={{ flex: 1 }}>
-                  <label style={{ fontSize: '0.75rem', color: '#6b7280' }}>상태</label>
+                  <label style={{ fontSize: '0.75rem', color: '#6b7280' }}>{t('comp.taskModal.subStatus')}</label>
                   <input
                     type="text"
-                    value={(formData.phases?.development?.status || '설계 리뷰')}
+                    value={phaseStatusLabel(formData.phases?.development?.status || '설계 리뷰')}
                     className="form-input"
                     style={{ 
                       fontSize: '0.8rem', 
@@ -905,11 +934,11 @@ export function TaskEditModal({
                     readOnly
                   />
                   <small style={{ fontSize: '0.7rem', color: '#9ca3af', marginTop: '0.25rem', display: 'block' }}>
-                    워크플로우 전환을 통해서만 변경 가능
+                    {t('comp.taskModal.wfReadonlyHint')}
                   </small>
                 </div>
                 <div className="form-group" style={{ flex: 1 }}>
-                  <label style={{ fontSize: '0.75rem', color: '#6b7280' }}>진행률 (계획/실적)</label>
+                  <label style={{ fontSize: '0.75rem', color: '#6b7280' }}>{t('comp.taskModal.subProgress')}</label>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <input
                       type="number"
@@ -933,7 +962,7 @@ export function TaskEditModal({
               </div>
               <div className="form-row">
                 <div className="form-group" style={{ flex: 1 }}>
-                  <label style={{ fontSize: '0.75rem', color: '#6b7280' }}>시작일</label>
+                  <label style={{ fontSize: '0.75rem', color: '#6b7280' }}>{t('comp.taskModal.subStart')}</label>
                   <input
                     type="date"
                     value={(formData.phases?.development?.start || new Date().toISOString().slice(0, 10))}
@@ -944,7 +973,7 @@ export function TaskEditModal({
                   />
                 </div>
                 <div className="form-group" style={{ flex: 1 }}>
-                  <label style={{ fontSize: '0.75rem', color: '#6b7280' }}>마감일</label>
+                  <label style={{ fontSize: '0.75rem', color: '#6b7280' }}>{t('comp.taskModal.subDue')}</label>
                   <input
                     type="date"
                     value={(formData.phases?.development?.due || '')}
@@ -959,7 +988,7 @@ export function TaskEditModal({
               {!isGmpRecord && !isPimTask && (
                 <div style={{ marginTop: '0.5rem', padding: '0.5rem', background: '#f0f9ff', borderRadius: '0.375rem', border: '1px solid #bae6fd' }}>
                   <label style={{ fontSize: '0.75rem', color: '#0369a1', fontWeight: 500, marginBottom: '0.375rem', display: 'block' }}>
-                    워크플로우 전환 (상태 변경)
+                    {t('comp.taskModal.wfTransition')}
                   </label>
                   {mode === 'edit' ? (
                     <DevelopmentPhaseStatusActions
@@ -974,7 +1003,7 @@ export function TaskEditModal({
                     />
                   ) : (
                     <p style={{ fontSize: '0.75rem', color: '#6b7280', margin: 0 }}>
-                      일감 저장 후 워크플로우 전환을 사용할 수 있습니다.
+                      {t('comp.taskModal.wfAfterSave')}
                     </p>
                   )}
                 </div>
@@ -982,7 +1011,7 @@ export function TaskEditModal({
               {isPimTask && (
                 <div style={{ marginTop: '0.5rem', padding: '0.5rem', background: '#fef3c7', borderRadius: '0.375rem', border: '1px solid #fcd34d' }}>
                   <p style={{ fontSize: '0.75rem', color: '#92400e', margin: 0 }}>
-                    ℹ️ PIM일감입니다. PI 단계가 100% 완료되면 개발일감으로 이동되어 개발 단계를 입력할 수 있습니다.
+                    {t('comp.taskModal.pimHint')}
                   </p>
                 </div>
               )}

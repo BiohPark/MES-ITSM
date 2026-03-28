@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useI18n } from '@/lib/i18n'
 import { parsePredecessorString, formatPredecessorString } from '@/lib/predecessor-parser'
 import { GanttTasksChart, type GanttChartEvent } from './GanttTasksChart'
 
@@ -225,6 +226,7 @@ export function GanttWorkspace({
   initialProjectId?: number
   onInitialProjectIdConsumed?: () => void
 } = {}) {
+  const { t: tr, locale } = useI18n()
   const [projects, setProjects] = useState<GanttProject[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -290,7 +292,7 @@ export function GanttWorkspace({
       try {
         const res = await fetch('/api/gantt/projects')
         if (!res.ok) {
-          throw new Error('Gantt 프로젝트 목록을 불러오지 못했습니다.')
+          throw new Error(tr('comp.gantt.loadProjectsFailed'))
         }
         const data = await res.json()
         setProjects(data.projects || [])
@@ -300,7 +302,7 @@ export function GanttWorkspace({
         }
       } catch (err: any) {
         console.error('Failed to load Gantt projects', err)
-        setError(err.message || 'Gantt 프로젝트 로딩 실패')
+        setError(err.message || tr('comp.gantt.loadProjectsFailedShort'))
       } finally {
         projectsLoadPromiseRef.current = null
         setLoading(false)
@@ -308,7 +310,7 @@ export function GanttWorkspace({
     })()
 
     await projectsLoadPromiseRef.current
-  }, [selectedProjectId])
+  }, [selectedProjectId, tr])
 
   useEffect(() => {
     void loadProjects()
@@ -359,7 +361,7 @@ export function GanttWorkspace({
       })
       registeredUserNamesRef.current = names
       setRegisteredUserNames(names)
-      const groupManager = userList.find((u: { role?: string }) => u.role === '그룹 매니저')
+      const groupManager = userList.find((u: { role?: string }) => u.role === tr('comp.gantt.groupManagerRole'))
       setDefaultAssignee(groupManager?.name ? String(groupManager.name).trim() : '')
       usersLoadedRef.current = true
       return names
@@ -375,7 +377,7 @@ export function GanttWorkspace({
     } finally {
       usersLoadPromiseRef.current = null
     }
-  }, [])
+  }, [tr])
 
   const loadTasks = async (projectId: number) => {
     setTasksLoading(true)
@@ -384,7 +386,7 @@ export function GanttWorkspace({
     try {
       const res = await fetch(`/api/gantt/tasks/${projectId}`)
       if (!res.ok) {
-        throw new Error('태스크를 불러오지 못했습니다.')
+        throw new Error(tr('comp.gantt.loadTasksFailed'))
       }
       const data = await res.json()
       setTasks(
@@ -396,7 +398,7 @@ export function GanttWorkspace({
       setHasUnsavedChanges(false)
     } catch (err: any) {
       console.error('Failed to load gantt tasks', err)
-      setTasksError(err.message || '태스크 로딩 실패')
+      setTasksError(err.message || tr('comp.gantt.loadTasksFailedShort'))
     } finally {
       setTasksLoading(false)
     }
@@ -405,7 +407,7 @@ export function GanttWorkspace({
   const loadEvents = useCallback(async (projectId: number) => {
     const res = await fetch(`/api/gantt/events?projectId=${projectId}`)
     if (!res.ok) {
-      throw new Error('이벤트를 불러오지 못했습니다.')
+      throw new Error(tr('comp.gantt.loadEventsFailed'))
     }
     const data = await res.json()
     setChartEvents((data.events || []).map((e: any) => ({
@@ -413,7 +415,7 @@ export function GanttWorkspace({
       date: e.date,
       name: e.name,
     })))
-  }, [])
+  }, [tr])
 
   // 프로젝트 선택 시: 태스크 + 이벤트를 함께 로드 (이벤트는 서버에서 공유)
   useEffect(() => {
@@ -441,7 +443,7 @@ export function GanttWorkspace({
 
   const handleAddRow = async () => {
     if (!selectedProjectId) {
-      alert('먼저 Gantt 프로젝트를 선택하거나 생성하세요.')
+      alert(tr('comp.gantt.selectProjectFirst'))
       return
     }
     await ensureAssignableUsersLoaded()
@@ -470,7 +472,7 @@ export function GanttWorkspace({
   /** 특정 행의 하위 레벨 행 추가 (마지막 자식 위치 = 맨 아래) */
   const handleAddChildRow = async (parentIndex: number) => {
     if (!selectedProjectId) {
-      alert('먼저 Gantt 프로젝트를 선택하거나 생성하세요.')
+      alert(tr('comp.gantt.selectProjectFirst'))
       return
     }
     await ensureAssignableUsersLoaded()
@@ -732,17 +734,17 @@ export function GanttWorkspace({
           for (const p of parsed) {
             // 존재하지 않는 행
             if (p.index < 1 || p.index > prev.length) {
-              alert(`존재하지 않는 행(#${p.index})을 선행 작업으로 지정할 수 없습니다.`)
+              alert(tr('comp.gantt.predecessorInvalidRow', { index: p.index }))
               return prev
             }
             // 자기 자신
             if (p.index === selfRow) {
-              alert('자기 자신을 선행 작업으로 지정할 수 없습니다.')
+              alert(tr('comp.gantt.predecessorSelf'))
               return prev
             }
             // 상위(조상) 작업
             if (ancestorIndices.includes(p.index - 1)) {
-              alert('상위(조상) 작업을 선행 작업으로 지정할 수 없습니다.')
+              alert(tr('comp.gantt.predecessorAncestor'))
               return prev
             }
           }
@@ -1046,9 +1048,11 @@ export function GanttWorkspace({
       .filter(({ task }) => (task.outlineLevel ?? 1) === 1)
       .map(({ index, task }) => ({
         index,
-        label: `${task.wbsCode ?? ''} ${(task.name || '(이름 없음)').trim()}`.trim() || `레벨 1 #${index + 1}`,
+        label:
+          `${task.wbsCode ?? ''} ${(task.name || tr('comp.gantt.noName')).trim()}`.trim() ||
+          tr('comp.gantt.level1Row', { n: index + 1 }),
       }))
-  }, [displayTasks])
+  }, [displayTasks, tr])
 
   /** 담당자 필터용 옵션 (현재 표시 중인 WBS 기준) */
   const assigneeOptions = useMemo(() => {
@@ -1057,8 +1061,8 @@ export function GanttWorkspace({
       const a = (t.assignee ?? '').trim()
       if (a) names.add(a)
     })
-    return Array.from(names).sort((a, b) => a.localeCompare(b, 'ko-KR'))
-  }, [displayTasks])
+    return Array.from(names).sort((a, b) => a.localeCompare(b, locale === 'ko' ? 'ko-KR' : 'en-US'))
+  }, [displayTasks, locale])
 
   const todayStr = formatLocalDate(new Date())
 
@@ -1146,7 +1150,7 @@ export function GanttWorkspace({
     const empty = { planDays: 0, plannedProgress: 0, overallProgress: 0, startDate: null as string | null, finishDate: null as string | null, plannedProgressReason: '' as string }
     if (filteredDisplayTasks.length === 0) return empty
     const withDates = filteredDisplayTasks.filter((t) => t.startDate && t.finishDate)
-    if (withDates.length === 0) return { ...empty, plannedProgressReason: '시작/종료일이 있는 작업이 없습니다.' }
+    if (withDates.length === 0) return { ...empty, plannedProgressReason: tr('comp.gantt.plannedNoDates') }
     const minStart = withDates.reduce((a, t) => {
       const s = t.startDate!.includes('T') ? t.startDate!.split('T')[0] : t.startDate!
       return s < a ? s : a
@@ -1170,17 +1174,17 @@ export function GanttWorkspace({
       const todayMs = today.getTime()
       if (todayMs < startMs) {
         plannedProgress = 0
-        plannedProgressReason = '오늘이 프로젝트 시작일보다 이전이라 0%입니다.'
+        plannedProgressReason = tr('comp.gantt.plannedBeforeStart')
       } else if (todayMs >= finishMs) {
         plannedProgress = 100
-        plannedProgressReason = '프로젝트 종료일이 지났습니다.'
+        plannedProgressReason = tr('comp.gantt.plannedAfterEnd')
       } else {
         const elapsedDays = Math.ceil((todayMs - startMs) / (1000 * 60 * 60 * 24))
         plannedProgress = Math.min(100, Math.max(0, (elapsedDays / planDays) * 100))
-        plannedProgressReason = '오늘 기준 계획 기간 대비 경과율입니다.'
+        plannedProgressReason = tr('comp.gantt.plannedNormal')
       }
     } else {
-      plannedProgressReason = '시작/종료일을 확인할 수 없습니다.'
+      plannedProgressReason = tr('comp.gantt.plannedUnknown')
     }
     // 리프 작업만 가중 평균 (기간 기준)
     const leafTasks = filteredDisplayTasks.filter((t, i) => {
@@ -1206,7 +1210,7 @@ export function GanttWorkspace({
       finishDate: maxFinish,
       plannedProgressReason,
     }
-  }, [filteredDisplayTasks])
+  }, [filteredDisplayTasks, tr])
 
   /** 작업 지표: 전체 / 미시작 / 진행 중 / 완료 / 이슈 (필터 적용 목록 기준) */
   const taskStats = useMemo(() => {
@@ -1283,7 +1287,7 @@ export function GanttWorkspace({
 
   const handleSaveTasks = async () => {
     if (!selectedProjectId) {
-      alert('먼저 Gantt 프로젝트를 선택하세요.')
+      alert(tr('comp.gantt.selectProjectToSave'))
       return
     }
     setAssigneeError(null)
@@ -1293,7 +1297,7 @@ export function GanttWorkspace({
     for (const t of normalized) {
       const assignee = (t.assignee ?? '').trim()
       if (assignee && !assignableUsers.has(normalizeAssigneeKey(assignee))) {
-        setAssigneeError(`담당자 "${assignee}"(은)는 등록된 사용자가 아닙니다. 사용자 관리에서 등록 후 선택해 주세요.`)
+        setAssigneeError(tr('comp.gantt.assigneeNotUser', { name: assignee }))
         return
       }
     }
@@ -1317,13 +1321,18 @@ export function GanttWorkspace({
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
-        const msg = data.details ? `${data.error || '태스크 저장 실패'}: ${data.details}` : (data.error || '태스크 저장 실패')
+        const msg = data.details
+          ? tr('comp.gantt.taskSaveFailedWithDetail', {
+              error: data.error || tr('comp.gantt.taskSaveFailed'),
+              details: data.details,
+            })
+          : data.error || tr('comp.gantt.taskSaveFailed')
         throw new Error(msg)
       }
       await loadTasks(selectedProjectId)
     } catch (err: any) {
       console.error('Failed to save gantt tasks', err)
-      alert(err.message || '태스크 저장 실패')
+      alert(err.message || tr('comp.gantt.taskSaveFailedGeneric'))
     } finally {
       setTasksLoading(false)
     }
@@ -1332,7 +1341,7 @@ export function GanttWorkspace({
   const handleCreateProject = async () => {
     const name = projectNameInput.trim()
     if (!name) {
-      alert('프로젝트 이름을 입력하세요.')
+      alert(tr('comp.gantt.enterProjectName'))
       return
     }
     try {
@@ -1345,7 +1354,7 @@ export function GanttWorkspace({
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || '프로젝트 생성 실패')
+        throw new Error(data.error || tr('comp.gantt.createProjectFailed'))
       }
       const data = await res.json()
       setProjectNameInput('')
@@ -1354,18 +1363,19 @@ export function GanttWorkspace({
       setTasks([])
     } catch (err: any) {
       console.error('Failed to create gantt project', err)
-      alert(err.message || '프로젝트 생성 실패')
+      alert(err.message || tr('comp.gantt.createProjectFailed'))
     }
   }
 
   const handleDeleteProject = async () => {
     if (!selectedProjectId) {
-      alert('삭제할 프로젝트를 선택하세요.')
+      alert(tr('comp.gantt.selectProjectToDelete'))
       return
     }
 
-    const projectName = selectedProject?.name || `프로젝트 #${selectedProjectId}`
-    if (!confirm(`"${projectName}" 프로젝트를 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없으며, 프로젝트의 모든 작업도 함께 삭제됩니다.`)) {
+    const projectName =
+      selectedProject?.name || tr('comp.gantt.deleteProjectName', { id: String(selectedProjectId) })
+    if (!confirm(tr('comp.gantt.deleteProjectConfirm', { name: projectName }))) {
       return
     }
 
@@ -1375,22 +1385,22 @@ export function GanttWorkspace({
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || '프로젝트 삭제 실패')
+        throw new Error(data.error || tr('comp.gantt.deleteProjectFailed'))
       }
-      alert('프로젝트가 삭제되었습니다.')
+      alert(tr('comp.gantt.projectDeleted'))
       setSelectedProjectId(null)
       setTasks([])
       await loadProjects()
     } catch (err: any) {
       console.error('Failed to delete gantt project', err)
-      alert(err.message || '프로젝트 삭제 실패')
+      alert(err.message || tr('comp.gantt.deleteProjectFailed'))
     }
   }
 
   const handleImportXml = async (fileArg?: File | null) => {
     const f = fileArg ?? xmlFile
     if (!f) {
-      alert('XML 파일을 선택하세요.')
+      alert(tr('comp.gantt.selectXmlFile'))
       return
     }
     setImporting(true)
@@ -1407,10 +1417,10 @@ export function GanttWorkspace({
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || 'XML Import 실패')
+        throw new Error(data.error || tr('comp.gantt.xmlImportFailed'))
       }
       const data = await res.json()
-      alert('MS Project XML Import가 완료되었습니다.')
+      alert(tr('comp.gantt.xmlImportDone'))
       setXmlFile(null)
       if (xmlFileInputRef.current) xmlFileInputRef.current.value = ''
       setProjectNameInput('')
@@ -1420,7 +1430,7 @@ export function GanttWorkspace({
       }
     } catch (err: any) {
       console.error('Failed to import xml', err)
-      alert(err.message || 'XML Import 실패')
+      alert(err.message || tr('comp.gantt.xmlImportFailed'))
     } finally {
       setImporting(false)
     }
@@ -1443,44 +1453,44 @@ export function GanttWorkspace({
 
   const handleExportXml = async () => {
     if (!selectedProjectId) {
-      alert('먼저 Gantt 프로젝트를 선택하세요.')
+      alert(tr('comp.gantt.selectProjectToSave'))
       return
     }
     try {
       const res = await fetch(`/api/gantt/export/${selectedProjectId}`)
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || 'XML Export 실패')
+        throw new Error(data.error || tr('comp.gantt.xmlExportFailed'))
       }
       await downloadBlobResponse(res, `gantt_project_${selectedProjectId}.xlsx`)
     } catch (err: any) {
       console.error('Failed to export xml', err)
-      alert(err.message || 'XML Export 실패')
+      alert(err.message || tr('comp.gantt.xmlExportFailed'))
     }
   }
 
   const handleExportExcel = async () => {
     if (!selectedProjectId) {
-      alert('먼저 Gantt 프로젝트를 선택하세요.')
+      alert(tr('comp.gantt.selectProjectToSave'))
       return
     }
     try {
       const res = await fetch(`/api/gantt/export-excel/${selectedProjectId}`)
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || 'Excel Export 실패')
+        throw new Error(data.error || tr('comp.gantt.excelExportFailed'))
       }
       await downloadBlobResponse(res, `gantt_project_${selectedProjectId}.xml`)
     } catch (err: any) {
       console.error('Failed to export excel', err)
-      alert(err.message || 'Excel Export 실패')
+      alert(err.message || tr('comp.gantt.excelExportFailed'))
     }
   }
 
   return (
     <div className="table-wrapper">
       <div className="table-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
-        <h2 style={{ margin: 0 }}>Gantt 프로젝트 및 WBS 편집</h2>
+        <h2 style={{ margin: 0 }}>{tr('comp.gantt.pageTitle')}</h2>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
           <input
             ref={xmlFileInputRef}
@@ -1521,7 +1531,7 @@ export function GanttWorkspace({
       {/* 상단 툴바 영역 - 프로젝트 선택/생성만 (XML은 헤더 우측으로 이동) */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '0.5rem' }}>
         <div className="servicenow-toolbar__section">
-          <h3 className="servicenow-toolbar__title">Gantt 프로젝트</h3>
+          <h3 className="servicenow-toolbar__title">{tr('comp.gantt.projectSidebarTitle')}</h3>
           <div className="servicenow-toolbar__row">
             <select
               value={selectedProjectId ?? ''}
@@ -1533,7 +1543,7 @@ export function GanttWorkspace({
               className="servicenow-form-select"
               style={{ flex: 1 }}
             >
-              <option value="">프로젝트 선택...</option>
+              <option value="">{tr('comp.gantt.selectProjectPlaceholder')}</option>
               {projects.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name} (#{p.id})
@@ -1545,7 +1555,7 @@ export function GanttWorkspace({
               className="servicenow-button servicenow-button--secondary"
               onClick={() => { void loadProjects(true) }}
             >
-              새로고침
+              {tr('comp.ui.refresh')}
             </button>
             {selectedProjectId && (
               <button
@@ -1554,14 +1564,14 @@ export function GanttWorkspace({
                 onClick={handleDeleteProject}
                 style={{ marginLeft: '0.5rem' }}
               >
-                삭제
+                {tr('comp.ui.delete')}
               </button>
             )}
           </div>
           <div className="servicenow-toolbar__row" style={{ marginTop: '0.5rem' }}>
             <input
               type="text"
-              placeholder="새 프로젝트 이름"
+              placeholder={tr('comp.gantt.newProjectPlaceholder')}
               value={projectNameInput}
               onChange={(e) => setProjectNameInput(e.target.value)}
               className="servicenow-form-input"
@@ -1573,7 +1583,7 @@ export function GanttWorkspace({
               onClick={handleCreateProject}
               disabled={readOnlyWbs}
             >
-              새로 만들기
+              {tr('comp.gantt.createProjectBtn')}
             </button>
           </div>
         </div>
@@ -1581,15 +1591,15 @@ export function GanttWorkspace({
 
       {loading ? (
         <div className="placeholder">
-          <p>Gantt 프로젝트를 불러오는 중...</p>
+          <p>{tr('comp.gantt.loadingProjects')}</p>
         </div>
       ) : error ? (
         <div className="placeholder">
-          <p>에러: {error}</p>
+          <p>{tr('comp.gantt.errorLine', { message: error ?? '' })}</p>
         </div>
       ) : !selectedProject ? (
         <div className="placeholder">
-          <p>왼쪽에서 Gantt 프로젝트를 선택하거나 새로 생성해주세요.</p>
+          <p>{tr('comp.gantt.pickProjectHint')}</p>
         </div>
       ) : (
         <>
@@ -1619,7 +1629,7 @@ export function GanttWorkspace({
               }}
               onClick={() => setActiveSubTab('wbs')}
             >
-              WBS
+              {tr('comp.gantt.subTabWbs')}
             </button>
             <button
               type="button"
@@ -1638,7 +1648,7 @@ export function GanttWorkspace({
               }}
               onClick={() => setActiveSubTab('chart')}
             >
-              간트 차트
+              {tr('comp.gantt.subTabChart')}
             </button>
           </div>
 
@@ -1656,23 +1666,33 @@ export function GanttWorkspace({
               fontSize: '0.875rem',
             }}
           >
-            <span style={{ color: '#475569', fontWeight: 600 }}>작업 지표</span>
+            <span style={{ color: '#475569', fontWeight: 600 }}>{tr('comp.gantt.workMetrics')}</span>
             <span style={{ color: '#64748b' }}>
-              전체 <strong style={{ color: '#0f172a', marginLeft: '0.25rem' }}>{taskStats.total}</strong>개
+              {tr('comp.gantt.statLabelTotal')}{' '}
+              <strong style={{ color: '#0f172a', marginLeft: '0.25rem' }}>{taskStats.total}</strong>
+              {tr('comp.ui.countSuffix')}
             </span>
             <span style={{ color: '#cbd5e1' }}>|</span>
             <span style={{ color: '#64748b' }}>
-              미시작 <strong style={{ color: '#64748b', marginLeft: '0.25rem' }}>{taskStats.notStarted}</strong>개
+              {tr('comp.gantt.statLabelNotStarted')}{' '}
+              <strong style={{ color: '#64748b', marginLeft: '0.25rem' }}>{taskStats.notStarted}</strong>
+              {tr('comp.ui.countSuffix')}
             </span>
             <span style={{ color: '#64748b' }}>
-              진행 중 <strong style={{ color: '#2A84D5', marginLeft: '0.25rem' }}>{taskStats.inProgress}</strong>개
+              {tr('comp.gantt.statLabelInProgress')}{' '}
+              <strong style={{ color: '#2A84D5', marginLeft: '0.25rem' }}>{taskStats.inProgress}</strong>
+              {tr('comp.ui.countSuffix')}
             </span>
             <span style={{ color: '#64748b' }}>
-              완료 <strong style={{ color: '#059669', marginLeft: '0.25rem' }}>{taskStats.completed}</strong>개
+              {tr('comp.gantt.statLabelDone')}{' '}
+              <strong style={{ color: '#059669', marginLeft: '0.25rem' }}>{taskStats.completed}</strong>
+              {tr('comp.ui.countSuffix')}
             </span>
             <span style={{ color: '#cbd5e1' }}>|</span>
             <span style={{ color: '#64748b' }}>
-              이슈 <strong style={{ color: '#dc2626', marginLeft: '0.25rem' }}>{taskStats.issues}</strong>개
+              {tr('comp.gantt.statLabelIssue')}{' '}
+              <strong style={{ color: '#dc2626', marginLeft: '0.25rem' }}>{taskStats.issues}</strong>
+              {tr('comp.ui.countSuffix')}
             </span>
           </div>
 
@@ -1693,9 +1713,11 @@ export function GanttWorkspace({
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <span style={{ color: '#64748b', fontSize: '0.85rem' }}>계획 기간</span>
+                <span style={{ color: '#64748b', fontSize: '0.85rem' }}>{tr('comp.gantt.plannedPeriod')}</span>
                 <strong style={{ fontSize: '1rem' }}>
-                  {Number.isFinite(projectProgressSummary.planDays) ? projectProgressSummary.planDays : 0}일
+                  {tr('comp.gantt.dayCount', {
+                    n: String(Number.isFinite(projectProgressSummary.planDays) ? projectProgressSummary.planDays : 0),
+                  })}
                 </strong>
                 {projectProgressSummary.startDate && projectProgressSummary.finishDate && (
                   <span style={{ color: '#94a3b8', fontSize: '0.8rem' }}>
@@ -1704,7 +1726,7 @@ export function GanttWorkspace({
                 )}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <span style={{ color: '#64748b', fontSize: '0.85rem' }}>계획 실적</span>
+                <span style={{ color: '#64748b', fontSize: '0.85rem' }}>{tr('comp.gantt.plannedActual')}</span>
                 <strong
                   style={{ fontSize: '1.05rem', color: '#64748b', cursor: projectProgressSummary.plannedProgressReason ? 'help' : undefined }}
                   title={projectProgressSummary.plannedProgressReason || undefined}
@@ -1712,7 +1734,7 @@ export function GanttWorkspace({
                   {Number.isFinite(projectProgressSummary.plannedProgress) ? Math.round(projectProgressSummary.plannedProgress) : 0}%
                 </strong>
                 <span style={{ color: '#cbd5e1', margin: '0 0.25rem' }}>{' | '}</span>
-                <span style={{ color: '#64748b', fontSize: '0.85rem' }}>전체 실적</span>
+                <span style={{ color: '#64748b', fontSize: '0.85rem' }}>{tr('comp.gantt.overallActual')}</span>
                 <strong style={{ fontSize: '1.1rem', color: '#2A84D5' }}>
                   {Number.isFinite(projectProgressSummary.overallProgress) ? Math.round(projectProgressSummary.overallProgress) : 0}%
                 </strong>
@@ -1754,7 +1776,7 @@ export function GanttWorkspace({
                     color: '#92400e',
                   }}
                 >
-                  WBS 수정 권한이 없습니다. 관리자(설정 → 사용자 관리)에서 WBS 수정 권한 부여를 요청하세요.
+                  {tr('comp.gantt.wbsReadOnlyHint')}
                 </div>
               )}
               {assigneeError && (
@@ -1786,7 +1808,7 @@ export function GanttWorkspace({
                       className="servicenow-button servicenow-button--primary"
                       onClick={() => setAssigneeError(null)}
                     >
-                      확인
+                      {tr('comp.ui.ok')}
                     </button>
                   </div>
                 </div>
@@ -1830,13 +1852,13 @@ export function GanttWorkspace({
                       </span>
                     </div>
                     <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.15rem' }}>
-                      행을 0.5초 이상 누르면 드래그로 이동 · 선행 작업은 드롭다운으로 선택
+                      {tr('comp.gantt.wbsDragHint')}
                     </div>
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', color: '#475569' }}>
-                    <span style={{ whiteSpace: 'nowrap' }}>레벨 1 보기:</span>
+                    <span style={{ whiteSpace: 'nowrap' }}>{tr('comp.gantt.level1Filter')}</span>
                     <select
                       value={selectedLevel1Index == null ? '' : String(selectedLevel1Index)}
                       onChange={(e) => {
@@ -1852,7 +1874,7 @@ export function GanttWorkspace({
                         color: '#334155',
                       }}
                     >
-                      <option value="">전체</option>
+                      <option value="">{tr('comp.gantt.filterAll')}</option>
                       {level1Options.map((opt) => (
                         <option key={opt.index} value={opt.index}>
                           {opt.label}
@@ -1861,7 +1883,7 @@ export function GanttWorkspace({
                     </select>
                   </label>
                   <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.8rem', color: '#475569' }}>
-                    <span style={{ whiteSpace: 'nowrap' }}>상태</span>
+                    <span style={{ whiteSpace: 'nowrap' }}>{tr('comp.gantt.status')}</span>
                     <select
                       value={statusFilter}
                       onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
@@ -1874,15 +1896,15 @@ export function GanttWorkspace({
                         color: '#334155',
                       }}
                     >
-                      <option value="all">전체</option>
-                      <option value="notStarted">미시작</option>
-                      <option value="inProgress">진행 중</option>
-                      <option value="completed">완료</option>
-                      <option value="issue">이슈 ❗</option>
+                      <option value="all">{tr('comp.gantt.statusAll')}</option>
+                      <option value="notStarted">{tr('comp.gantt.statusNotStarted')}</option>
+                      <option value="inProgress">{tr('comp.gantt.statusInProgress')}</option>
+                      <option value="completed">{tr('comp.gantt.statusCompleted')}</option>
+                      <option value="issue">{tr('comp.gantt.statusIssue')}</option>
                     </select>
                   </label>
                   <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.8rem', color: '#475569' }}>
-                    <span style={{ whiteSpace: 'nowrap' }}>담당자</span>
+                    <span style={{ whiteSpace: 'nowrap' }}>{tr('comp.gantt.assignee')}</span>
                     <select
                       value={assigneeFilter}
                       onChange={(e) => setAssigneeFilter(e.target.value)}
@@ -1895,7 +1917,7 @@ export function GanttWorkspace({
                         color: '#334155',
                       }}
                     >
-                      <option value="">전체</option>
+                      <option value="">{tr('comp.gantt.filterAll')}</option>
                       {assigneeOptions.map((name) => (
                         <option key={name} value={name}>
                           {name}
@@ -1914,7 +1936,7 @@ export function GanttWorkspace({
                       fontWeight: 500,
                     }}
                   >
-                    + 행 추가
+                    {tr('comp.gantt.addRowButton')}
                   </button>
                   <button
                     type="button"
@@ -1928,7 +1950,7 @@ export function GanttWorkspace({
                       background: tasksLoading ? '#94a3b8' : undefined,
                     }}
                   >
-                    {tasksLoading ? '저장 중...' : '💾 WBS 저장'}
+                    {tasksLoading ? tr('comp.gantt.savingWbs') : tr('comp.gantt.saveWbs')}
                   </button>
                 </div>
               </div>
@@ -1964,16 +1986,16 @@ export function GanttWorkspace({
                   <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.seq, minWidth: WBS_COLUMNS.seq, padding: '0.3rem 0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>#</div>
                   <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.wbs, minWidth: WBS_COLUMNS.wbs, padding: '0.3rem 0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>WBS</div>
                   <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.issue, minWidth: WBS_COLUMNS.issue, padding: '0.3rem 0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }} />
-                  <div style={{ flex: '1 1 0%', minWidth: WBS_NAME_MIN, padding: '0.3rem 0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>작업명</div>
-                  <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.progress, minWidth: WBS_COLUMNS.progress, padding: '0.3rem 0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center', whiteSpace: 'nowrap' }}>실적(%)</div>
-                  <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.date, minWidth: WBS_COLUMNS.date, padding: '0.3rem 0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>시작</div>
-                  <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.date, minWidth: WBS_COLUMNS.date, padding: '0.3rem 0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>종료</div>
-                  <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.duration, minWidth: WBS_COLUMNS.duration, padding: '0.3rem 0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center', whiteSpace: 'nowrap' }}>기간(일)</div>
-                  <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.predecessors, minWidth: WBS_COLUMNS.predecessors, padding: '0.3rem 0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>선행 작업</div>
-                  <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.assignee, minWidth: WBS_COLUMNS.assignee, padding: '0.3rem 0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>담당자</div>
-                  <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.indent, minWidth: WBS_COLUMNS.indent, padding: '0.3rem 0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>조정</div>
-                  <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.addChild, minWidth: WBS_COLUMNS.addChild, padding: '0.3rem 0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>하위</div>
-                  <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.delete, minWidth: WBS_COLUMNS.delete, padding: '0.3rem 0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>삭제</div>
+                  <div style={{ flex: '1 1 0%', minWidth: WBS_NAME_MIN, padding: '0.3rem 0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{tr('comp.gantt.colName')}</div>
+                  <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.progress, minWidth: WBS_COLUMNS.progress, padding: '0.3rem 0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center', whiteSpace: 'nowrap' }}>{tr('comp.gantt.colProgress')}</div>
+                  <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.date, minWidth: WBS_COLUMNS.date, padding: '0.3rem 0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{tr('comp.gantt.colStart')}</div>
+                  <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.date, minWidth: WBS_COLUMNS.date, padding: '0.3rem 0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{tr('comp.gantt.colEnd')}</div>
+                  <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.duration, minWidth: WBS_COLUMNS.duration, padding: '0.3rem 0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center', whiteSpace: 'nowrap' }}>{tr('comp.gantt.colDuration')}</div>
+                  <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.predecessors, minWidth: WBS_COLUMNS.predecessors, padding: '0.3rem 0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{tr('comp.gantt.colPred')}</div>
+                  <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.assignee, minWidth: WBS_COLUMNS.assignee, padding: '0.3rem 0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{tr('comp.gantt.colAssignee')}</div>
+                  <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.indent, minWidth: WBS_COLUMNS.indent, padding: '0.3rem 0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{tr('comp.gantt.colIndent')}</div>
+                  <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.addChild, minWidth: WBS_COLUMNS.addChild, padding: '0.3rem 0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{tr('comp.gantt.colChild')}</div>
+                  <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.delete, minWidth: WBS_COLUMNS.delete, padding: '0.3rem 0.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{tr('comp.gantt.colDelete')}</div>
                 </div>
                 {visibleDisplayRows.map(({ task: t, index: idx }) => {
                   const isDragging = draggedSubtreeIndexSet?.has(idx) ?? false
@@ -2064,7 +2086,7 @@ export function GanttWorkspace({
                       {hasDirectChildrenByIndex[idx] ? (
                         <button
                           type="button"
-                          aria-label={collapsedDisplayIndices.has(idx) ? '펼치기' : '접기'}
+                          aria-label={collapsedDisplayIndices.has(idx) ? tr('comp.gantt.expandRow') : tr('comp.gantt.collapseRow')}
                           onClick={(e) => {
                             e.preventDefault()
                             e.stopPropagation()
@@ -2124,7 +2146,7 @@ export function GanttWorkspace({
                             }
                           }
                         }}
-                        placeholder="작업명"
+                        placeholder={tr('comp.gantt.taskNamePh')}
                         style={{
                           width: '100%',
                           minHeight: WBS_ROW_CELL.minHeight,
@@ -2301,7 +2323,7 @@ export function GanttWorkspace({
                             }
                           }
                         }}
-                        placeholder="예: 1FS;3FS;5FS"
+                        placeholder={tr('comp.gantt.predPh')}
                         style={{
                           width: '100%',
                           minHeight: WBS_ROW_CELL.minHeight,
@@ -2328,7 +2350,7 @@ export function GanttWorkspace({
                             registeredUserNames.size > 0 &&
                             !registeredUserNames.has(normalizeAssigneeKey(assignee))
                           ) {
-                            setAssigneeError(`담당자 "${assignee}"(은)는 등록된 사용자가 아닙니다. 사용자 관리에서 등록 후 선택해 주세요.`)
+                            setAssigneeError(tr('comp.gantt.assigneeNotUser', { name: assignee }))
                           }
                         }}
                         onKeyDown={(e) => {
@@ -2339,7 +2361,7 @@ export function GanttWorkspace({
                             }
                           }
                         }}
-                        placeholder="담당자"
+                        placeholder={tr('comp.gantt.assigneePh')}
                         style={{
                           width: '100%',
                           minHeight: WBS_ROW_CELL.minHeight,
@@ -2378,7 +2400,7 @@ export function GanttWorkspace({
                         className="servicenow-button servicenow-button--secondary servicenow-button--sm"
                         onClick={() => handleIndent(idx, 1)}
                         disabled={readOnlyWbs || (t.outlineLevel ?? 1) >= WBS_MAX_LEVEL}
-                        title={(t.outlineLevel ?? 1) >= WBS_MAX_LEVEL ? `레벨 ${WBS_MAX_LEVEL}까지만 허용됩니다` : '하위로'}
+                        title={(t.outlineLevel ?? 1) >= WBS_MAX_LEVEL ? tr('comp.gantt.maxLevelOnly', { max: WBS_MAX_LEVEL }) : tr('comp.gantt.indentTitle')}
                         style={{ minHeight: WBS_ROW_CELL.minHeight, padding: WBS_ROW_CELL.padding, lineHeight: 1 }}
                       >
                         ▷
@@ -2389,11 +2411,11 @@ export function GanttWorkspace({
                         type="button"
                         className="servicenow-button servicenow-button--secondary servicenow-button--sm"
                         onClick={() => handleAddChildRow(idx)}
-                        title={(t.outlineLevel ?? 1) >= WBS_MAX_LEVEL ? `레벨 ${WBS_MAX_LEVEL}까지만 허용됩니다` : '하위 레벨 행 추가'}
+                        title={(t.outlineLevel ?? 1) >= WBS_MAX_LEVEL ? tr('comp.gantt.maxLevelOnly', { max: WBS_MAX_LEVEL }) : tr('comp.gantt.addChildTitle')}
                         disabled={readOnlyWbs || (t.outlineLevel ?? 1) >= WBS_MAX_LEVEL}
                         style={{ minHeight: WBS_ROW_CELL.minHeight, padding: WBS_ROW_CELL.padding, lineHeight: 1, whiteSpace: 'nowrap' }}
                       >
-                        + 하위
+                        {tr('comp.gantt.addChildButtonShort')}
                       </button>
                     </div>
                     <div style={{ flex: '0 0 auto', width: WBS_COLUMNS.delete, minWidth: WBS_COLUMNS.delete, padding: '0.3rem 0.55rem', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -2402,7 +2424,7 @@ export function GanttWorkspace({
                         className="servicenow-button servicenow-button--danger servicenow-button--sm"
                         onClick={() => handleDeleteRow(idx)}
                         disabled={readOnlyWbs}
-                        title="행 삭제"
+                        title={tr('comp.gantt.deleteRowTitle')}
                         style={{ minHeight: WBS_ROW_CELL.minHeight, padding: WBS_ROW_CELL.padding, lineHeight: 1 }}
                       >
                         ✕
@@ -2419,8 +2441,7 @@ export function GanttWorkspace({
                       color: '#94a3b8',
                     }}
                   >
-                    아직 WBS 행이 없습니다. 상단의 &quot;행 추가&quot; 버튼을 눌러
-                    작업을 추가하세요.
+                    {tr('comp.gantt.wbsEmptyHint')}
                   </div>
                 )}
               </div>
@@ -2440,20 +2461,20 @@ export function GanttWorkspace({
                   gap: '0.5rem',
                 }}
               >
-                <span style={{ fontWeight: 600 }}>CP (Critical Path, 주공정)</span>
+                <span style={{ fontWeight: 600 }}>{tr('comp.gantt.criticalPath')}</span>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
                   <span style={{ color: '#c62828', fontWeight: 700 }}>●</span>
-                  <span>● 표시는 공기(프로젝트 전체 기간)에 직접 영향을 주는 주공정 작업을 의미합니다.</span>
+                  <span>{tr('comp.gantt.criticalPathHint')}</span>
                 </span>
               </div>
 
               {tasksLoading ? (
                 <div className="placeholder">
-                  <p>일정을 계산하는 중...</p>
+                  <p>{tr('comp.gantt.calculatingSchedule')}</p>
                 </div>
               ) : tasksError ? (
                 <div className="placeholder">
-                  <p>에러: {tasksError}</p>
+                  <p>{tr('comp.gantt.tasksErrorLine', { message: tasksError ?? '' })}</p>
                 </div>
               ) : (
                 <GanttTasksChart
@@ -2463,7 +2484,7 @@ export function GanttWorkspace({
                   issueTaskIds={issueTaskIds}
                 onDoubleClickDate={(date) => setAddEventModal({ date, name: '' })}
                 onDeleteEvent={async (ev) => {
-                  if (typeof window !== 'undefined' && window.confirm(`이벤트 "${ev.name || '(이벤트)'}"을(를) 삭제할까요?`)) {
+                  if (typeof window !== 'undefined' && window.confirm(tr('comp.gantt.deleteEventConfirm', { name: ev.name || tr('comp.gantt.unnamedEvent') }))) {
                     const next = chartEvents.filter(
                       (e) =>
                         !(
@@ -2520,23 +2541,24 @@ export function GanttWorkspace({
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 style={{ margin: '0 0 1rem', fontSize: '1rem', fontWeight: 600 }}>이벤트 추가</h3>
-            <p style={{ margin: '0 0 0.5rem', fontSize: '0.8rem', color: '#64748b' }}>날짜</p>
+            <h3 style={{ margin: '0 0 1rem', fontSize: '1rem', fontWeight: 600 }}>{tr('comp.gantt.addEventTitle')}</h3>
+            <p style={{ margin: '0 0 0.5rem', fontSize: '0.8rem', color: '#64748b' }}>{tr('comp.gantt.eventDate')}</p>
             <p style={{ margin: '0 0 0.75rem', fontSize: '0.9rem', fontWeight: 500 }}>
               {(() => {
                 const [y, m, d] = addEventModal.date.split('-').map(Number)
                 const local = new Date(y, m - 1, d)
-                return `${addEventModal.date.replace(/-/g, '.')} (${local.toLocaleDateString('ko-KR', { weekday: 'short' })})`
+                const dateLocale = locale.startsWith('en') ? 'en-US' : 'ko-KR'
+                return `${addEventModal.date.replace(/-/g, '.')} (${local.toLocaleDateString(dateLocale, { weekday: 'short' })})`
               })()}
             </p>
             <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.8rem', color: '#64748b' }}>
-              이벤트명
+              {tr('comp.gantt.eventNameLabel')}
             </label>
             <input
               type="text"
               value={addEventModal.name}
               onChange={(e) => setAddEventModal((prev) => (prev ? { ...prev, name: e.target.value } : null))}
-              placeholder="예: 출시 목표, 검토 회의"
+              placeholder={tr('comp.gantt.eventNamePh')}
               autoFocus
               style={{
                 width: '100%',
@@ -2561,12 +2583,12 @@ export function GanttWorkspace({
                   cursor: 'pointer',
                 }}
               >
-                취소
+                {tr('comp.ui.cancel')}
               </button>
               <button
                 type="button"
                 onClick={async () => {
-                  const name = (addEventModal?.name ?? '').trim() || '이벤트'
+                  const name = (addEventModal?.name ?? '').trim() || tr('comp.gantt.defaultEventName')
                   const newEvent: GanttChartEvent = {
                     id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `ev-${Date.now()}`,
                     date: addEventModal!.date,
@@ -2605,7 +2627,7 @@ export function GanttWorkspace({
                   cursor: 'pointer',
                 }}
               >
-                저장
+                {tr('comp.ui.save')}
               </button>
             </div>
           </div>

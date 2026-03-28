@@ -1,5 +1,6 @@
 'use client'
 
+import { useI18n } from '@/lib/i18n'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { PriorityPolicy, SlaPolicy } from '@/types/ticket'
 
@@ -27,6 +28,7 @@ const EMPTY_SLA: SlaPolicy = {
 }
 
 export function TicketPoliciesView({ mode, isAdmin = false }: TicketPoliciesViewProps) {
+  const { t } = useI18n()
   const [priorityPolicies, setPriorityPolicies] = useState<PriorityPolicy[]>([])
   const [slaPolicies, setSlaPolicies] = useState<SlaPolicy[]>([])
   const [priorityForm, setPriorityForm] = useState<PriorityPolicy>(EMPTY_PRIORITY)
@@ -108,7 +110,7 @@ export function TicketPoliciesView({ mode, isAdmin = false }: TicketPoliciesView
           <p style={{ margin: '0.35rem 0 0', color: '#64748b', fontSize: '0.92rem' }}>{description}</p>
         </div>
         <button className="servicenow-button servicenow-button--secondary" onClick={() => void fetchData()}>
-          새로고침
+          {t('comp.ui.refresh')}
         </button>
       </div>
 
@@ -116,38 +118,38 @@ export function TicketPoliciesView({ mode, isAdmin = false }: TicketPoliciesView
         <div style={{ display: 'grid', gap: '0.75rem', gridTemplateColumns: isPriority ? 'repeat(6, minmax(0, 1fr))' : 'repeat(8, minmax(0, 1fr))', padding: '1rem', border: '1px solid #e5e7eb', borderRadius: 8, background: '#fff' }}>
           {isPriority ? (
             <>
-              <input className="servicenow-form-input" placeholder="정책명" value={priorityForm.name} onChange={(e) => setPriorityForm((prev) => ({ ...prev, name: e.target.value }))} />
-              <input className="servicenow-form-input" placeholder="Impact" value={priorityForm.impact} onChange={(e) => setPriorityForm((prev) => ({ ...prev, impact: e.target.value }))} />
-              <input className="servicenow-form-input" placeholder="Urgency" value={priorityForm.urgency} onChange={(e) => setPriorityForm((prev) => ({ ...prev, urgency: e.target.value }))} />
-              <input className="servicenow-form-input" placeholder="Priority" value={priorityForm.priority} onChange={(e) => setPriorityForm((prev) => ({ ...prev, priority: e.target.value }))} />
+              <input className="servicenow-form-input" placeholder={t('comp.ticketPolicies.phName')} value={priorityForm.name} onChange={(e) => setPriorityForm((prev) => ({ ...prev, name: e.target.value }))} />
+              <input className="servicenow-form-input" placeholder={t('comp.ticketPolicies.phImpact')} value={priorityForm.impact} onChange={(e) => setPriorityForm((prev) => ({ ...prev, impact: e.target.value }))} />
+              <input className="servicenow-form-input" placeholder={t('comp.ticketPolicies.phUrgency')} value={priorityForm.urgency} onChange={(e) => setPriorityForm((prev) => ({ ...prev, urgency: e.target.value }))} />
+              <input className="servicenow-form-input" placeholder={t('comp.ticketPolicies.phPriority')} value={priorityForm.priority} onChange={(e) => setPriorityForm((prev) => ({ ...prev, priority: e.target.value }))} />
               <button className="servicenow-button servicenow-button--primary" onClick={() => void post({ action: 'savePriority', policy: priorityForm })}>
-                {isEditingPriority ? '수정' : '추가'}
+                {isEditingPriority ? t('comp.ticketPolicies.edit') : t('comp.ticketPolicies.add')}
               </button>
               {isEditingPriority && (
                 <button className="servicenow-button servicenow-button--secondary" onClick={cancelEdit}>
-                  취소
+                  {t('comp.ui.cancel')}
                 </button>
               )}
             </>
           ) : (
             <>
-              <input className="servicenow-form-input" placeholder="정책명" value={slaForm.name} onChange={(e) => setSlaForm((prev) => ({ ...prev, name: e.target.value }))} />
+              <input className="servicenow-form-input" placeholder={t('comp.ticketPolicies.phName')} value={slaForm.name} onChange={(e) => setSlaForm((prev) => ({ ...prev, name: e.target.value }))} />
               <select className="servicenow-form-select" value={slaForm.ticket_type} onChange={(e) => setSlaForm((prev) => ({ ...prev, ticket_type: e.target.value as SlaPolicy['ticket_type'] }))}>
                 <option value="request">Request</option>
                 <option value="incident">Incident</option>
                 <option value="problem">Problem</option>
                 <option value="change">Change</option>
               </select>
-              <input className="servicenow-form-input" placeholder="Priority" value={slaForm.priority} onChange={(e) => setSlaForm((prev) => ({ ...prev, priority: e.target.value }))} />
-              <input className="servicenow-form-input" type="number" placeholder="응답(분)" value={slaForm.response_minutes} onChange={(e) => setSlaForm((prev) => ({ ...prev, response_minutes: Number(e.target.value) }))} />
-              <input className="servicenow-form-input" type="number" placeholder="해결(분)" value={slaForm.resolution_minutes} onChange={(e) => setSlaForm((prev) => ({ ...prev, resolution_minutes: Number(e.target.value) }))} />
-              <input className="servicenow-form-input" type="number" placeholder="에스컬레이션(분)" value={slaForm.escalation_minutes} onChange={(e) => setSlaForm((prev) => ({ ...prev, escalation_minutes: Number(e.target.value) }))} />
+              <input className="servicenow-form-input" placeholder={t('comp.ticketPolicies.phPriority')} value={slaForm.priority} onChange={(e) => setSlaForm((prev) => ({ ...prev, priority: e.target.value }))} />
+              <input className="servicenow-form-input" type="number" placeholder={t('comp.ticketPolicies.colResponse')} value={slaForm.response_minutes} onChange={(e) => setSlaForm((prev) => ({ ...prev, response_minutes: Number(e.target.value) }))} />
+              <input className="servicenow-form-input" type="number" placeholder={t('comp.ticketPolicies.colResolve')} value={slaForm.resolution_minutes} onChange={(e) => setSlaForm((prev) => ({ ...prev, resolution_minutes: Number(e.target.value) }))} />
+              <input className="servicenow-form-input" type="number" placeholder={t('comp.ticketPolicies.colEscalation')} value={slaForm.escalation_minutes} onChange={(e) => setSlaForm((prev) => ({ ...prev, escalation_minutes: Number(e.target.value) }))} />
               <button className="servicenow-button servicenow-button--primary" onClick={() => void post({ action: 'saveSla', policy: slaForm })}>
-                {isEditingSla ? '수정' : '추가'}
+                {isEditingSla ? t('comp.ticketPolicies.edit') : t('comp.ticketPolicies.add')}
               </button>
               {isEditingSla && (
                 <button className="servicenow-button servicenow-button--secondary" onClick={cancelEdit}>
-                  취소
+                  {t('comp.ui.cancel')}
                 </button>
               )}
             </>
@@ -160,33 +162,33 @@ export function TicketPoliciesView({ mode, isAdmin = false }: TicketPoliciesView
           <thead>
             {isPriority ? (
               <tr>
-                <th>정책명</th>
-                <th>Impact</th>
-                <th>Urgency</th>
-                <th>Priority</th>
-                <th>활성</th>
-                {isAdmin && <th>수정</th>}
-                {isAdmin && <th>삭제</th>}
+                <th>{t('comp.ticketPolicies.colName')}</th>
+                <th>{t('comp.ticketPolicies.phImpact')}</th>
+                <th>{t('comp.ticketPolicies.phUrgency')}</th>
+                <th>{t('comp.ticketPolicies.phPriority')}</th>
+                <th>{t('comp.ticketPolicies.active')}</th>
+                {isAdmin && <th>{t('comp.ticketPolicies.edit')}</th>}
+                {isAdmin && <th>{t('comp.ticketPolicies.delete')}</th>}
               </tr>
             ) : (
               <tr>
-                <th>정책명</th>
-                <th>유형</th>
-                <th>Priority</th>
-                <th>응답(분)</th>
-                <th>해결(분)</th>
-                <th>에스컬레이션(분)</th>
-                <th>활성</th>
-                {isAdmin && <th>수정</th>}
-                {isAdmin && <th>삭제</th>}
+                <th>{t('comp.ticketPolicies.colName')}</th>
+                <th>{t('comp.ticketPolicies.colType')}</th>
+                <th>{t('comp.ticketPolicies.phPriority')}</th>
+                <th>{t('comp.ticketPolicies.colResponse')}</th>
+                <th>{t('comp.ticketPolicies.colResolve')}</th>
+                <th>{t('comp.ticketPolicies.colEscalation')}</th>
+                <th>{t('comp.ticketPolicies.active')}</th>
+                {isAdmin && <th>{t('comp.ticketPolicies.edit')}</th>}
+                {isAdmin && <th>{t('comp.ticketPolicies.delete')}</th>}
               </tr>
             )}
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={isPriority ? (isAdmin ? 7 : 5) : (isAdmin ? 9 : 7)} style={{ textAlign: 'center' }}>로딩 중...</td></tr>
+              <tr><td colSpan={isPriority ? (isAdmin ? 7 : 5) : (isAdmin ? 9 : 7)} style={{ textAlign: 'center' }}>{t('comp.ticketPolicies.loading')}</td></tr>
             ) : rows.length === 0 ? (
-              <tr><td colSpan={isPriority ? (isAdmin ? 7 : 5) : (isAdmin ? 9 : 7)} style={{ textAlign: 'center', color: '#64748b' }}>정의된 정책이 없습니다.</td></tr>
+              <tr><td colSpan={isPriority ? (isAdmin ? 7 : 5) : (isAdmin ? 9 : 7)} style={{ textAlign: 'center', color: '#64748b' }}>{t('comp.ticketPolicies.empty')}</td></tr>
             ) : (
               rows.map((row: any) => (
                 <tr key={`${mode}-${row.id}`}>
@@ -200,14 +202,14 @@ export function TicketPoliciesView({ mode, isAdmin = false }: TicketPoliciesView
                       {isAdmin && (
                         <td>
                           <button className="servicenow-button servicenow-button--secondary servicenow-button--sm" onClick={() => startEditPriority(row)}>
-                            수정
+                            {t('comp.ticketPolicies.edit')}
                           </button>
                         </td>
                       )}
                       {isAdmin && (
                         <td>
                           <button className="servicenow-button servicenow-button--danger servicenow-button--sm" onClick={() => void post({ action: 'deletePriority', id: row.id })}>
-                            삭제
+                            {t('comp.ticketPolicies.delete')}
                           </button>
                         </td>
                       )}
@@ -223,14 +225,14 @@ export function TicketPoliciesView({ mode, isAdmin = false }: TicketPoliciesView
                       {isAdmin && (
                         <td>
                           <button className="servicenow-button servicenow-button--secondary servicenow-button--sm" onClick={() => startEditSla(row)}>
-                            수정
+                            {t('comp.ticketPolicies.edit')}
                           </button>
                         </td>
                       )}
                       {isAdmin && (
                         <td>
                           <button className="servicenow-button servicenow-button--danger servicenow-button--sm" onClick={() => void post({ action: 'deleteSla', id: row.id })}>
-                            삭제
+                            {t('comp.ticketPolicies.delete')}
                           </button>
                         </td>
                       )}

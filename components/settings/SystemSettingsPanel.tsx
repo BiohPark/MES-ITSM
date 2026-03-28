@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { useI18n } from '@/lib/i18n'
 
 interface SystemSettingsPanelProps {
   onBack?: () => void
@@ -13,6 +14,7 @@ export function SystemSettingsPanel({
   onClose,
   embedInPanel,
 }: SystemSettingsPanelProps) {
+  const { t } = useI18n()
   const [backupRetentionDays, setBackupRetentionDays] = useState<number>(10)
   const [backupListLimit, setBackupListLimit] = useState<number>(50)
   const [backupScheduleIntervalHours, setBackupScheduleIntervalHours] = useState<number>(1)
@@ -21,11 +23,7 @@ export function SystemSettingsPanel({
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<{ type: 'ok' | 'error'; text: string } | null>(null)
 
-  useEffect(() => {
-    loadSettings()
-  }, [])
-
-  const loadSettings = async () => {
+  const loadSettings = useCallback(async () => {
     try {
       setLoading(true)
       const res = await fetch('/api/settings')
@@ -50,31 +48,35 @@ export function SystemSettingsPanel({
       }
     } catch (e) {
       console.error(e)
-      setMessage({ type: 'error', text: '설정을 불러오지 못했습니다.' })
+      setMessage({ type: 'error', text: t('comp.systemSettings.loadFail') })
     } finally {
       setLoading(false)
     }
-  }
+  }, [t])
+
+  useEffect(() => {
+    loadSettings()
+  }, [loadSettings])
 
   const handleSave = async () => {
     const days = Math.round(Number(backupRetentionDays))
     if (!Number.isFinite(days) || days < 0 || days > 365) {
-      setMessage({ type: 'error', text: '백업 보관 일수는 0~365 사이로 입력하세요.' })
+      setMessage({ type: 'error', text: t('comp.systemSettings.errRetention') })
       return
     }
     const limit = Math.round(Number(backupListLimit))
     if (!Number.isFinite(limit) || limit < 1 || limit > 500) {
-      setMessage({ type: 'error', text: '백업 목록 limit은 1~500 사이로 입력하세요.' })
+      setMessage({ type: 'error', text: t('comp.systemSettings.errListLimit') })
       return
     }
     const hours = Number(backupScheduleIntervalHours)
     if (!Number.isFinite(hours) || hours < 0.25 || hours > 168) {
-      setMessage({ type: 'error', text: '자동 백업 주기는 0.25~168(시간) 사이로 입력하세요.' })
+      setMessage({ type: 'error', text: t('comp.systemSettings.errBackupHours') })
       return
     }
     const sec = Math.round(Number(meetingAutosaveIntervalSec))
     if (!Number.isFinite(sec) || sec < 30 || sec > 600) {
-      setMessage({ type: 'error', text: '회의록 자동 저장 주기는 30~600(초) 사이로 입력하세요.' })
+      setMessage({ type: 'error', text: t('comp.systemSettings.errAutosaveSec') })
       return
     }
     try {
@@ -96,17 +98,19 @@ export function SystemSettingsPanel({
         setBackupListLimit(data.backup_list_limit ?? limit)
         setBackupScheduleIntervalHours(data.backup_schedule_interval_hours ?? hours)
         setMeetingAutosaveIntervalSec(data.meeting_autosave_interval_sec ?? sec)
-        setMessage({ type: 'ok', text: '저장되었습니다. 자동 백업 주기는 서버 재시작 후 적용됩니다.' })
+        setMessage({ type: 'ok', text: t('comp.systemSettings.saveOk') })
       } else {
-        setMessage({ type: 'error', text: data.error || '저장에 실패했습니다.' })
+        setMessage({ type: 'error', text: data.error || t('comp.systemSettings.saveFail') })
       }
     } catch (e) {
       console.error(e)
-      setMessage({ type: 'error', text: '저장 중 오류가 발생했습니다.' })
+      setMessage({ type: 'error', text: t('comp.systemSettings.saveError') })
     } finally {
       setSaving(false)
     }
   }
+
+  const backLabel = t('comp.userMgmt.back')
 
   if (loading) {
     return (
@@ -124,10 +128,10 @@ export function SystemSettingsPanel({
               fontSize: '0.875rem',
             }}
           >
-            ← 설정 목록
+            {backLabel}
           </button>
         )}
-        <p>로딩 중...</p>
+        <p>{t('comp.systemSettings.loading')}</p>
       </div>
     )
   }
@@ -147,16 +151,16 @@ export function SystemSettingsPanel({
             fontSize: '0.875rem',
           }}
         >
-          ← 설정 목록
+          {backLabel}
         </button>
       )}
       <h3 style={{ marginBottom: '1rem', fontSize: '1.1rem', fontWeight: 600 }}>
-        시스템 설정
+        {t('comp.systemSettings.pageTitle')}
       </h3>
 
       <div className="form-group" style={{ marginBottom: '1rem' }}>
         <label htmlFor="backup-retention-days">
-          백업 보관 일수 (이 기간이 지난 백업 파일은 자동 삭제됩니다)
+          {t('comp.systemSettings.backupRetentionLabel')}
         </label>
         <input
           id="backup-retention-days"
@@ -169,12 +173,12 @@ export function SystemSettingsPanel({
           style={{ maxWidth: '120px' }}
         />
         <span style={{ marginLeft: '0.5rem', color: '#6b7280', fontSize: '0.875rem' }}>
-          일 (0~365)
+          {t('comp.systemSettings.unitDays')}
         </span>
       </div>
 
       <div className="form-group" style={{ marginBottom: '1rem' }}>
-        <label htmlFor="backup-list-limit">백업 목록 조회 개수</label>
+        <label htmlFor="backup-list-limit">{t('comp.systemSettings.backupListLimitLabel')}</label>
         <input
           id="backup-list-limit"
           type="number"
@@ -186,12 +190,14 @@ export function SystemSettingsPanel({
           style={{ maxWidth: '120px' }}
         />
         <span style={{ marginLeft: '0.5rem', color: '#6b7280', fontSize: '0.875rem' }}>
-          개 (1~500)
+          {t('comp.systemSettings.unitCount')}
         </span>
       </div>
 
       <div className="form-group" style={{ marginBottom: '1rem' }}>
-        <label htmlFor="backup-schedule-interval-hours">자동 백업 실행 주기 (시간)</label>
+        <label htmlFor="backup-schedule-interval-hours">
+          {t('comp.systemSettings.backupScheduleLabel')}
+        </label>
         <input
           id="backup-schedule-interval-hours"
           type="number"
@@ -204,12 +210,14 @@ export function SystemSettingsPanel({
           style={{ maxWidth: '120px' }}
         />
         <span style={{ marginLeft: '0.5rem', color: '#6b7280', fontSize: '0.875rem' }}>
-          시간 (0.25~168, 서버 재시작 후 적용)
+          {t('comp.systemSettings.unitHoursHint')}
         </span>
       </div>
 
       <div className="form-group" style={{ marginBottom: '1rem' }}>
-        <label htmlFor="meeting-autosave-interval-sec">회의록 자동 저장 주기 (초)</label>
+        <label htmlFor="meeting-autosave-interval-sec">
+          {t('comp.systemSettings.meetingAutosaveLabel')}
+        </label>
         <input
           id="meeting-autosave-interval-sec"
           type="number"
@@ -221,7 +229,7 @@ export function SystemSettingsPanel({
           style={{ maxWidth: '120px' }}
         />
         <span style={{ marginLeft: '0.5rem', color: '#6b7280', fontSize: '0.875rem' }}>
-          초 (30~600)
+          {t('comp.systemSettings.unitSecHint')}
         </span>
       </div>
 
@@ -245,7 +253,7 @@ export function SystemSettingsPanel({
           disabled={saving}
           style={{ opacity: saving ? 0.6 : 1, cursor: saving ? 'not-allowed' : 'pointer' }}
         >
-          {saving ? '저장 중...' : '저장'}
+          {saving ? t('comp.systemSettings.saveSaving') : t('comp.systemSettings.saveBtn')}
         </button>
       </div>
     </div>

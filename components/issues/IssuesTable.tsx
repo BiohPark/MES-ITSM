@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
 import type { Issue } from '@/types/issue'
 import { StatusBadge } from '../common/StatusBadge'
+import { useI18n } from '@/lib/i18n'
 
 export function IssuesTable({
   issues,
@@ -29,10 +29,11 @@ export function IssuesTable({
   onDeleteModeChange: (enabled: boolean) => void
   onBatchDelete: () => void
 }) {
+  const { t } = useI18n()
   if (loading) {
     return (
       <div className="placeholder">
-        <p>데이터를 불러오는 중...</p>
+        <p>{t('comp.ui.loading')}</p>
       </div>
     )
   }
@@ -40,9 +41,9 @@ export function IssuesTable({
   if (error) {
     return (
       <div className="placeholder">
-        <p style={{ color: '#e74c3c' }}>오류: {error}</p>
+        <p style={{ color: '#e74c3c' }}>{t('comp.ui.errorPrefix')} {error}</p>
         <button onClick={onRefresh} className="refresh-button">
-          다시 시도
+          {t('comp.ui.retry')}
         </button>
       </div>
     )
@@ -51,10 +52,10 @@ export function IssuesTable({
   return (
     <div className="table-wrapper">
       <div className="table-header">
-        <h2>이슈 목록</h2>
+        <h2>{t('comp.issuesTable.title')}</h2>
         <div className="table-actions">
           <button onClick={onRefresh} className="refresh-button">
-            새로고침
+            {t('comp.ui.refresh')}
           </button>
           {!isDeleteMode ? (
             <>
@@ -66,7 +67,7 @@ export function IssuesTable({
                 className="primary-button"
                 style={{ backgroundColor: '#e74c3c' }}
               >
-                삭제
+                {t('comp.ui.delete')}
               </button>
             </>
           ) : (
@@ -77,7 +78,7 @@ export function IssuesTable({
                 }}
                 className="refresh-button"
               >
-                취소
+                {t('comp.ui.cancel')}
               </button>
               {selectedIssueIds.size > 0 && (
                 <button
@@ -85,7 +86,7 @@ export function IssuesTable({
                   className="primary-button"
                   style={{ backgroundColor: '#e74c3c' }}
                 >
-                  선택 삭제 ({selectedIssueIds.size})
+                  {t('comp.issuesTable.batchDelete', { n: selectedIssueIds.size })}
                 </button>
               )}
             </>
@@ -94,26 +95,26 @@ export function IssuesTable({
       </div>
       {issues.length === 0 ? (
         <div className="placeholder">
-          <p>등록된 이슈가 없습니다.</p>
+          <p>{t('comp.issuesTable.noIssues')}</p>
         </div>
       ) : (
         <table>
           <thead>
             <tr>
               {isDeleteMode && <th style={{ width: '40px' }}></th>}
-              <th>이슈 ID</th>
-              <th>제목</th>
-              <th>상태</th>
-              <th>담당자</th>
-              <th>발생일</th>
-              <th>마감일</th>
-              <th>S/W 버전</th>
-              <th>원인 분류</th>
-              <th>모듈</th>
-              <th>Deviation</th>
-              <th>관련 이슈</th>
-              <th>해결일</th>
-              <th>해결 S/W 버전</th>
+              <th>{t('comp.issuesTable.colId')}</th>
+              <th>{t('comp.issuesTable.colTitle')}</th>
+              <th>{t('comp.issuesTable.colStatus')}</th>
+              <th>{t('comp.issuesTable.colOwner')}</th>
+              <th>{t('comp.issuesTable.colOccurred')}</th>
+              <th>{t('comp.issuesTable.colDue')}</th>
+              <th>{t('comp.issuesTable.colSwShort')}</th>
+              <th>{t('comp.issuesTable.colCause')}</th>
+              <th>{t('comp.issuesTable.colModule')}</th>
+              <th>{t('comp.issuesTable.colDeviation')}</th>
+              <th>{t('comp.issuesTable.colRelated')}</th>
+              <th>{t('comp.issuesTable.colResolved')}</th>
+              <th>{t('comp.issuesTable.colSw')}</th>
             </tr>
           </thead>
           <tbody>

@@ -4,16 +4,18 @@ export const dynamic = 'force-dynamic'
 
 import { Suspense, useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { useI18n } from '@/lib/i18n'
 
 export default function ResetPasswordPage() {
   return (
-    <Suspense fallback={<div>Loading...</div>}>
+    <Suspense fallback={<div style={{ padding: '2rem', textAlign: 'center' }}>Loading...</div>}>
       <ResetPasswordContent />
     </Suspense>
   )
 }
 
 function ResetPasswordContent() {
+  const { t } = useI18n()
   const router = useRouter()
   const searchParams = useSearchParams()
   const [step, setStep] = useState<'request' | 'reset'>('request')
@@ -55,7 +57,7 @@ function ResetPasswordContent() {
       const data = await response.json()
 
       if (!response.ok) {
-        setError(data.error || '비밀번호 재설정 요청에 실패했습니다.')
+        setError(data.error || t('auth.reset.errorRequest'))
         setLoading(false)
         return
       }
@@ -67,7 +69,7 @@ function ResetPasswordContent() {
       setLoading(false)
     } catch (error) {
       console.error('Request reset error:', error)
-      setError('비밀번호 재설정 요청 중 오류가 발생했습니다.')
+      setError(t('auth.reset.errorRequestGeneric'))
       setLoading(false)
     }
   }
@@ -78,12 +80,12 @@ function ResetPasswordContent() {
     setSuccess('')
 
     if (password !== confirmPassword) {
-      setError('비밀번호가 일치하지 않습니다.')
+      setError(t('auth.reset.errorPasswordMismatch'))
       return
     }
 
     if (password.length < 8) {
-      setError('비밀번호는 최소 8자 이상이어야 합니다.')
+      setError(t('auth.reset.errorPasswordLength'))
       return
     }
 
@@ -105,18 +107,18 @@ function ResetPasswordContent() {
       const data = await response.json()
 
       if (!response.ok) {
-        setError(data.error || '비밀번호 재설정에 실패했습니다.')
+        setError(data.error || t('auth.reset.errorReset'))
         setLoading(false)
         return
       }
 
-      setSuccess('비밀번호가 성공적으로 변경되었습니다. 로그인 페이지로 이동합니다.')
+      setSuccess(t('auth.reset.successReset'))
       setTimeout(() => {
         router.push('/login')
       }, 2000)
     } catch (error) {
       console.error('Reset password error:', error)
-      setError('비밀번호 재설정 중 오류가 발생했습니다.')
+      setError(t('auth.reset.errorResetGeneric'))
       setLoading(false)
     }
   }
@@ -146,7 +148,7 @@ function ResetPasswordContent() {
             textAlign: 'center',
             color: '#111827',
           }}>
-            비밀번호 찾기
+            {t('auth.reset.requestTitle')}
           </h1>
           <p style={{
             fontSize: '0.875rem',
@@ -154,7 +156,7 @@ function ResetPasswordContent() {
             textAlign: 'center',
             marginBottom: '2rem',
           }}>
-            이메일 주소를 입력하세요
+            {t('auth.reset.requestSubtitle')}
           </p>
 
           {error && (
@@ -184,10 +186,10 @@ function ResetPasswordContent() {
               {success}
               {resetToken && (
                 <div style={{ marginTop: '0.5rem', fontSize: '0.75rem' }}>
-                  <strong>개발용 토큰:</strong> {resetToken}
+                  <strong>{t('auth.reset.devToken')}</strong> {resetToken}
                   <br />
                   <a href={`/reset-password?token=${resetToken}`} style={{ color: '#059669', textDecoration: 'underline' }}>
-                    이 링크를 클릭하여 비밀번호를 재설정하세요
+                    {t('auth.reset.devLinkText')}
                   </a>
                 </div>
               )}
@@ -203,7 +205,7 @@ function ResetPasswordContent() {
                 color: '#374151',
                 marginBottom: '0.5rem',
               }}>
-                이메일
+                {t('auth.reset.email')}
               </label>
               <input
                 type="email"
@@ -219,7 +221,7 @@ function ResetPasswordContent() {
                   fontSize: '1rem',
                   boxSizing: 'border-box',
                 }}
-                placeholder="이메일을 입력하세요"
+                placeholder={t('auth.reset.placeholderEmail')}
               />
             </div>
 
@@ -239,7 +241,7 @@ function ResetPasswordContent() {
                 marginBottom: '1rem',
               }}
             >
-              {loading ? '전송 중...' : '비밀번호 재설정 링크 전송'}
+              {loading ? t('auth.reset.sending') : t('auth.reset.sendLink')}
             </button>
           </form>
 
@@ -255,7 +257,7 @@ function ResetPasswordContent() {
                 fontWeight: 500,
               }}
             >
-              로그인으로 돌아가기
+              {t('auth.reset.backToLogin')}
             </a>
           </div>
         </div>
@@ -287,7 +289,7 @@ function ResetPasswordContent() {
           textAlign: 'center',
           color: '#111827',
         }}>
-          비밀번호 재설정
+          {t('auth.reset.resetTitle')}
         </h1>
         <p style={{
           fontSize: '0.875rem',
@@ -295,7 +297,7 @@ function ResetPasswordContent() {
           textAlign: 'center',
           marginBottom: '2rem',
         }}>
-          새로운 비밀번호를 입력하세요
+          {t('auth.reset.resetSubtitle')}
         </p>
 
         {error && (
@@ -335,7 +337,7 @@ function ResetPasswordContent() {
               color: '#374151',
               marginBottom: '0.5rem',
             }}>
-              새 비밀번호 * (최소 8자, 영문자와 숫자 포함)
+              {t('auth.reset.newPassword')}
             </label>
             <input
               type="password"
@@ -351,7 +353,7 @@ function ResetPasswordContent() {
                 fontSize: '1rem',
                 boxSizing: 'border-box',
               }}
-              placeholder="새 비밀번호를 입력하세요"
+              placeholder={t('auth.reset.placeholderNew')}
             />
           </div>
 
@@ -363,7 +365,7 @@ function ResetPasswordContent() {
               color: '#374151',
               marginBottom: '0.5rem',
             }}>
-              비밀번호 확인 *
+              {t('auth.reset.confirmPassword')}
             </label>
             <input
               type="password"
@@ -379,7 +381,7 @@ function ResetPasswordContent() {
                 fontSize: '1rem',
                 boxSizing: 'border-box',
               }}
-              placeholder="비밀번호를 다시 입력하세요"
+              placeholder={t('auth.reset.placeholderConfirm')}
             />
           </div>
 
@@ -399,7 +401,7 @@ function ResetPasswordContent() {
               marginBottom: '1rem',
             }}
           >
-            {loading ? '변경 중...' : '비밀번호 변경'}
+            {loading ? t('auth.reset.changing') : t('auth.reset.changePassword')}
           </button>
         </form>
 
@@ -415,7 +417,7 @@ function ResetPasswordContent() {
               fontWeight: 500,
             }}
           >
-            로그인으로 돌아가기
+            {t('auth.reset.backToLogin')}
           </a>
         </div>
       </div>

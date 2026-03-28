@@ -1,16 +1,17 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useI18n } from '@/lib/i18n'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import type { VocFeedback } from '@/lib/voc'
 
-const CATEGORIES = [
+const CATEGORY_VALUES = [
   'UI/UX 개선',
   '기능 요청',
   '버그 신고',
   '성능 문제',
   '사용성 개선',
   '기타',
-]
+] as const
 
 const PRIORITIES = ['Low', 'Medium', 'High', 'Critical']
 const STATUSES = ['Open', 'In Progress', 'Resolved', 'Closed']
@@ -20,6 +21,21 @@ interface VocViewProps {
 }
 
 export function VocView({ currentUser }: VocViewProps) {
+  const { t, locale } = useI18n()
+  const dateLocale = locale.startsWith('en') ? 'en-US' : 'ko-KR'
+
+  const categoryLabel = useMemo(() => {
+    const m: Record<string, string> = {
+      'UI/UX 개선': t('comp.voc.catUi'),
+      '기능 요청': t('comp.voc.catFeature'),
+      '버그 신고': t('comp.voc.catBug'),
+      '성능 문제': t('comp.voc.catPerf'),
+      '사용성 개선': t('comp.voc.catUx'),
+      기타: t('comp.voc.catOther'),
+    }
+    return (v: string) => m[v] || v
+  }, [t])
+
   const [feedbacks, setFeedbacks] = useState<VocFeedback[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -27,7 +43,7 @@ export function VocView({ currentUser }: VocViewProps) {
   const [selectedFeedback, setSelectedFeedback] = useState<VocFeedback | null>(null)
   const [filterStatus, setFilterStatus] = useState<string>('')
   const [formData, setFormData] = useState({
-    category: '기타',
+    category: '기타' as string,
     title: '',
     content: '',
     priority: 'Medium',
@@ -43,35 +59,29 @@ export function VocView({ currentUser }: VocViewProps) {
       if (filterStatus) {
         params.append('status', filterStatus)
       }
-      // 모든 권한에서 모든 피드백을 볼 수 있도록 수정
-      // 특정 사용자의 피드백만 보려면 아래 주석을 해제하고 userId를 전달
-      // if (!isAdmin) {
-      //   params.append('userId', currentUser?.username || '')
-      // }
 
       const response = await fetch(`/api/voc?${params.toString()}`)
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        const errorMessage = errorData.error || '피드백 조회에 실패했습니다.'
-        
-        // 테이블이 없는 경우 특별 처리
+        const errorMessage = errorData.error || t('comp.voc.fetchFail')
+
         if (errorData.code === 'TABLE_NOT_FOUND') {
-          throw new Error(`${errorMessage}\n\n터미널에서 다음 명령어를 실행해주세요:\nnpm run add-voc-table`)
+          throw new Error(`${errorMessage}${t('comp.voc.tableNotFoundExtra')}`)
         }
-        
+
         throw new Error(errorMessage)
       }
       const data = await response.json()
       setFeedbacks(data)
     } catch (err) {
-      setError(err instanceof Error ? err.message : '오류가 발생했습니다.')
+      setError(err instanceof Error ? err.message : t('comp.voc.genericError'))
     } finally {
       setLoading(false)
     }
-  }, [filterStatus, isAdmin, currentUser])
+  }, [filterStatus, t])
 
   useEffect(() => {
-    fetchFeedbacks()
+    void fetchFeedbacks()
   }, [fetchFeedbacks])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -88,15 +98,15 @@ export function VocView({ currentUser }: VocViewProps) {
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.error || '피드백 제출에 실패했습니다.')
+        throw new Error(errorData.error || t('comp.voc.submitFail'))
       }
 
       setShowForm(false)
       setFormData({ category: '기타', title: '', content: '', priority: 'Medium' })
       await fetchFeedbacks()
-      alert('피드백이 제출되었습니다.')
+      alert(t('comp.voc.submitOk'))
     } catch (err) {
-      alert(err instanceof Error ? err.message : '오류가 발생했습니다.')
+      alert(err instanceof Error ? err.message : t('comp.voc.genericError'))
     }
   }
 
@@ -114,20 +124,20 @@ export function VocView({ currentUser }: VocViewProps) {
       })
 
       if (!response.ok) {
-        throw new Error('상태 업데이트에 실패했습니다.')
+        throw new Error(t('comp.voc.statusFail'))
       }
 
       setSelectedFeedback(null)
       setAdminResponse('')
       await fetchFeedbacks()
     } catch (err) {
-      alert(err instanceof Error ? err.message : '오류가 발생했습니다.')
+      alert(err instanceof Error ? err.message : t('comp.voc.genericError'))
     }
   }
 
   const formatDate = (date: Date | string) => {
     const d = typeof date === 'string' ? new Date(date) : date
-    return d.toLocaleString('ko-KR')
+    return d.toLocaleString(dateLocale)
   }
 
   const getStatusColor = (status: string) => {
@@ -163,7 +173,7 @@ export function VocView({ currentUser }: VocViewProps) {
   if (loading) {
     return (
       <div className="placeholder">
-        <p>데이터를 불러오는 중...</p>
+        <p>{t('comp.voc.loading')}</p>
       </div>
     )
   }
@@ -171,7 +181,7 @@ export function VocView({ currentUser }: VocViewProps) {
   return (
     <div className="table-wrapper">
       <div className="table-header">
-        <h2>VOC 관리</h2>
+        <h2>{t('comp.voc.title')}</h2>
         <div className="table-actions">
           {isAdmin && (
             <select
@@ -184,7 +194,7 @@ export function VocView({ currentUser }: VocViewProps) {
                 fontSize: '0.875rem',
               }}
             >
-              <option value="">전체 상태</option>
+              <option value="">{t('comp.voc.allStatus')}</option>
               {STATUSES.map((status) => (
                 <option key={status} value={status}>
                   {status}
@@ -196,27 +206,29 @@ export function VocView({ currentUser }: VocViewProps) {
             onClick={() => setShowForm(!showForm)}
             className="primary-button"
           >
-            {showForm ? '취소' : '피드백 제출'}
+            {showForm ? t('comp.voc.cancel') : t('comp.voc.newSubmit')}
           </button>
-          <button onClick={fetchFeedbacks} className="refresh-button">
-            새로고침
+          <button onClick={() => void fetchFeedbacks()} className="refresh-button">
+            {t('comp.ui.refresh')}
           </button>
         </div>
       </div>
 
       {error && (
         <div className="placeholder">
-          <p style={{ color: '#e74c3c' }}>오류: {error}</p>
+          <p style={{ color: '#e74c3c' }}>
+            {t('comp.voc.errorLine')} {error}
+          </p>
         </div>
       )}
 
       {showForm && (
         <div style={{ marginBottom: '2rem', padding: '1.5rem', background: '#f9fafb', borderRadius: '0.5rem' }}>
-          <h3 style={{ marginBottom: '1rem' }}>새 피드백 제출</h3>
+          <h3 style={{ marginBottom: '1rem' }}>{t('comp.voc.newSubmit')}</h3>
           <form onSubmit={handleSubmit}>
             <div style={{ marginBottom: '1rem' }}>
               <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500 }}>
-                카테고리
+                {t('comp.voc.category')}
               </label>
               <select
                 value={formData.category}
@@ -224,16 +236,16 @@ export function VocView({ currentUser }: VocViewProps) {
                 className="form-input"
                 required
               >
-                {CATEGORIES.map((cat) => (
+                {CATEGORY_VALUES.map((cat) => (
                   <option key={cat} value={cat}>
-                    {cat}
+                    {categoryLabel(cat)}
                   </option>
                 ))}
               </select>
             </div>
             <div style={{ marginBottom: '1rem' }}>
               <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500 }}>
-                우선순위
+                {t('comp.voc.priority')}
               </label>
               <select
                 value={formData.priority}
@@ -249,7 +261,7 @@ export function VocView({ currentUser }: VocViewProps) {
             </div>
             <div style={{ marginBottom: '1rem' }}>
               <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500 }}>
-                제목
+                {t('comp.voc.vocTitle')}
               </label>
               <input
                 type="text"
@@ -261,7 +273,7 @@ export function VocView({ currentUser }: VocViewProps) {
             </div>
             <div style={{ marginBottom: '1rem' }}>
               <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500 }}>
-                내용
+                {t('comp.voc.content')}
               </label>
               <textarea
                 value={formData.content}
@@ -272,7 +284,7 @@ export function VocView({ currentUser }: VocViewProps) {
               />
             </div>
             <button type="submit" className="primary-button">
-              제출
+              {t('comp.voc.submit')}
             </button>
           </form>
         </div>
@@ -280,20 +292,20 @@ export function VocView({ currentUser }: VocViewProps) {
 
       {feedbacks.length === 0 ? (
         <div className="placeholder">
-          <p>피드백이 없습니다.</p>
+          <p>{t('comp.voc.empty')}</p>
         </div>
       ) : (
         <table>
           <thead>
             <tr>
-              <th>ID</th>
-              <th>카테고리</th>
-              <th>제목</th>
-              <th>작성자</th>
-              <th>우선순위</th>
-              <th>상태</th>
-              <th>작성일</th>
-              {isAdmin && <th>관리</th>}
+              <th>{t('comp.voc.tableId')}</th>
+              <th>{t('comp.voc.category')}</th>
+              <th>{t('comp.voc.vocTitle')}</th>
+              <th>{t('comp.voc.author')}</th>
+              <th>{t('comp.voc.priority')}</th>
+              <th>{t('comp.voc.colStatus')}</th>
+              <th>{t('comp.voc.created')}</th>
+              {isAdmin && <th>{t('comp.voc.manage')}</th>}
             </tr>
           </thead>
           <tbody>
@@ -305,7 +317,7 @@ export function VocView({ currentUser }: VocViewProps) {
                 style={{ cursor: 'pointer' }}
               >
                 <td>#{feedback.id}</td>
-                <td>{feedback.category}</td>
+                <td>{categoryLabel(feedback.category)}</td>
                 <td>
                   <p className="project-name">{feedback.title}</p>
                 </td>
@@ -346,7 +358,7 @@ export function VocView({ currentUser }: VocViewProps) {
                       className="primary-button"
                       style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
                     >
-                      상세
+                      {t('comp.voc.detail')}
                     </button>
                   </td>
                 )}
@@ -360,23 +372,23 @@ export function VocView({ currentUser }: VocViewProps) {
         <div className="modal-overlay" onClick={() => setSelectedFeedback(null)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '800px' }}>
             <div className="modal-header">
-              <h2>피드백 상세</h2>
+              <h2>{t('comp.voc.detailTitle')}</h2>
               <button className="modal-close" onClick={() => setSelectedFeedback(null)}>
                 ×
               </button>
             </div>
             <div style={{ padding: '1.5rem' }}>
               <div style={{ marginBottom: '1rem' }}>
-                <strong>제목:</strong> {selectedFeedback.title}
+                <strong>{t('comp.voc.labelTitleStrong')}</strong> {selectedFeedback.title}
               </div>
               <div style={{ marginBottom: '1rem' }}>
-                <strong>카테고리:</strong> {selectedFeedback.category}
+                <strong>{t('comp.voc.labelCategoryStrong')}</strong> {categoryLabel(selectedFeedback.category)}
               </div>
               <div style={{ marginBottom: '1rem' }}>
-                <strong>작성자:</strong> {selectedFeedback.user_name}
+                <strong>{t('comp.voc.labelAuthorStrong')}</strong> {selectedFeedback.user_name}
               </div>
               <div style={{ marginBottom: '1rem' }}>
-                <strong>우선순위:</strong>{' '}
+                <strong>{t('comp.voc.labelPriorityStrong')}</strong>{' '}
                 <span
                   style={{
                     padding: '0.25rem 0.5rem',
@@ -391,7 +403,7 @@ export function VocView({ currentUser }: VocViewProps) {
                 </span>
               </div>
               <div style={{ marginBottom: '1rem' }}>
-                <strong>상태:</strong>{' '}
+                <strong>{t('comp.voc.labelStatusStrong')}</strong>{' '}
                 <span
                   style={{
                     padding: '0.25rem 0.5rem',
@@ -406,14 +418,14 @@ export function VocView({ currentUser }: VocViewProps) {
                 </span>
               </div>
               <div style={{ marginBottom: '1rem' }}>
-                <strong>내용:</strong>
+                <strong>{t('comp.voc.labelContentStrong')}</strong>
                 <div style={{ marginTop: '0.5rem', padding: '1rem', background: '#f9fafb', borderRadius: '0.5rem', whiteSpace: 'pre-wrap' }}>
                   {selectedFeedback.content}
                 </div>
               </div>
               {selectedFeedback.admin_response && (
                 <div style={{ marginBottom: '1rem' }}>
-                  <strong>관리자 응답:</strong>
+                  <strong>{t('comp.voc.labelAdminReplyStrong')}</strong>
                   <div style={{ marginTop: '0.5rem', padding: '1rem', background: '#eff6ff', borderRadius: '0.5rem', whiteSpace: 'pre-wrap' }}>
                     {selectedFeedback.admin_response}
                   </div>
@@ -423,37 +435,37 @@ export function VocView({ currentUser }: VocViewProps) {
                 <>
                   <div style={{ marginBottom: '1rem' }}>
                     <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500 }}>
-                      관리자 응답
+                      {t('comp.voc.adminReplyLabel')}
                     </label>
                     <textarea
                       value={adminResponse}
                       onChange={(e) => setAdminResponse(e.target.value)}
                       className="form-input"
                       rows={4}
-                      placeholder="응답을 입력하세요..."
+                      placeholder={t('comp.voc.replyPh')}
                     />
                   </div>
                   <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                     <button
-                      onClick={() => handleUpdateStatus(selectedFeedback.id, 'In Progress')}
+                      onClick={() => void handleUpdateStatus(selectedFeedback.id, 'In Progress')}
                       className="primary-button"
                       disabled={selectedFeedback.status === 'In Progress'}
                     >
-                      진행 중
+                      {t('comp.voc.stProgress')}
                     </button>
                     <button
-                      onClick={() => handleUpdateStatus(selectedFeedback.id, 'Resolved', adminResponse)}
+                      onClick={() => void handleUpdateStatus(selectedFeedback.id, 'Resolved', adminResponse)}
                       className="primary-button"
                       style={{ backgroundColor: '#10b981' }}
                     >
-                      해결됨
+                      {t('comp.voc.stResolved')}
                     </button>
                     <button
-                      onClick={() => handleUpdateStatus(selectedFeedback.id, 'Closed', adminResponse)}
+                      onClick={() => void handleUpdateStatus(selectedFeedback.id, 'Closed', adminResponse)}
                       className="primary-button"
                       style={{ backgroundColor: '#6b7280' }}
                     >
-                      종료
+                      {t('comp.voc.stClosed')}
                     </button>
                   </div>
                 </>
@@ -465,4 +477,3 @@ export function VocView({ currentUser }: VocViewProps) {
     </div>
   )
 }
-

@@ -1,10 +1,12 @@
 'use client'
 
+import { useI18n } from '@/lib/i18n'
+
 export function Placeholder({ label }: { label: string }) {
+  const { t } = useI18n()
   return (
     <div className="placeholder">
-      <p>{label} 화면은 곧 제공될 예정입니다.</p>
+      <p>{t('comp.placeholder.comingSoon', { label })}</p>
     </div>
   )
 }
-

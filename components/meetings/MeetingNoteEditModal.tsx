@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import type { MeetingNote, ActionItem } from '@/types/meeting'
 import { RichTextEditor } from './RichTextEditor'
+import { useI18n } from '@/lib/i18n'
 
 export type MeetingNoteSaveOptions = { autoSave?: boolean }
 
@@ -20,6 +21,7 @@ export function MeetingNoteEditModal({
   onClose,
   onSave,
 }: MeetingNoteEditModalProps) {
+  const { t } = useI18n()
   const [formData, setFormData] = useState<MeetingNote>({
     ...meetingNote,
     attendees: meetingNote.attendees || [],
@@ -84,11 +86,11 @@ export function MeetingNoteEditModal({
 
   const handleSaveAndClose = async () => {
     if (!formData.title?.trim()) {
-      alert('회의 제목을 입력하세요.')
+      alert(t('comp.meetingEditModal.alertTitle'))
       return
     }
     if (!formData.meeting_date) {
-      alert('회의 일시를 선택하세요.')
+      alert(t('comp.meetingEditModal.alertDate'))
       return
     }
     setSaving(true)
@@ -187,7 +189,7 @@ export function MeetingNoteEditModal({
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '900px', maxHeight: '90vh', overflowY: 'auto' }}>
         <div className="modal-header">
-          <h2>{mode === 'edit' ? '회의록 수정' : '새 회의록 작성'}</h2>
+          <h2>{mode === 'edit' ? t('comp.meetingEditModal.titleEdit') : t('comp.meetingEditModal.titleCreate')}</h2>
           <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
             <button
               type="button"
@@ -202,7 +204,7 @@ export function MeetingNoteEditModal({
 
         <form id="meeting-note-form" onSubmit={handleSubmit} className="project-form">
           <div className="form-group">
-            <label htmlFor="id">회의록 ID</label>
+            <label htmlFor="id">{t('comp.meetingEditModal.noteId')}</label>
             <input
               type="text"
               id="id"
@@ -215,7 +217,7 @@ export function MeetingNoteEditModal({
           </div>
 
           <div className="form-group">
-            <label htmlFor="title">회의 제목 *</label>
+            <label htmlFor="title">{t('comp.meetingEditModal.meetingTitle')}</label>
             <input
               type="text"
               id="title"
@@ -224,13 +226,13 @@ export function MeetingNoteEditModal({
               onChange={handleChange}
               required
               className="form-input"
-              placeholder="예: 프로젝트 진행 상황 검토 회의"
+              placeholder={t('comp.meetingEditModal.titlePh')}
             />
           </div>
 
           <div className="form-row">
             <div className="form-group">
-              <label htmlFor="meeting_date">회의 일시 *</label>
+              <label htmlFor="meeting_date">{t('comp.meetingEditModal.meetingAt')}</label>
               <input
                 type="date"
                 id="meeting_date"
@@ -243,7 +245,7 @@ export function MeetingNoteEditModal({
             </div>
 
             <div className="form-group">
-              <label htmlFor="next_meeting_date">다음 회의 일정</label>
+              <label htmlFor="next_meeting_date">{t('comp.meetingEditModal.nextMeeting')}</label>
               <input
                 type="date"
                 id="next_meeting_date"
@@ -256,19 +258,19 @@ export function MeetingNoteEditModal({
           </div>
 
           <div className="form-group">
-            <label>참석자</label>
+            <label>{t('comp.meetingEditModal.attendees')}</label>
             <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
               <input
                 type="text"
                 value={newAttendee}
                 onChange={(e) => setNewAttendee(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addAttendee())}
-                placeholder="참석자 이름 입력 후 Enter"
+                placeholder={t('comp.meetingEditModal.attendeePh')}
                 className="form-input"
                 style={{ flex: 1 }}
               />
               <button type="button" onClick={addAttendee} className="refresh-button">
-                추가
+                {t('comp.meetingEditModal.add')}
               </button>
             </div>
             {formData.attendees.length > 0 && (
@@ -309,19 +311,19 @@ export function MeetingNoteEditModal({
           </div>
 
           <div className="form-group">
-            <label>안건</label>
+            <label>{t('comp.meetingEditModal.agenda')}</label>
             <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
               <input
                 type="text"
                 value={newAgendaItem}
                 onChange={(e) => setNewAgendaItem(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addAgendaItem())}
-                placeholder="안건 입력 후 Enter"
+                placeholder={t('comp.meetingEditModal.agendaPh')}
                 className="form-input"
                 style={{ flex: 1 }}
               />
               <button type="button" onClick={addAgendaItem} className="refresh-button">
-                추가
+                {t('comp.meetingEditModal.add')}
               </button>
             </div>
             {formData.agenda.length > 0 && (
@@ -340,7 +342,7 @@ export function MeetingNoteEditModal({
                         fontSize: '1rem',
                       }}
                     >
-                      삭제
+                      {t('comp.meetingEditModal.remove')}
                     </button>
                   </li>
                 ))}
@@ -349,7 +351,7 @@ export function MeetingNoteEditModal({
           </div>
 
           <div className="form-group">
-            <label htmlFor="discussion">논의 내용</label>
+            <label htmlFor="discussion">{t('comp.meetingEditModal.discussion')}</label>
             <RichTextEditor
               value={formData.discussion}
               onChange={(html) =>
@@ -358,12 +360,12 @@ export function MeetingNoteEditModal({
                   discussion: html,
                 }))
               }
-              placeholder="회의 중 논의된 내용을 자유롭게 기록하세요. (굵게, 리스트 등 서식 지원)"
+              placeholder={t('comp.meetingEditModal.discussionPh')}
             />
           </div>
 
           <div className="form-group">
-            <label htmlFor="decisions">결정 사항</label>
+            <label htmlFor="decisions">{t('comp.meetingEditModal.decisions')}</label>
             <textarea
               id="decisions"
               name="decisions"
@@ -371,19 +373,19 @@ export function MeetingNoteEditModal({
               onChange={handleChange}
               className="form-input"
               rows={6}
-              placeholder="회의에서 결정된 사항을 기록하세요..."
+              placeholder={t('comp.meetingEditModal.decisionsPh')}
             />
           </div>
 
           <div className="form-group">
-            <label>액션 아이템</label>
+            <label>{t('comp.meetingEditModal.actionItems')}</label>
             <div style={{ border: '1px solid #ddd', borderRadius: '4px', padding: '1rem', marginBottom: '1rem' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '0.5rem' }}>
                 <input
                   type="text"
                   value={newActionItem.description || ''}
                   onChange={(e) => setNewActionItem((prev) => ({ ...prev, description: e.target.value }))}
-                  placeholder="액션 아이템 설명"
+                  placeholder={t('comp.meetingEditModal.actionDescPh')}
                   className="form-input"
                 />
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -393,7 +395,7 @@ export function MeetingNoteEditModal({
                     className="form-input"
                     style={{ flex: 1 }}
                   >
-                    <option value="">담당자 선택</option>
+                    <option value="">{t('comp.meetingEditModal.selectAssignee')}</option>
                     {users.map((user) => (
                       <option key={user.id} value={user.name}>
                         {user.name}
@@ -406,10 +408,10 @@ export function MeetingNoteEditModal({
                     onChange={(e) => setNewActionItem((prev) => ({ ...prev, due_date: e.target.value }))}
                     className="form-input"
                     style={{ flex: 1 }}
-                    placeholder="마감일"
+                    placeholder={t('comp.meetingEditModal.duePh')}
                   />
                   <button type="button" onClick={addActionItem} className="refresh-button">
-                    추가
+                    {t('comp.meetingEditModal.add')}
                   </button>
                 </div>
               </div>
@@ -432,7 +434,10 @@ export function MeetingNoteEditModal({
                       <div style={{ flex: 1 }}>
                         <div style={{ fontWeight: 500, marginBottom: '0.25rem' }}>{item.description}</div>
                         <div style={{ fontSize: '0.875rem', color: '#666' }}>
-                          담당자: {item.assignee} | 마감일: {item.due_date || '미정'}
+                          {t('comp.meetingEditModal.assigneeMeta', {
+                            assignee: item.assignee,
+                            due: item.due_date || t('comp.meetingEditModal.dueUnset'),
+                          })}
                         </div>
                       </div>
                       <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
@@ -441,9 +446,9 @@ export function MeetingNoteEditModal({
                           onChange={(e) => updateActionItemStatus(item.id, e.target.value as ActionItem['status'])}
                           style={{ fontSize: '0.875rem', padding: '0.25rem' }}
                         >
-                          <option value="pending">대기</option>
-                          <option value="in_progress">진행중</option>
-                          <option value="completed">완료</option>
+                          <option value="pending">{t('comp.meetingEditModal.stPending')}</option>
+                          <option value="in_progress">{t('comp.meetingEditModal.stProgress')}</option>
+                          <option value="completed">{t('comp.meetingEditModal.stDone')}</option>
                         </select>
                         <button
                           type="button"
@@ -456,7 +461,7 @@ export function MeetingNoteEditModal({
                             fontSize: '1rem',
                           }}
                         >
-                          삭제
+                          {t('comp.meetingEditModal.remove')}
                         </button>
                       </div>
                     </div>

@@ -1,10 +1,13 @@
 'use client'
 
+import { useI18n } from '@/lib/i18n'
+
 export function OwnerStatsTable({ data }: { data: Array<{ owner: string; projects: number; tasks: number; avgProgress: number }> }) {
+  const { t } = useI18n()
   if (data.length === 0) {
     return (
       <div style={{ padding: '2rem', textAlign: 'center', color: '#94a3b8' }}>
-        <p>데이터가 없습니다.</p>
+        <p>{t('comp.ownerStats.noData')}</p>
       </div>
     )
   }
@@ -15,16 +18,16 @@ export function OwnerStatsTable({ data }: { data: Array<{ owner: string; project
         <thead>
           <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
             <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: 600, color: '#475569' }}>
-              담당자
+              {t('comp.ownerStats.owner')}
             </th>
             <th style={{ padding: '0.75rem', textAlign: 'center', fontSize: '0.875rem', fontWeight: 600, color: '#475569' }}>
-              프로젝트
+              {t('comp.ownerStats.projects')}
             </th>
             <th style={{ padding: '0.75rem', textAlign: 'center', fontSize: '0.875rem', fontWeight: 600, color: '#475569' }}>
-              일감
+              {t('comp.ownerStats.tasks')}
             </th>
             <th style={{ padding: '0.75rem', textAlign: 'center', fontSize: '0.875rem', fontWeight: 600, color: '#475569' }}>
-              평균 진행률
+              {t('comp.ownerStats.avgProgress')}
             </th>
           </tr>
         </thead>
@@ -67,4 +70,3 @@ export function OwnerStatsTable({ data }: { data: Array<{ owner: string; project
     </div>
   )
 }
-

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useI18n } from '@/lib/i18n/I18nProvider'
 
 interface Transition {
   id: number
@@ -34,6 +35,7 @@ export function DevelopmentPhaseStatusActions({
   userId,
   style,
 }: DevelopmentPhaseStatusActionsProps) {
+  const { t } = useI18n()
   const [transitions, setTransitions] = useState<Transition[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -65,7 +67,7 @@ export function DevelopmentPhaseStatusActions({
 
       if (!response.ok) {
         if (signal?.aborted) return
-        const errorData = await response.json().catch(() => ({ error: '전환 목록을 가져오는데 실패했습니다.' }))
+        const errorData = await response.json().catch(() => ({ error: t('comp.taskTransition.fetchFail') }))
         throw new Error(errorData.error || `HTTP ${response.status}`)
       }
 
@@ -85,14 +87,14 @@ export function DevelopmentPhaseStatusActions({
     } catch (err) {
       if (signal?.aborted) return
       console.error('Error fetching development phase transitions:', err)
-      setError(err instanceof Error ? err.message : '전환 목록을 불러오는데 실패했습니다.')
+      setError(err instanceof Error ? err.message : t('comp.taskTransition.loadFail'))
       setTransitions([])
     } finally {
       if (!signal?.aborted) {
         setLoading(false)
       }
     }
-  }, [taskId, userRole, userId])
+  }, [taskId, userRole, userId, t])
 
   // 사용 가능한 전환 목록 가져오기
   useEffect(() => {
@@ -136,7 +138,7 @@ export function DevelopmentPhaseStatusActions({
       })
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: '상태 전환에 실패했습니다.' }))
+        const errorData = await response.json().catch(() => ({ error: t('comp.taskTransition.transitionFail') }))
         throw new Error(errorData.error || `HTTP ${response.status}`)
       }
 
@@ -154,7 +156,7 @@ export function DevelopmentPhaseStatusActions({
       console.log('Development phase status changed:', data.message)
     } catch (err) {
       console.error('Error executing development phase transition:', err)
-      setError(err instanceof Error ? err.message : '상태 전환에 실패했습니다.')
+      setError(err instanceof Error ? err.message : t('comp.taskTransition.transitionFail'))
     } finally {
       setExecuting(null)
     }
@@ -163,7 +165,7 @@ export function DevelopmentPhaseStatusActions({
   if (loading) {
     return (
       <div style={{ padding: '0.25rem 0', color: '#6b7280', fontSize: '0.75rem', ...style }}>
-        전환 목록 로딩 중...
+        {t('comp.taskTransition.loading')}
       </div>
     )
   }
@@ -233,7 +235,7 @@ export function DevelopmentPhaseStatusActions({
             }}
             title={transition.description || transition.name}
           >
-            {executing === transition.id ? '처리 중...' : transition.name}
+            {executing === transition.id ? t('comp.taskTransition.processing') : transition.name}
             {transition.to_status_name && (
               <span style={{ marginLeft: '0.375rem', opacity: 0.9 }}>
                 → {transition.to_status_name}

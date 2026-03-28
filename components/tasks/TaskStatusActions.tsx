@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useI18n } from '@/lib/i18n/I18nProvider'
 
 interface Transition {
   id: number
@@ -31,6 +32,7 @@ export function TaskStatusActions({
   userRole,
   userId,
 }: TaskStatusActionsProps) {
+  const { t } = useI18n()
   const [transitions, setTransitions] = useState<Transition[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -58,7 +60,7 @@ export function TaskStatusActions({
       })
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: '전환 목록을 가져오는데 실패했습니다.' }))
+        const errorData = await response.json().catch(() => ({ error: t('comp.taskTransition.fetchFail') }))
         throw new Error(errorData.error || `HTTP ${response.status}`)
       }
 
@@ -67,12 +69,12 @@ export function TaskStatusActions({
       setCurrentTaskStatus(data.current_status || null)
     } catch (err) {
       console.error('Error fetching transitions:', err)
-      setError(err instanceof Error ? err.message : '전환 목록을 불러오는데 실패했습니다.')
+      setError(err instanceof Error ? err.message : t('comp.taskTransition.loadFail'))
       setTransitions([])
     } finally {
       setLoading(false)
     }
-  }, [taskId, userRole, userId])
+  }, [taskId, userRole, userId, t])
 
   // 사용 가능한 전환 목록 가져오기
   useEffect(() => {
@@ -103,7 +105,7 @@ export function TaskStatusActions({
       })
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: '상태 전환에 실패했습니다.' }))
+        const errorData = await response.json().catch(() => ({ error: t('comp.taskTransition.transitionFail') }))
         throw new Error(errorData.error || `HTTP ${response.status}`)
       }
 
@@ -121,7 +123,7 @@ export function TaskStatusActions({
       console.log('Status changed:', data.message)
     } catch (err) {
       console.error('Error executing transition:', err)
-      setError(err instanceof Error ? err.message : '상태 전환에 실패했습니다.')
+      setError(err instanceof Error ? err.message : t('comp.taskTransition.transitionFail'))
     } finally {
       setExecuting(null)
     }
@@ -130,7 +132,7 @@ export function TaskStatusActions({
   if (loading) {
     return (
       <div style={{ padding: '0.5rem', color: '#6b7280', fontSize: '0.875rem' }}>
-        전환 목록 로딩 중...
+        {t('comp.taskTransition.loading')}
       </div>
     )
   }
@@ -153,7 +155,7 @@ export function TaskStatusActions({
   if (transitions.length === 0) {
     return (
       <div style={{ padding: '0.5rem', color: '#6b7280', fontSize: '0.875rem' }}>
-        {currentTaskStatus ? `현재 상태: ${currentTaskStatus}` : '사용 가능한 전환이 없습니다.'}
+        {currentTaskStatus ? t('comp.taskTransition.currentStatusLine', { status: currentTaskStatus }) : t('comp.taskTransition.none')}
       </div>
     )
   }
@@ -167,7 +169,8 @@ export function TaskStatusActions({
           color: '#374151',
           fontWeight: 500
         }}>
-          현재 상태: <span style={{ color: '#059669' }}>{currentTaskStatus}</span>
+          {t('comp.taskTransition.currentPrefix')}{' '}
+          <span style={{ color: '#059669' }}>{currentTaskStatus}</span>
         </div>
       )}
 
@@ -214,7 +217,7 @@ export function TaskStatusActions({
             }}
             title={transition.description || transition.name}
           >
-            {executing === transition.id ? '처리 중...' : transition.name}
+            {executing === transition.id ? t('comp.taskTransition.processing') : transition.name}
             {transition.to_status_name && (
               <span style={{ marginLeft: '0.5rem', opacity: 0.9 }}>
                 → {transition.to_status_name}

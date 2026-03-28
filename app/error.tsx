@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import { useI18n } from '@/lib/i18n'
 
 export default function Error({
   error,
@@ -9,6 +10,8 @@ export default function Error({
   error: Error & { digest?: string }
   reset: () => void
 }) {
+  const { t } = useI18n()
+
   useEffect(() => {
     console.error('Application error:', error)
   }, [error])
@@ -23,9 +26,9 @@ export default function Error({
       padding: '2rem',
       textAlign: 'center',
     }}>
-      <h2 style={{ marginBottom: '1rem', color: '#e74c3c' }}>오류가 발생했습니다</h2>
+      <h2 style={{ marginBottom: '1rem', color: '#e74c3c' }}>{t('common.errorBoundaryTitle')}</h2>
       <p style={{ marginBottom: '2rem', color: '#666' }}>
-        {error.message || '알 수 없는 오류가 발생했습니다.'}
+        {error.message || t('common.errorBoundaryFallback')}
       </p>
       <button
         onClick={reset}
@@ -39,9 +42,8 @@ export default function Error({
           fontSize: '1rem',
         }}
       >
-        다시 시도
+        {t('comp.ui.retry')}
       </button>
     </div>
   )
 }
-

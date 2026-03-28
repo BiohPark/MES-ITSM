@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import type { Issue } from '@/types/issue'
 import { AttachmentSection } from '@/components/attachments/AttachmentSection'
+import { useI18n } from '@/lib/i18n'
 
 /** 설명 본문 HTML 허용 태그만 남기기 (XSS 방지) */
 function sanitizeDescriptionHtml(html: string): string {
@@ -78,6 +79,18 @@ const MODULES = [
   'GMP 절차 위반',
 ]
 
+const CAUSE_VALUE_TO_I18N: Record<string, string> = {
+  '코드 오류': 'causeCode',
+  '설정 오류': 'causeConfig',
+  '인프라 문제': 'causeInfra',
+  '데이터 문제': 'causeData',
+  '사용자 오류': 'causeUser',
+  '외부 의존성': 'causeExternal',
+  '성능 문제': 'causePerf',
+  '보안 문제': 'causeSecurity',
+  '기타': 'causeOther',
+}
+
 /** 연결 일감 선택용 옵션 (프로젝트명 - 일감명) */
 export type TaskLinkOption = { value: string; label: string }
 
@@ -117,6 +130,7 @@ export function IssueEditModal({
   onCreateTask,
   onTaskCreated,
 }: IssueEditModalProps) {
+  const { t } = useI18n()
   const [showCreateTaskForm, setShowCreateTaskForm] = useState(false)
   const [newTaskProjectId, setNewTaskProjectId] = useState('')
   const [newTaskTitle, setNewTaskTitle] = useState('')
@@ -196,7 +210,7 @@ export function IssueEditModal({
 
         const img = document.createElement('img')
         img.src = `/api/attachments/${data.attachment_id}/download`
-        img.alt = '화면 캡처'
+        img.alt = t('comp.issueModal.screenCaptureAlt')
         img.style.maxWidth = '100%'
         img.style.height = 'auto'
         img.style.display = 'block'
@@ -216,7 +230,7 @@ export function IssueEditModal({
         setPastingImage(false)
       }
     },
-    [issue.id, syncDescriptionToForm]
+    [issue.id, syncDescriptionToForm, t]
   )
 
   useEffect(() => {
@@ -267,7 +281,7 @@ export function IssueEditModal({
     const rawDesc = descriptionRef.current?.innerHTML ?? formData.description ?? ''
     const sanitizedDesc = sanitizeDescriptionHtml(rawDesc === '<br>' ? '' : rawDesc) || (formData.description || '')
     if (formData.owner && !users.some(u => u.name === formData.owner)) {
-      alert('등록되지 않은 사용자입니다.')
+      alert(t('comp.childModal.unknownUser'))
       return
     }
     setSaving(true)
@@ -306,7 +320,7 @@ export function IssueEditModal({
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '800px', maxHeight: '90vh', overflowY: 'auto' }}>
         <div className="modal-header">
-          <h2>{mode === 'edit' ? '이슈 수정' : '새 이슈 추가'}</h2>
+          <h2>{mode === 'edit' ? t('comp.issueModal.titleEdit') : t('comp.issueModal.titleCreate')}</h2>
           <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
             <button
               type="submit"
@@ -315,7 +329,7 @@ export function IssueEditModal({
               className="btn btn-primary"
               style={{ margin: 0 }}
             >
-              {saving ? '저장 중...' : 'Save'}
+              {saving ? t('comp.ui.saving') : t('comp.ui.save')}
             </button>
             <button className="modal-close" onClick={onClose}>
               ×
@@ -334,12 +348,12 @@ export function IssueEditModal({
                 onChange={handleChange}
                 style={{ width: 'auto', cursor: 'pointer', transform: 'scale(1.2)' }}
               />
-              <span>Deviation 판정</span>
+              <span>{t('comp.issueModal.deviationLabel')}</span>
             </label>
           </div>
 
           <div className="form-group">
-            <label htmlFor="id">이슈 ID</label>
+            <label htmlFor="id">{t('comp.issueModal.issueId')}</label>
             <input
               type="text"
               id="id"
@@ -352,7 +366,7 @@ export function IssueEditModal({
           </div>
 
           <div className="form-group">
-            <label htmlFor="title">이슈 제목</label>
+            <label htmlFor="title">{t('comp.issueModal.issueTitle')}</label>
             <input
               type="text"
               id="title"
@@ -366,7 +380,7 @@ export function IssueEditModal({
 
           <div className="form-row">
             <div className="form-group">
-              <label htmlFor="status">상태</label>
+              <label htmlFor="status">{t('comp.issueModal.status')}</label>
               <select
                 id="status"
                 name="status"
@@ -383,7 +397,7 @@ export function IssueEditModal({
             </div>
 
             <div className="form-group">
-              <label htmlFor="owner">담당자</label>
+              <label htmlFor="owner">{t('comp.issueModal.owner')}</label>
               <select
                 id="owner"
                 name="owner"
@@ -392,7 +406,7 @@ export function IssueEditModal({
                 required
                 className="form-input"
               >
-                <option value="">선택하세요</option>
+                <option value="">{t('comp.issueModal.select')}</option>
                 {users.map((user) => (
                   <option key={user.id} value={user.name}>
                     {user.name}
@@ -404,7 +418,7 @@ export function IssueEditModal({
 
           <div className="form-row">
             <div className="form-group">
-              <label htmlFor="occurred_date">발생일</label>
+              <label htmlFor="occurred_date">{t('comp.issueModal.occurredDate')}</label>
               <input
                 type="date"
                 id="occurred_date"
@@ -417,7 +431,7 @@ export function IssueEditModal({
             </div>
 
             <div className="form-group">
-              <label htmlFor="due_date">마감일 (완료 예정일)</label>
+              <label htmlFor="due_date">{t('comp.issueModal.dueDate')}</label>
               <input
                 type="date"
                 id="due_date"
@@ -431,7 +445,7 @@ export function IssueEditModal({
 
           <div className="form-row">
             <div className="form-group">
-              <label htmlFor="sw_version">S/W 버전</label>
+              <label htmlFor="sw_version">{t('comp.issueModal.swVersion')}</label>
               <input
                 type="text"
                 id="sw_version"
@@ -439,12 +453,12 @@ export function IssueEditModal({
                 value={formData.sw_version || ''}
                 onChange={handleChange}
                 className="form-input"
-                placeholder="예: SRB 26.1"
+                placeholder={t('comp.issueModal.swVersionPh')}
               />
             </div>
 
             <div className="form-group">
-              <label htmlFor="cause_category">원인 분류</label>
+              <label htmlFor="cause_category">{t('comp.issueModal.causeCategory')}</label>
               <select
                 id="cause_category"
                 name="cause_category"
@@ -452,17 +466,17 @@ export function IssueEditModal({
                 onChange={handleChange}
                 className="form-input"
               >
-                <option value="">선택하세요</option>
+                <option value="">{t('comp.issueModal.select')}</option>
                 {CAUSE_CATEGORIES.map((category) => (
                   <option key={category} value={category}>
-                    {category}
+                    {t(`comp.issueModal.${CAUSE_VALUE_TO_I18N[category]}`)}
                   </option>
                 ))}
               </select>
             </div>
 
             <div className="form-group">
-              <label htmlFor="module">발생 모듈</label>
+              <label htmlFor="module">{t('comp.issueModal.module')}</label>
               <select
                 id="module"
                 name="module"
@@ -470,10 +484,10 @@ export function IssueEditModal({
                 onChange={handleChange}
                 className="form-input"
               >
-                <option value="">선택하세요</option>
+                <option value="">{t('comp.issueModal.select')}</option>
                 {MODULES.map((module) => (
                   <option key={module} value={module}>
-                    {module}
+                    {module === 'GMP 절차 위반' ? t('comp.issueModal.moduleGmpViolation') : module}
                   </option>
                 ))}
               </select>
@@ -481,7 +495,7 @@ export function IssueEditModal({
           </div>
 
           <div className="form-group">
-            <label htmlFor="related_issue_id">관련 이슈 ID (재발 추적용)</label>
+            <label htmlFor="related_issue_id">{t('comp.issueModal.relatedIssueId')}</label>
             <select
               id="related_issue_id"
               name="related_issue_id"
@@ -489,7 +503,7 @@ export function IssueEditModal({
               onChange={handleChange}
               className="form-input"
             >
-              <option value="">선택하세요 (없음)</option>
+              <option value="">{t('comp.issueModal.selectNone')}</option>
               {availableRelatedIssues.map((relatedIssue) => (
                 <option key={relatedIssue.id} value={relatedIssue.id}>
                   {relatedIssue.id} - {relatedIssue.title}
@@ -501,7 +515,7 @@ export function IssueEditModal({
           {/* 연결된 GMP Record (Deviation 체크 시 자동 생성·링크) */}
           {(formData.linked_gmp_record_id || formData.is_deviation) && (
             <div className="form-group">
-              <label>연결된 GMP Record</label>
+              <label>{t('comp.issueModal.linkedGmpRecord')}</label>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                 {formData.linked_gmp_record_id ? (
                   <>
@@ -515,13 +529,13 @@ export function IssueEditModal({
                         style={{ backgroundColor: '#2563eb', color: '#fff', borderColor: '#2563eb' }}
                         onClick={() => onOpenGmpRecord(formData.linked_gmp_record_id!)}
                       >
-                        GMP Record로 이동
+                        {t('comp.issueModal.openGmpRecord')}
                       </button>
                     )}
                   </>
                 ) : (
                   <span style={{ fontSize: '0.9rem', color: '#64748b' }}>
-                    저장 시 Deviation이면 GMP Record가 생성되고 여기서 링크됩니다.
+                    {t('comp.issueModal.gmpHintOnSave')}
                   </span>
                 )}
               </div>
@@ -530,7 +544,7 @@ export function IssueEditModal({
 
           {/* 연결된 일감 (해결을 위한 일감 연결) */}
           <div className="form-group">
-            <label htmlFor="linked_task_id">연결된 일감 (해결용)</label>
+            <label htmlFor="linked_task_id">{t('comp.issueModal.linkedTask')}</label>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
               <select
                 id="linked_task_id"
@@ -540,7 +554,7 @@ export function IssueEditModal({
                 className="form-input"
                 style={{ flex: 1, minWidth: 0 }}
               >
-                <option value="">선택하세요 (없음)</option>
+                <option value="">{t('comp.issueModal.selectNone')}</option>
                 {taskLinkOptions.map((opt) => (
                   <option key={opt.value} value={opt.value}>
                     {opt.label}
@@ -554,7 +568,7 @@ export function IssueEditModal({
                   style={{ backgroundColor: '#2563eb', color: '#fff', borderColor: '#2563eb' }}
                   onClick={() => onOpenTask(formData.linked_task_id!)}
                 >
-                  일감으로 이동
+                  {t('comp.issueModal.openTask')}
                 </button>
               )}
             </div>
@@ -570,7 +584,7 @@ export function IssueEditModal({
                       setNewTaskTitle(formData.title || issue.title || '')
                     }}
                   >
-                    + 해결용 일감 새로 만들기
+                    {t('comp.issueModal.newResolveTask')}
                   </button>
                 ) : (
                   <div
@@ -583,16 +597,16 @@ export function IssueEditModal({
                     }}
                   >
                     <div style={{ fontSize: '0.9rem', fontWeight: 600, marginBottom: '0.5rem' }}>
-                      해결용 일감 생성 (생성 시 이 이슈와 자동 연결)
+                      {t('comp.issueModal.createResolveTaskTitle')}
                     </div>
                     <div className="form-group" style={{ marginBottom: '0.5rem' }}>
-                      <label>프로젝트</label>
+                      <label>{t('comp.issueModal.project')}</label>
                       <select
                         className="form-input"
                         value={newTaskProjectId}
                         onChange={(e) => setNewTaskProjectId(e.target.value)}
                       >
-                        <option value="">선택하세요</option>
+                        <option value="">{t('comp.issueModal.select')}</option>
                         {projectOptions.map((p) => (
                           <option key={p.id} value={p.id}>
                             {p.name}
@@ -601,13 +615,13 @@ export function IssueEditModal({
                       </select>
                     </div>
                     <div className="form-group" style={{ marginBottom: '0.5rem' }}>
-                      <label>일감 제목</label>
+                      <label>{t('comp.issueModal.taskTitle')}</label>
                       <input
                         type="text"
                         className="form-input"
                         value={newTaskTitle}
                         onChange={(e) => setNewTaskTitle(e.target.value)}
-                        placeholder="이슈 제목이 기본으로 들어갑니다"
+                        placeholder={t('comp.issueModal.taskTitlePh')}
                       />
                     </div>
                     <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
@@ -632,7 +646,7 @@ export function IssueEditModal({
                           }
                         }}
                       >
-                        {creatingTask ? '생성 중…' : '생성 후 연결'}
+                        {creatingTask ? t('comp.issueModal.creating') : t('comp.issueModal.createAndLink')}
                       </button>
                       <button
                         type="button"
@@ -644,7 +658,7 @@ export function IssueEditModal({
                           setNewTaskTitle('')
                         }}
                       >
-                        취소
+                        {t('comp.ui.cancel')}
                       </button>
                     </div>
                   </div>
@@ -654,7 +668,7 @@ export function IssueEditModal({
           </div>
 
           <div className="form-group">
-            <label htmlFor="cause">원인</label>
+            <label htmlFor="cause">{t('comp.issueModal.cause')}</label>
             <textarea
               id="cause"
               name="cause"
@@ -662,16 +676,16 @@ export function IssueEditModal({
               onChange={handleChange}
               className="form-input"
               rows={4}
-              placeholder="이슈 발생 원인을 상세히 입력하세요..."
+              placeholder={t('comp.issueModal.causePh')}
             />
           </div>
 
           <div className="form-group">
-            <label htmlFor="description">설명 (상황 설명)</label>
+            <label htmlFor="description">{t('comp.issueModal.descriptionLabel')}</label>
             <div style={{ position: 'relative' }}>
               {(pastingImage || null) && (
                 <div style={{ position: 'absolute', top: 8, right: 8, fontSize: '0.8rem', color: '#64748b', zIndex: 2 }}>
-                  이미지 업로드 중…
+                  {t('comp.issueModal.pastingImage')}
                 </div>
               )}
               <div
@@ -680,9 +694,9 @@ export function IssueEditModal({
                 suppressContentEditableWarning
                 id="description"
                 role="textbox"
-                aria-label="설명 (상황 설명)"
+                aria-label={t('comp.issueModal.descriptionAria')}
                 className="form-input"
-                data-placeholder="이슈 발견 시점·재현 방법·증상 등을 입력하세요. 화면 캡처는 복사 후 여기에 붙여넣기(Ctrl+V)할 수 있고, 로그 파일 등은 아래 첨부파일로 추가할 수 있습니다."
+                data-placeholder={t('comp.issueModal.descriptionDataPh')}
                 onInput={syncDescriptionToForm}
                 onBlur={syncDescriptionToForm}
                 onPaste={handleDescriptionPaste}
@@ -709,18 +723,18 @@ export function IssueEditModal({
                 recordId={issue.id}
                 recordType="issue"
                 currentUser={currentUser}
-                titleHint="화면 캡처·로그 파일 등을 추가하면 검토 시 참고할 수 있습니다"
+                titleHint={t('comp.issueModal.attachmentHint')}
               />
             </div>
           ) : (
             <div className="form-group" style={{ marginTop: '1rem', padding: '0.75rem', backgroundColor: '#f8fafc', borderRadius: 6, fontSize: '0.9rem', color: '#64748b' }}>
-              <strong>첨부파일:</strong> 이슈를 저장한 뒤 아래에서 화면 캡처·로그 파일 등을 추가할 수 있습니다. 검토 시 참고 자료로 활용됩니다.
+              <strong>{t('comp.issueModal.attachmentStrong')}</strong> {t('comp.issueModal.attachmentAfterSave')}
             </div>
           )}
 
           <div className="form-row">
             <div className="form-group">
-              <label htmlFor="resolved_date">해결일</label>
+              <label htmlFor="resolved_date">{t('comp.issueModal.resolvedDate')}</label>
               <input
                 type="date"
                 id="resolved_date"
@@ -732,7 +746,7 @@ export function IssueEditModal({
             </div>
 
             <div className="form-group">
-              <label htmlFor="resolved_sw_version">해결 S/W 버전</label>
+              <label htmlFor="resolved_sw_version">{t('comp.issueModal.resolvedSwVersion')}</label>
               <input
                 type="text"
                 id="resolved_sw_version"
@@ -740,7 +754,7 @@ export function IssueEditModal({
                 value={formData.resolved_sw_version || ''}
                 onChange={handleChange}
                 className="form-input"
-                placeholder="예: 1.1.0"
+                placeholder={t('comp.issueModal.resolvedSwVersionPh')}
               />
             </div>
           </div>

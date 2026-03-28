@@ -3,6 +3,7 @@
 import { useMemo } from 'react'
 import type { Project, ProjectChild } from '@/types/project'
 import type { Issue } from '@/types/issue'
+import { useI18n } from '@/lib/i18n'
 import { KPICard } from './KPICard'
 import { ChartCard } from './ChartCard'
 import { StatusChart } from './StatusChart'
@@ -32,6 +33,7 @@ export function DashboardView({
   error: string | null
   onRefresh: () => void | Promise<void>
 }) {
+  const { t } = useI18n()
   const stats = useMemo(() => {
     // 프로젝트에 속한 일감과 orphan tasks 모두 포함
     const projectTasks = projects.flatMap((p) => p.children || [])
@@ -230,7 +232,7 @@ export function DashboardView({
     return (
       <div className="table-wrapper">
         <div className="placeholder">
-          <p>데이터를 불러오는 중...</p>
+          <p>{t('comp.ui.loading')}</p>
         </div>
       </div>
     )
@@ -240,9 +242,9 @@ export function DashboardView({
     return (
       <div className="table-wrapper">
         <div className="placeholder">
-          <p>에러 발생: {error}</p>
+          <p>{t('comp.ui.errorOccurred', { message: error })}</p>
           <button onClick={onRefresh} className="refresh-button">
-            새로고침
+            {t('comp.ui.refresh')}
           </button>
         </div>
       </div>
@@ -252,48 +254,48 @@ export function DashboardView({
   return (
     <div style={{ padding: '1.5rem' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-        <h1 style={{ fontSize: '1.75rem', fontWeight: 700, color: '#111827' }}>Dashboard</h1>
+        <h1 style={{ fontSize: '1.75rem', fontWeight: 700, color: '#111827' }}>{t('tabs.dashboard')}</h1>
         <button onClick={onRefresh} className="refresh-button">
-          새로고침
+          {t('comp.ui.refresh')}
         </button>
       </div>
 
       {/* KPI 카드 그리드 */}
       <div style={{ marginBottom: '2rem' }}>
-        <h2 style={{ fontSize: '1.25rem', fontWeight: 600, color: '#111827', marginBottom: '1rem' }}>핵심 KPI</h2>
+        <h2 style={{ fontSize: '1.25rem', fontWeight: 600, color: '#111827', marginBottom: '1rem' }}>{t('comp.dashboard.kpiHeading')}</h2>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem', marginBottom: '2rem' }}>
           {/* KPI 1: Issued 상태 일감 제로화 */}
           <KPICard
-            title="KPI 1: Issued 일감 제로화"
+            title={t('comp.dashboard.kpi1Title')}
             value={stats.issuedTasks}
-            subtitle={stats.issuedTasks === 0 ? '✅ 목표 달성!' : `목표: ${stats.issuedTasksGoal}개 (${stats.issuedTasks}개 남음)`}
+            subtitle={stats.issuedTasks === 0 ? t('comp.dashboard.kpi1Done') : t('comp.dashboard.kpi1Todo', { goal: stats.issuedTasksGoal, remain: stats.issuedTasks })}
             icon={<AlertTriangleIcon size={32} color={stats.issuedTasks === 0 ? "#22c55e" : "#ef4444"} />}
             color={stats.issuedTasks === 0 ? "#22c55e" : "#ef4444"}
           />
           
           {/* KPI 2: 완료 일감 수 지속 증대 */}
           <KPICard
-            title="KPI 2: 완료 일감 수"
+            title={t('comp.dashboard.kpi2Title')}
             value={stats.completedTasks}
-            subtitle={`전체 대비 ${stats.completedTasksRate}% | 총 ${stats.totalTasks}개 중`}
+            subtitle={t('comp.dashboard.kpi2Sub', { rate: stats.completedTasksRate, total: stats.totalTasks })}
             icon={<CheckCircleIcon size={32} color="#22c55e" />}
             color="#22c55e"
           />
           
           {/* KPI 3: 이슈 최소화 및 빠른 해결 */}
           <KPICard
-            title="KPI 3: 시스템 이슈 관리"
+            title={t('comp.dashboard.kpi3Title')}
             value={stats.totalIssues}
-            subtitle={stats.openIssues > 0 ? `미해결: ${stats.openIssues}개 | 평균 해결: ${stats.avgResolutionDays}일` : `모두 해결됨 | 평균 해결: ${stats.avgResolutionDays}일`}
+            subtitle={stats.openIssues > 0 ? t('comp.dashboard.kpi3Open', { open: stats.openIssues, days: stats.avgResolutionDays }) : t('comp.dashboard.kpi3Done', { days: stats.avgResolutionDays })}
             icon={<AlertTriangleIcon size={32} color={stats.openIssues === 0 ? "#22c55e" : "#f59e0b"} />}
             color={stats.openIssues === 0 ? "#22c55e" : "#f59e0b"}
           />
           
           {/* KPI 4: Deviation 수 최소화 */}
           <KPICard
-            title="KPI 4: Deviation 최소화"
+            title={t('comp.dashboard.kpi4Title')}
             value={stats.deviationIssues}
-            subtitle={stats.deviationIssues === 0 ? '✅ 목표 달성!' : `목표: ${stats.deviationIssuesGoal}개 (${stats.deviationIssues}개 남음)`}
+            subtitle={stats.deviationIssues === 0 ? t('comp.dashboard.kpi1Done') : t('comp.dashboard.kpi1Todo', { goal: stats.deviationIssuesGoal, remain: stats.deviationIssues })}
             icon={<XCircleIcon size={32} color={stats.deviationIssues === 0 ? "#22c55e" : "#ef4444"} />}
             color={stats.deviationIssues === 0 ? "#22c55e" : "#ef4444"}
           />
@@ -302,33 +304,33 @@ export function DashboardView({
 
       {/* 참고 통계 카드 */}
       <div style={{ marginBottom: '2rem' }}>
-        <h2 style={{ fontSize: '1.25rem', fontWeight: 600, color: '#111827', marginBottom: '1rem' }}>참고 통계</h2>
+        <h2 style={{ fontSize: '1.25rem', fontWeight: 600, color: '#111827', marginBottom: '1rem' }}>{t('comp.dashboard.refHeading')}</h2>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem' }}>
           <KPICard
-            title="전체 프로젝트"
+            title={t('comp.dashboard.refProjects')}
             value={stats.totalProjects}
-            subtitle={`진행 중: ${stats.activeProjects}`}
+            subtitle={t('comp.dashboard.refProjectsSub', { n: stats.activeProjects })}
             icon={<FolderIcon size={24} color="#3b82f6" />}
             color="#3b82f6"
           />
           <KPICard
-            title="전체 일감"
+            title={t('comp.dashboard.refTasks')}
             value={stats.totalTasks}
-            subtitle={`진행 중: ${stats.activeTasks}`}
+            subtitle={t('comp.dashboard.refTasksSub', { n: stats.activeTasks })}
             icon={<ClipboardIcon size={24} color="#10b981" />}
             color="#10b981"
           />
           <KPICard
-            title="해결된 이슈"
+            title={t('comp.dashboard.refResolved')}
             value={stats.resolvedIssues}
-            subtitle={`전체 ${stats.totalIssues}개 중`}
+            subtitle={t('comp.dashboard.refResolvedSub', { total: stats.totalIssues })}
             icon={<CheckCircleIcon size={24} color="#22c55e" />}
             color="#22c55e"
           />
           <KPICard
-            title="평균 진행률"
+            title={t('comp.dashboard.refAvgProgress')}
             value={`${stats.avgTaskProgress}%`}
-            subtitle="일감 평균"
+            subtitle={t('comp.dashboard.refAvgProgressSub')}
             icon={<BarChartIcon size={24} color="#8b5cf6" />}
             color="#8b5cf6"
           />
@@ -337,14 +339,14 @@ export function DashboardView({
 
       {/* KPI 상세 정보 섹션 */}
       <div style={{ marginBottom: '2rem' }}>
-        <h2 style={{ fontSize: '1.25rem', fontWeight: 600, color: '#111827', marginBottom: '1rem' }}>KPI 상세 정보</h2>
+        <h2 style={{ fontSize: '1.25rem', fontWeight: 600, color: '#111827', marginBottom: '1rem' }}>{t('comp.dashboard.detailHeading')}</h2>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '1.5rem' }}>
           {/* KPI 1: Issued 일감 목록 */}
-          <ChartCard title={`Issued 일감 목록 (${stats.issuedTasks}개)`}>
+          <ChartCard title={t('comp.dashboard.issuedListTitle', { count: stats.issuedTasks })}>
             {stats.issuedTasks === 0 ? (
               <div style={{ padding: '2rem', textAlign: 'center', color: '#22c55e' }}>
-                <p style={{ fontSize: '1.125rem', fontWeight: 600 }}>✅ 목표 달성!</p>
-                <p style={{ fontSize: '0.875rem', color: '#6b7280', marginTop: '0.5rem' }}>Issued 상태 일감이 없습니다.</p>
+                <p style={{ fontSize: '1.125rem', fontWeight: 600 }}>{t('comp.dashboard.kpi1Done')}</p>
+                <p style={{ fontSize: '0.875rem', color: '#6b7280', marginTop: '0.5rem' }}>{t('comp.dashboard.noIssued')}</p>
               </div>
             ) : (
               <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
@@ -401,11 +403,11 @@ export function DashboardView({
           </ChartCard>
 
           {/* KPI 3: 미해결 이슈 목록 */}
-          <ChartCard title={`미해결 이슈 (${stats.openIssues}개)`}>
+          <ChartCard title={t('comp.dashboard.openIssuesTitle', { count: stats.openIssues })}>
             {stats.openIssues === 0 ? (
               <div style={{ padding: '2rem', textAlign: 'center', color: '#22c55e' }}>
-                <p style={{ fontSize: '1.125rem', fontWeight: 600 }}>✅ 모든 이슈 해결됨</p>
-                <p style={{ fontSize: '0.875rem', color: '#6b7280', marginTop: '0.5rem' }}>현재 미해결 이슈가 없습니다.</p>
+                <p style={{ fontSize: '1.125rem', fontWeight: 600 }}>{t('comp.dashboard.allIssuesResolved')}</p>
+                <p style={{ fontSize: '0.875rem', color: '#6b7280', marginTop: '0.5rem' }}>{t('comp.dashboard.noOpenIssues')}</p>
               </div>
             ) : (
               <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
@@ -429,7 +431,7 @@ export function DashboardView({
                         <div>
                           <div style={{ fontWeight: 500, fontSize: '0.875rem' }}>{issue.title}</div>
                           <div style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.25rem' }}>
-                            {issue.id} | {issue.owner} | 발생: {daysSinceOccurred}일 전
+                            {t('comp.dashboard.issueMeta', { id: issue.id, owner: issue.owner, days: daysSinceOccurred })}
                           </div>
                         </div>
                         <div style={{ fontSize: '0.75rem', color: '#f59e0b', fontWeight: 600 }}>
@@ -443,11 +445,11 @@ export function DashboardView({
           </ChartCard>
 
           {/* KPI 4: Deviation 목록 */}
-          <ChartCard title={`Deviation 이슈 (${stats.deviationIssues}개)`}>
+          <ChartCard title={t('comp.dashboard.deviationTitle', { count: stats.deviationIssues })}>
             {stats.deviationIssues === 0 ? (
               <div style={{ padding: '2rem', textAlign: 'center', color: '#22c55e' }}>
-                <p style={{ fontSize: '1.125rem', fontWeight: 600 }}>✅ 목표 달성!</p>
-                <p style={{ fontSize: '0.875rem', color: '#6b7280', marginTop: '0.5rem' }}>Deviation 이슈가 없습니다.</p>
+                <p style={{ fontSize: '1.125rem', fontWeight: 600 }}>{t('comp.dashboard.kpi1Done')}</p>
+                <p style={{ fontSize: '0.875rem', color: '#6b7280', marginTop: '0.5rem' }}>{t('comp.dashboard.noDeviation')}</p>
               </div>
             ) : (
               <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
@@ -484,11 +486,11 @@ export function DashboardView({
       {/* 차트 및 통계 섹션 */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '1.5rem', marginBottom: '2rem' }}>
         {/* 상태별 분포 차트 */}
-        <ChartCard title="프로젝트 상태 분포">
+        <ChartCard title={t('comp.dashboard.chartProjectStatus')}>
           <StatusChart data={statusDistribution.projects} />
         </ChartCard>
         
-        <ChartCard title="일감 상태 분포">
+        <ChartCard title={t('comp.dashboard.chartTaskStatus')}>
           <StatusChart data={statusDistribution.tasks} />
         </ChartCard>
       </div>
@@ -496,12 +498,12 @@ export function DashboardView({
       {/* 담당자별 통계 및 마감일 임박 항목 */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '1.5rem' }}>
         {/* 담당자별 작업량 */}
-        <ChartCard title="담당자별 작업량 (Top 10)">
+        <ChartCard title={t('comp.dashboard.ownerTop')}>
           <OwnerStatsTable data={ownerStats} />
         </ChartCard>
 
         {/* 마감일 임박 항목 */}
-        <ChartCard title="다가오는 마감일 (7일 이내)">
+        <ChartCard title={t('comp.dashboard.deadlines')}>
           <UpcomingDeadlinesList items={upcomingDeadlines} />
         </ChartCard>
       </div>

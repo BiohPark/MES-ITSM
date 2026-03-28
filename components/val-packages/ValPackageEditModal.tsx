@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import type { Project, ProjectChild } from '@/types/project'
 import { CommentsSection } from '../common/CommentsSection'
+import { useI18n } from '@/lib/i18n'
 
 export function ValPackageEditModal({
   valPackage,
@@ -18,6 +19,7 @@ export function ValPackageEditModal({
   onSave: (valPackage: Project) => Promise<void> | void
   currentUser?: { name: string; username: string }
 }) {
+  const { t } = useI18n()
   const [formData, setFormData] = useState<any>({ ...valPackage, description: (valPackage as any).description || '', start: (valPackage as any).start || new Date().toISOString().slice(0, 10), srb_ver: (valPackage as any).srb_ver || '' })
   const [saving, setSaving] = useState(false)
   const [users, setUsers] = useState<Array<{ id: string; name: string }>>([])
@@ -108,17 +110,17 @@ export function ValPackageEditModal({
         newSet.delete(taskId)
         setSelectedTaskIds(newSet)
       } else {
-        alert('링크 해제에 실패했습니다.')
+        alert(t('comp.valEditModal.unlinkFail'))
       }
     } catch (error) {
       console.error('Error unlinking task:', error)
-      alert('링크 해제에 실패했습니다.')
+      alert(t('comp.valEditModal.unlinkFail'))
     }
   }
 
   const handleLinkTasks = async () => {
     if (selectedTaskIds.size === 0) {
-      alert('링크할 일감을 선택해주세요.')
+      alert(t('comp.valEditModal.selectTasks'))
       return
     }
     try {
@@ -133,13 +135,13 @@ export function ValPackageEditModal({
       })
       if (response.ok) {
         await fetchLinkedTasks()
-        alert('일감 링크가 완료되었습니다.')
+        alert(t('comp.valEditModal.linkOk'))
       } else {
-        alert('일감 링크에 실패했습니다.')
+        alert(t('comp.valEditModal.linkFail'))
       }
     } catch (error) {
       console.error('Error linking tasks:', error)
-      alert('일감 링크에 실패했습니다.')
+      alert(t('comp.valEditModal.linkFail'))
     }
   }
 
@@ -183,7 +185,7 @@ export function ValPackageEditModal({
       <div className="modal-overlay side-panel" onClick={onClose} />
       <div className="modal-content side-panel" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>{mode === 'edit' ? 'VAL Pkg 수정' : '새 VAL Pkg 추가'}</h2>
+          <h2>{mode === 'edit' ? t('comp.valEditModal.titleEdit') : t('comp.valEditModal.titleCreate')}</h2>
           <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
             <button
               type="submit"
@@ -192,7 +194,7 @@ export function ValPackageEditModal({
               className="btn btn-primary"
               style={{ margin: 0 }}
             >
-              {saving ? '저장 중...' : 'Save'}
+              {saving ? t('comp.ui.saving') : t('comp.ui.save')}
             </button>
             <button className="modal-close" onClick={onClose}>
               ×
@@ -215,7 +217,7 @@ export function ValPackageEditModal({
           </div>
 
           <div className="form-group">
-            <label htmlFor="name">VAL Pkg 이름</label>
+            <label htmlFor="name">{t('comp.valEditModal.name')}</label>
             <input
               type="text"
               id="name"
@@ -228,7 +230,7 @@ export function ValPackageEditModal({
           </div>
 
           <div className="form-group">
-            <label htmlFor="owner">담당 리더</label>
+            <label htmlFor="owner">{t('comp.valEditModal.owner')}</label>
             <select
               id="owner"
               name="owner"
@@ -237,7 +239,7 @@ export function ValPackageEditModal({
               required
               className="form-input"
             >
-              <option value="">선택하세요</option>
+              <option value="">{t('comp.valEditModal.select')}</option>
               {users.map((user) => (
                 <option key={user.id} value={user.name}>
                   {user.name}
@@ -248,7 +250,7 @@ export function ValPackageEditModal({
 
           <div className="form-row">
             <div className="form-group">
-              <label htmlFor="members">팀원 수</label>
+              <label htmlFor="members">{t('comp.valEditModal.members')}</label>
               <input
                 type="number"
                 id="members"
@@ -262,7 +264,7 @@ export function ValPackageEditModal({
             </div>
 
             <div className="form-group">
-              <label htmlFor="progress">진행률 (%)</label>
+              <label htmlFor="progress">{t('comp.valEditModal.progressPct')}</label>
               <input
                 type="number"
                 id="progress"
@@ -278,7 +280,7 @@ export function ValPackageEditModal({
 
           <div className="form-row">
             <div className="form-group">
-              <label htmlFor="status">상태</label>
+              <label htmlFor="status">{t('comp.valEditModal.status')}</label>
               <select
                 id="status"
                 name="status"
@@ -308,7 +310,7 @@ export function ValPackageEditModal({
             </div>
 
             <div className="form-group">
-              <label htmlFor="start">시작일</label>
+              <label htmlFor="start">{t('comp.valEditModal.start')}</label>
               <input
                 type="date"
                 id="start"
@@ -320,7 +322,7 @@ export function ValPackageEditModal({
             </div>
 
             <div className="form-group">
-              <label htmlFor="due">마감일</label>
+              <label htmlFor="due">{t('comp.valEditModal.due')}</label>
               <input
                 type="date"
                 id="due"
@@ -334,7 +336,7 @@ export function ValPackageEditModal({
           </div>
 
           <div className="form-group">
-            <label htmlFor="description">상세 내용</label>
+            <label htmlFor="description">{t('comp.valEditModal.detail')}</label>
             <textarea
               id="description"
               name="description"
@@ -349,14 +351,14 @@ export function ValPackageEditModal({
                 fontSize: '0.875rem',
                 lineHeight: '1.4',
               }}
-              placeholder="VAL Pkg의 상세 내용을 입력하세요..."
+              placeholder={t('comp.valEditModal.detailPh')}
             />
           </div>
 
           {mode === 'edit' && (
             <>
               <div className="form-group">
-                <label>개발 일감(링크) 연결</label>
+                <label>{t('comp.valEditModal.devTasksLink')}</label>
                 <div style={{ 
                   border: '1px solid #d1d5db', 
                   borderRadius: '0.5rem', 
@@ -426,15 +428,15 @@ export function ValPackageEditModal({
                     fontSize: '0.875rem',
                   }}
                 >
-                  선택한 일감 링크 ({selectedTaskIds.size}개)
+                  {t('comp.valEditModal.selectedLink', { n: selectedTaskIds.size })}
                 </button>
               </div>
 
               <div className="form-group">
-                <label>링크된 일감 목록</label>
+                <label>{t('comp.valEditModal.linkedList')}</label>
                 {linkedTasks.length === 0 ? (
                   <p style={{ color: '#6b7280', padding: '1rem', backgroundColor: '#f9fafb', borderRadius: '0.5rem' }}>
-                    링크된 일감이 없습니다.
+                    {t('comp.valEditModal.noLinked')}
                   </p>
                 ) : (
                   <div style={{ 
@@ -476,7 +478,7 @@ export function ValPackageEditModal({
                             fontSize: '0.875rem',
                           }}
                         >
-                          링크 해제
+                          {t('comp.valEditModal.unlink')}
                         </button>
                       </div>
                     ))}

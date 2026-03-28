@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react'
 import type { Project } from '@/types/project'
 import { StatusBadge } from '../common/StatusBadge'
 import { Progress } from '../common/Progress'
+import { useI18n } from '@/lib/i18n'
 
 export function ValPackagesTable({
   valPackages,
@@ -30,6 +31,7 @@ export function ValPackagesTable({
   onDeleteModeChange: (enabled: boolean) => void
   onBatchDelete: () => void
 }) {
+  const { t } = useI18n()
   const [filterStatus, setFilterStatus] = useState<string>('')
   const [filterOwner, setFilterOwner] = useState<string>('')
 
@@ -62,7 +64,7 @@ export function ValPackagesTable({
   if (loading) {
     return (
       <div className="placeholder">
-        <p>데이터를 불러오는 중...</p>
+        <p>{t('comp.ui.loading')}</p>
       </div>
     )
   }
@@ -70,9 +72,9 @@ export function ValPackagesTable({
   if (error) {
     return (
       <div className="placeholder">
-        <p style={{ color: '#e74c3c' }}>오류: {error}</p>
+        <p style={{ color: '#e74c3c' }}>{t('comp.ui.errorPrefix')} {error}</p>
         <button onClick={onRefresh} className="refresh-button">
-          다시 시도
+          {t('comp.ui.retry')}
         </button>
       </div>
     )
@@ -82,10 +84,10 @@ export function ValPackagesTable({
     return (
       <div className="table-wrapper">
         <div className="table-header">
-          <h2>VAL Pkg 목록</h2>
+          <h2>{t('comp.valTable.title')}</h2>
           <div className="table-actions">
             <button onClick={onRefresh} className="refresh-button">
-              새로고침
+              {t('comp.ui.refresh')}
             </button>
             {!isDeleteMode ? (
               <>
@@ -97,7 +99,7 @@ export function ValPackagesTable({
                   className="primary-button"
                   style={{ backgroundColor: '#e74c3c' }}
                 >
-                  삭제
+                  {t('comp.ui.delete')}
                 </button>
               </>
             ) : (
@@ -108,14 +110,14 @@ export function ValPackagesTable({
                   }}
                   className="refresh-button"
                 >
-                  취소
+                  {t('comp.ui.cancel')}
                 </button>
               </>
             )}
           </div>
         </div>
         <div className="placeholder">
-          <p>등록된 VAL Pkg가 없습니다.</p>
+          <p>{t('comp.valTable.noVal')}</p>
         </div>
       </div>
     )
@@ -124,7 +126,14 @@ export function ValPackagesTable({
   return (
     <div className="table-wrapper">
       <div className="table-header">
-        <h2>VAL Pkg 목록 {filteredValPackages.length > 0 && <span style={{ fontSize: '0.875rem', fontWeight: 'normal', color: '#64748b' }}>({filteredValPackages.length}개)</span>}</h2>
+        <h2>
+          {t('comp.valTable.title')}
+          {filteredValPackages.length > 0 && (
+            <span style={{ fontSize: '0.875rem', fontWeight: 'normal', color: '#64748b' }}>
+              {t('comp.valTable.listCount', { n: filteredValPackages.length })}
+            </span>
+          )}
+        </h2>
         <div className="table-actions">
           <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginRight: '0.75rem' }}>
             <select
@@ -139,7 +148,7 @@ export function ValPackagesTable({
                 cursor: 'pointer',
               }}
             >
-              <option value="">전체 상태</option>
+              <option value="">{t('comp.valTable.filterAllStatus')}</option>
               {uniqueStatuses.map((status) => (
                 <option key={status} value={status}>
                   {status}
@@ -158,7 +167,7 @@ export function ValPackagesTable({
                 cursor: 'pointer',
               }}
             >
-              <option value="">전체 담당 리더</option>
+              <option value="">{t('comp.valTable.filterAllLeaders')}</option>
               {uniqueOwners.map((owner) => (
                 <option key={owner} value={owner}>
                   {owner}
@@ -180,12 +189,12 @@ export function ValPackagesTable({
                   cursor: 'pointer',
                 }}
               >
-                필터 초기화
+                {t('comp.tasks.resetFilters')}
               </button>
             )}
           </div>
           <button onClick={onRefresh} className="refresh-button">
-            새로고침
+            {t('comp.ui.refresh')}
           </button>
           {!isDeleteMode ? (
             <>
@@ -197,7 +206,7 @@ export function ValPackagesTable({
                 className="primary-button"
                 style={{ backgroundColor: '#e74c3c' }}
               >
-                삭제
+                {t('comp.ui.delete')}
               </button>
             </>
           ) : (
@@ -208,7 +217,7 @@ export function ValPackagesTable({
                 }}
                 className="refresh-button"
               >
-                취소
+                {t('comp.ui.cancel')}
               </button>
               {selectedValPackageIds.size > 0 && (
                 <button
@@ -216,7 +225,7 @@ export function ValPackagesTable({
                   className="primary-button"
                   style={{ backgroundColor: '#e74c3c' }}
                 >
-                  VAL Pkg 삭제 ({selectedValPackageIds.size})
+                  {t('comp.valTable.deleteVal')} ({selectedValPackageIds.size})
                 </button>
               )}
             </>
@@ -225,21 +234,21 @@ export function ValPackagesTable({
       </div>
       {filteredValPackages.length === 0 ? (
         <div className="placeholder">
-          <p>필터 조건에 맞는 VAL Pkg가 없습니다.</p>
+          <p>{t('comp.valTable.noMatch')}</p>
         </div>
       ) : (
         <table>
           <thead>
             <tr>
               {isDeleteMode && <th style={{ width: '40px' }}></th>}
-              <th>VAL Pkg</th>
-              <th>담당 리더</th>
-              <th>인원</th>
-              <th>상태</th>
-              <th>진척도(계획/실적)</th>
-              <th>SRB Ver.</th>
-              <th>시작일</th>
-              <th>마감일</th>
+              <th>{t('comp.valTable.colVal')}</th>
+              <th>{t('comp.valTable.colLeader')}</th>
+              <th>{t('comp.valTable.colHeadcount')}</th>
+              <th>{t('comp.valTable.colStatus')}</th>
+              <th>{t('comp.valTable.colProgress')}</th>
+              <th>{t('comp.valTable.colSrb')}</th>
+              <th>{t('comp.valTable.colStart')}</th>
+              <th>{t('comp.valTable.colDue')}</th>
             </tr>
           </thead>
           <tbody>
@@ -267,7 +276,10 @@ export function ValPackagesTable({
                   <span className="project-id">{valPackage.id}</span>
                 </td>
                 <td>{valPackage.owner}</td>
-                <td>{valPackage.members}명</td>
+                <td>
+                  {valPackage.members}
+                  {t('comp.ui.name')}
+                </td>
                 <td>
                   <StatusBadge status={valPackage.status} />
                 </td>

@@ -3,7 +3,8 @@
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react'
 import type { MouseEvent } from 'react'
 import type { Project, ProjectChild } from '@/types/project'
-import { APP_VERSION, TABS, type TabKey } from '@/utils/constants'
+import { APP_VERSION, isValidTabKey, type TabKey } from '@/utils/constants'
+import { useI18n, tabTranslationPath } from '@/lib/i18n'
 import { buildNewProject, buildNewChild, buildNewGmpRecord, buildNewIssue, buildNewTicket, buildNewValPackage } from '@/utils/project-utils'
 import type { Issue } from '@/types/issue'
 import type { Ticket, TicketType } from '@/types/ticket'
@@ -41,6 +42,7 @@ import { SettingsIcon, SearchIcon } from '@/components/common/Icons'
 import { ServiceNowLayout } from '@/components/layout/ServiceNowLayout'
 
 export default function Home() {
+  const { t } = useI18n()
   const [activeTab, setActiveTab] = useState<TabKey>('dashboard')
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
@@ -270,7 +272,7 @@ export default function Home() {
         
         // 데이터베이스 연결 오류인 경우 명확한 메시지
         if (errorData.code === 'DB_CONNECTION_ERROR' || response.status === 503) {
-          throw new Error('데이터베이스 연결에 실패했습니다. 데이터베이스 서버가 실행 중인지 확인해주세요.')
+          throw new Error(t('page.errors.dbConnection'))
         }
         
         throw new Error(errorMessage)
@@ -284,7 +286,7 @@ export default function Home() {
       
       // 네트워크 오류 처리
       if (err.name === 'TypeError' && err.message.includes('fetch')) {
-        setError('서버에 연결할 수 없습니다. 네트워크 연결을 확인해주세요.')
+        setError(t('page.errors.network'))
       } else {
         const errorMessage = err instanceof Error ? err.message : 'Unknown error'
         setError(errorMessage)
@@ -298,7 +300,7 @@ export default function Home() {
         setLoading(false)
       }
     }
-  }, [applyProjectsPayload])
+  }, [applyProjectsPayload, t])
 
   // Orphan tasks 가져오기
   const fetchOrphanTasks = useCallback(async (signal?: AbortSignal, detail: 'lite' | 'full' = 'full') => {
@@ -343,7 +345,7 @@ export default function Home() {
         
         // 데이터베이스 연결 오류인 경우 명확한 메시지
         if (errorData.code === 'DB_CONNECTION_ERROR' || response.status === 503) {
-          throw new Error('데이터베이스 연결에 실패했습니다. 데이터베이스 서버가 실행 중인지 확인해주세요.')
+          throw new Error(t('page.errors.dbConnection'))
         }
         
         throw new Error(errorMessage)
@@ -364,7 +366,7 @@ export default function Home() {
         setGmpRecordsLoading(false)
       }
     }
-  }, [normalizeGmpRecords])
+  }, [normalizeGmpRecords, t])
 
   // VAL Pkg 관련 함수들
   const fetchValPackages = useCallback(async (signal?: AbortSignal) => {
@@ -503,15 +505,15 @@ export default function Home() {
       })
       const data = await response.json()
       if (!response.ok || !data.ticket) {
-        throw new Error(data.error || '티켓 상세를 불러오지 못했습니다.')
+        throw new Error(data.error || t('page.errors.ticketLoad'))
       }
       setSelectedTicket(data.ticket)
       setTicketEditMode('edit')
       setIsTicketEditing(true)
     } catch (err) {
-      alert(err instanceof Error ? err.message : '티켓 상세를 불러오지 못했습니다.')
+      alert(err instanceof Error ? err.message : t('page.errors.ticketLoad'))
     }
-  }, [])
+  }, [t])
 
   const handleCreateTicket = useCallback(async (ticketType: TicketType) => {
     const newTicket = await buildNewTicket(ticketType)
@@ -537,14 +539,14 @@ export default function Home() {
     })
     const data = await response.json().catch(() => ({}))
     if (!response.ok) {
-      throw new Error(data.error || '티켓 저장에 실패했습니다.')
+      throw new Error(data.error || t('page.errors.ticketSave'))
     }
     setTicketsByType((prev) => ({
       ...prev,
       [updatedTicket.ticket_type]: data.tickets || prev[updatedTicket.ticket_type],
     }))
     loadedDataRef.current.tickets[updatedTicket.ticket_type] = true
-  }, [ticketEditMode])
+  }, [ticketEditMode, t])
 
   // 회의록 관련 함수들
   const fetchMeetingNotes = useCallback(async (signal?: AbortSignal): Promise<MeetingNote[] | undefined> => {
@@ -591,7 +593,7 @@ export default function Home() {
         credentials: 'include',
       })
       if (!response.ok) {
-        throw new Error('이슈 상세를 불러오지 못했습니다.')
+        throw new Error(t('page.errors.issueLoad'))
       }
       const data = (await response.json()) as Issue[]
       setIssues(data)
@@ -599,12 +601,12 @@ export default function Home() {
       issue = data.find((item) => item.id === issueId) || null
     }
     if (!issue) {
-      throw new Error('이슈를 찾을 수 없습니다.')
+      throw new Error(t('page.errors.issueNotFound'))
     }
     setSelectedIssue(issue)
     setIssueEditMode('edit')
     setIsIssueEditing(true)
-  }, [issues])
+  }, [issues, t])
 
   const openMeetingNoteDetailById = useCallback(async (meetingNoteId: string) => {
     setActiveTab('meetings')
@@ -616,7 +618,7 @@ export default function Home() {
       })
       const data = await response.json().catch(() => ({}))
       if (!response.ok || !data.meetingNote) {
-        throw new Error(data.error || '회의록을 불러오지 못했습니다.')
+        throw new Error(data.error || t('page.errors.meetingLoad'))
       }
       meetingNote = data.meetingNote as MeetingNote
       setMeetingNotes((prev) => (prev.some((item) => item.id === meetingNoteId) ? prev : [meetingNote!, ...prev]))
@@ -624,7 +626,7 @@ export default function Home() {
     setSelectedMeetingNote(meetingNote)
     setMeetingNoteEditMode('edit')
     setIsMeetingNoteEditing(true)
-  }, [meetingNotes])
+  }, [meetingNotes, t])
 
   const openProjectTaskDetailById = useCallback(async (taskId: string) => {
     setActiveTab('tasks')
@@ -638,7 +640,7 @@ export default function Home() {
         credentials: 'include',
       })
       if (!response.ok) {
-        throw new Error('일감 목록을 불러오지 못했습니다.')
+        throw new Error(t('page.errors.taskListLoad'))
       }
       const data = (await response.json()) as Project[]
       applyProjectsPayload(data, 'full')
@@ -651,7 +653,7 @@ export default function Home() {
         credentials: 'include',
       })
       if (!response.ok) {
-        throw new Error('미배정 일감을 불러오지 못했습니다.')
+        throw new Error(t('page.errors.orphanLoad'))
       }
       const data = (await response.json()) as ProjectChild[]
       applyOrphanTasksPayload(data, 'full')
@@ -684,8 +686,8 @@ export default function Home() {
       return
     }
 
-    throw new Error('일감을 찾을 수 없습니다.')
-  }, [applyOrphanTasksPayload, applyProjectsPayload, normalizeProjects, orphanTasks, projects])
+    throw new Error(t('page.errors.taskNotFound'))
+  }, [applyOrphanTasksPayload, applyProjectsPayload, normalizeProjects, orphanTasks, projects, t])
 
   const openGmpRecordDetailById = useCallback(async (recordId: string) => {
     setActiveTab('gmp-record')
@@ -696,7 +698,7 @@ export default function Home() {
         credentials: 'include',
       })
       if (!response.ok) {
-        throw new Error('GMP Record를 불러오지 못했습니다.')
+        throw new Error(t('page.errors.gmpLoad'))
       }
       const data = await response.json()
       records = normalizeGmpRecords(data)
@@ -705,7 +707,7 @@ export default function Home() {
     }
     const record = records.find((item: any) => item.id === recordId)
     if (!record) {
-      throw new Error('GMP Record를 찾을 수 없습니다.')
+      throw new Error(t('page.errors.gmpNotFound'))
     }
     setSelectedTask({
       task: record,
@@ -714,7 +716,7 @@ export default function Home() {
     })
     setTaskEditMode('edit')
     setIsTaskEditing(true)
-  }, [gmpRecords, normalizeGmpRecords])
+  }, [gmpRecords, normalizeGmpRecords, t])
 
   useEffect(() => {
     if (deepLinkHandledRef.current || isLoadingSession) return
@@ -742,7 +744,7 @@ export default function Home() {
     void (async () => {
       try {
         if (ticketId) {
-          const targetTab = TABS.some((tab) => tab.key === tabParam) ? (tabParam as TabKey) : 'incident'
+          const targetTab = tabParam && isValidTabKey(tabParam) ? (tabParam as TabKey) : 'incident'
           setActiveTab(targetTab)
           await handleOpenTicketDetail(ticketId)
           return
@@ -777,7 +779,7 @@ export default function Home() {
           }
         }
 
-        if (tabParam && TABS.some((tab) => tab.key === tabParam)) {
+        if (tabParam && isValidTabKey(tabParam)) {
           setActiveTab(tabParam as TabKey)
         }
       } catch (error) {
@@ -882,11 +884,11 @@ export default function Home() {
         opts.push({ value: child.id, label: `${project.name} — ${child.title}` })
       })
     })
-    orphanTasks.forEach((t) => {
-      opts.push({ value: t.id, label: `(미배정) ${t.title}` })
+    orphanTasks.forEach((task) => {
+      opts.push({ value: task.id, label: `${t('common.unassignedPrefix')} ${task.title}` })
     })
     return opts
-  }, [projects, orphanTasks])
+  }, [projects, orphanTasks, t])
 
   const handleProjectSave = async (project: Project, mode: 'create' | 'edit') => {
     try {
@@ -922,7 +924,7 @@ export default function Home() {
       if (process.env.NODE_ENV === 'development') {
         console.error('Error saving project:', err)
       }
-      const errorMessage = err instanceof Error ? err.message : '프로젝트 저장에 실패했습니다.'
+      const errorMessage = err instanceof Error ? err.message : t('page.errors.projectSaveFailed')
       alert(errorMessage)
     }
   }
@@ -953,7 +955,7 @@ export default function Home() {
       if (process.env.NODE_ENV === 'development') {
         console.error('Error adding child:', err)
       }
-      alert('하위 아이템 추가에 실패했습니다.')
+      alert(t('page.alerts.addChildFailed'))
     }
   }
 
@@ -984,18 +986,18 @@ export default function Home() {
       if (process.env.NODE_ENV === 'development') {
         console.error('Error adding task:', err)
       }
-      alert('일감 추가에 실패했습니다.')
+      alert(t('page.alerts.addTaskFailed'))
       throw err
     }
   }
 
   const handleBatchDeleteProjects = async () => {
     if (selectedProjectIds.size === 0) {
-      alert('삭제할 프로젝트를 선택해주세요.')
+      alert(t('page.alerts.selectProjects'))
       return
     }
 
-    if (!confirm(`선택한 ${selectedProjectIds.size}개의 프로젝트를 삭제하시겠습니까?`)) {
+    if (!confirm(t('page.confirms.deleteProjects', { count: selectedProjectIds.size }))) {
       return
     }
 
@@ -1023,22 +1025,22 @@ export default function Home() {
       applyProjectsPayload(latestProjects)
       setSelectedProjectIds(new Set())
       setIsDeleteMode(false)
-      alert('프로젝트가 삭제되었습니다.')
+      alert(t('page.alerts.projectsDeleted'))
     } catch (err) {
       if (process.env.NODE_ENV === 'development') {
         console.error('Error deleting projects:', err)
       }
-      alert('프로젝트 삭제에 실패했습니다.')
+      alert(t('page.alerts.projectsDeleteFailed'))
     }
   }
 
   const handleBatchDeleteTasks = async () => {
     if (selectedTaskIds.size === 0) {
-      alert('삭제할 일감을 선택해주세요.')
+      alert(t('page.alerts.selectTasks'))
       return
     }
 
-    if (!confirm(`선택한 ${selectedTaskIds.size}개의 일감을 삭제하시겠습니까?`)) {
+    if (!confirm(t('page.confirms.deleteTasks', { count: selectedTaskIds.size }))) {
       return
     }
 
@@ -1090,7 +1092,7 @@ export default function Home() {
               if (process.env.NODE_ENV === 'development') {
                 console.error(`Failed to delete task ${taskId} from project ${projectId}:`, errorMessage)
               }
-              throw new Error(`일감 ${taskId} 삭제 실패: ${errorMessage}`)
+              throw new Error(t('page.errors.taskDeleteLine', { taskId, message: errorMessage }))
             }
             const data = await response.json().catch(() => ({}))
             latestProjects = data.projects
@@ -1109,13 +1111,13 @@ export default function Home() {
       }
       setSelectedTaskIds(new Set())
       setIsDeleteMode(false)
-      alert('일감이 삭제되었습니다.')
+      alert(t('page.alerts.tasksDeleted'))
     } catch (err) {
       if (process.env.NODE_ENV === 'development') {
         console.error('Error deleting tasks:', err)
       }
-      const errorMessage = err instanceof Error ? err.message : '알 수 없는 오류'
-      alert(`일감 삭제에 실패했습니다: ${errorMessage}`)
+      const errorMessage = err instanceof Error ? err.message : t('common.unknownError')
+      alert(t('page.alerts.tasksDeleteFailed', { message: errorMessage }))
     }
   }
 
@@ -1145,18 +1147,18 @@ export default function Home() {
       if (process.env.NODE_ENV === 'development') {
         console.error('Error adding GMP record:', err)
       }
-      alert('GMP Record 추가에 실패했습니다.')
+      alert(t('page.alerts.addGmpFailed'))
       throw err
     }
   }
 
   const handleBatchDeleteGmpRecords = async () => {
     if (selectedTaskIds.size === 0) {
-      alert('삭제할 GMP Record를 선택해주세요.')
+      alert(t('page.alerts.selectGmp'))
       return
     }
 
-    if (!confirm(`선택한 ${selectedTaskIds.size}개의 GMP Record를 삭제하시겠습니까?`)) {
+    if (!confirm(t('page.confirms.deleteGmp', { count: selectedTaskIds.size }))) {
       return
     }
 
@@ -1186,22 +1188,22 @@ export default function Home() {
       await fetchGmpRecords()
       setSelectedTaskIds(new Set())
       setIsDeleteMode(false)
-      alert('GMP Record가 삭제되었습니다.')
+      alert(t('page.alerts.gmpDeleted'))
     } catch (err) {
       if (process.env.NODE_ENV === 'development') {
         console.error('Error deleting GMP records:', err)
       }
-      alert('GMP Record 삭제에 실패했습니다.')
+      alert(t('page.alerts.gmpDeleteFailed'))
     }
   }
 
   const handleBatchDeleteChildren = async () => {
     if (selectedChildIds.size === 0) {
-      alert('삭제할 하위 아이템을 선택해주세요.')
+      alert(t('page.alerts.selectChildren'))
       return
     }
 
-    if (!confirm(`선택한 ${selectedChildIds.size}개의 하위 아이템을 삭제하시겠습니까?`)) {
+    if (!confirm(t('page.confirms.deleteChildren', { count: selectedChildIds.size }))) {
       return
     }
 
@@ -1276,13 +1278,13 @@ export default function Home() {
 
       await fetchProjects()
       setSelectedChildIds(new Set())
-      alert('하위 아이템이 삭제되었습니다.')
+      alert(t('page.alerts.childrenDeleted'))
     } catch (err) {
       if (process.env.NODE_ENV === 'development') {
         console.error('Error deleting children:', err)
       }
-      const errorMessage = err instanceof Error ? err.message : '알 수 없는 오류'
-      alert(`하위 아이템 삭제에 실패했습니다: ${errorMessage}`)
+      const errorMessage = err instanceof Error ? err.message : t('common.unknownError')
+      alert(t('page.alerts.childrenDeleteFailed', { message: errorMessage }))
     }
   }
 
@@ -1353,18 +1355,18 @@ export default function Home() {
       if (process.env.NODE_ENV === 'development') {
         console.error('Error saving VAL Pkg:', err)
       }
-      const errorMessage = err instanceof Error ? err.message : 'VAL Pkg 저장에 실패했습니다.'
+      const errorMessage = err instanceof Error ? err.message : t('page.errors.valPkgSaveFailed')
       alert(errorMessage)
     }
   }
 
   const handleBatchDeleteValPackages = async () => {
     if (selectedValPackageIds.size === 0) {
-      alert('삭제할 VAL Pkg를 선택해주세요.')
+      alert(t('page.alerts.selectValPkg'))
       return
     }
 
-    if (!confirm(`선택한 ${selectedValPackageIds.size}개의 VAL Pkg를 삭제하시겠습니까?`)) {
+    if (!confirm(t('page.confirms.deleteValPkg', { count: selectedValPackageIds.size }))) {
       return
     }
 
@@ -1389,12 +1391,12 @@ export default function Home() {
       await fetchValPackages()
       setSelectedValPackageIds(new Set())
       setIsDeleteMode(false)
-      alert('VAL Pkg가 삭제되었습니다.')
+      alert(t('page.alerts.valPkgDeleted'))
     } catch (err) {
       if (process.env.NODE_ENV === 'development') {
         console.error('Error deleting VAL Pkg:', err)
       }
-      alert('VAL Pkg 삭제에 실패했습니다.')
+      alert(t('page.alerts.valPkgDeleteFailed'))
     }
   }
 
@@ -1434,7 +1436,7 @@ export default function Home() {
       if (process.env.NODE_ENV === 'development') {
         console.error('Error adding issue:', err)
       }
-      alert('이슈 추가에 실패했습니다.')
+      alert(t('page.alerts.addIssueFailed'))
       throw err
     }
   }
@@ -1465,18 +1467,18 @@ export default function Home() {
       if (process.env.NODE_ENV === 'development') {
         console.error('Error updating issue:', err)
       }
-      alert('이슈 수정에 실패했습니다.')
+      alert(t('page.alerts.updateIssueFailed'))
       throw err
     }
   }
 
   const handleBatchDeleteIssues = async () => {
     if (selectedIssueIds.size === 0) {
-      alert('삭제할 이슈를 선택해주세요.')
+      alert(t('page.alerts.selectIssues'))
       return
     }
 
-    if (!confirm(`선택한 ${selectedIssueIds.size}개의 이슈를 삭제하시겠습니까?`)) {
+    if (!confirm(t('page.confirms.deleteIssues', { count: selectedIssueIds.size }))) {
       return
     }
 
@@ -1507,12 +1509,12 @@ export default function Home() {
       }
       setSelectedIssueIds(new Set())
       setIsDeleteMode(false)
-      alert('이슈가 삭제되었습니다.')
+      alert(t('page.alerts.issuesDeleted'))
     } catch (err) {
       if (process.env.NODE_ENV === 'development') {
         console.error('Error deleting issues:', err)
       }
-      alert('이슈 삭제에 실패했습니다.')
+      alert(t('page.alerts.issuesDeleteFailed'))
     }
   }
 
@@ -1539,7 +1541,7 @@ export default function Home() {
       if (process.env.NODE_ENV === 'development') {
         console.error('Error adding meeting note:', err)
       }
-      alert('회의록 추가에 실패했습니다.')
+      alert(t('page.alerts.addMeetingFailed'))
       throw err
     }
   }
@@ -1566,18 +1568,18 @@ export default function Home() {
       if (process.env.NODE_ENV === 'development') {
         console.error('Error updating meeting note:', err)
       }
-      alert('회의록 수정에 실패했습니다.')
+      alert(t('page.alerts.updateMeetingFailed'))
       throw err
     }
   }
 
   const handleBatchDeleteMeetingNotes = async () => {
     if (selectedMeetingNoteIds.size === 0) {
-      alert('삭제할 회의록을 선택해주세요.')
+      alert(t('page.alerts.selectMeetings'))
       return
     }
 
-    if (!confirm(`선택한 ${selectedMeetingNoteIds.size}개의 회의록을 삭제하시겠습니까?`)) {
+    if (!confirm(t('page.confirms.deleteMeetings', { count: selectedMeetingNoteIds.size }))) {
       return
     }
 
@@ -1602,12 +1604,12 @@ export default function Home() {
       await fetchMeetingNotes()
       setSelectedMeetingNoteIds(new Set())
       setIsDeleteMode(false)
-      alert('회의록이 삭제되었습니다.')
+      alert(t('page.alerts.meetingsDeleted'))
     } catch (err) {
       if (process.env.NODE_ENV === 'development') {
         console.error('Error deleting meeting notes:', err)
       }
-      alert('회의록 삭제에 실패했습니다.')
+      alert(t('page.alerts.meetingsDeleteFailed'))
     }
   }
 
@@ -1641,7 +1643,7 @@ export default function Home() {
       if (process.env.NODE_ENV === 'development') {
         console.error('Error creating new meeting note:', err)
       }
-      alert('새 회의록 생성에 실패했습니다.')
+      alert(t('page.alerts.createMeetingFailed'))
     }
   }
 
@@ -1650,7 +1652,7 @@ export default function Home() {
     return (
       <main className="dashboard">
         <div className="placeholder" style={{ padding: '4rem 2rem', textAlign: 'center' }}>
-          <p>로딩 중...</p>
+          <p>{t('common.loading')}</p>
         </div>
       </main>
     )
@@ -1661,7 +1663,7 @@ export default function Home() {
     return (
       <main className="dashboard">
         <div className="placeholder" style={{ padding: '4rem 2rem', textAlign: 'center' }}>
-          <p>데이터를 불러오는 중...</p>
+          <p>{t('common.loadingData')}</p>
         </div>
       </main>
     )
@@ -1834,7 +1836,7 @@ export default function Home() {
               records={gmpRecords}
               loading={gmpRecordsLoading}
               error={gmpRecordsError}
-              title="GMP Record 목록"
+              title={t('page.gmpRecordListTitle')}
               onRefresh={async () => {
                 await fetchGmpRecords()
               }}
@@ -2226,10 +2228,10 @@ export default function Home() {
           user && (user.role === 'admin' || user.isAdmin) ? (
             <BackupView />
           ) : (
-            <Placeholder label="접근 권한이 없습니다." />
+            <Placeholder label={t('page.noAccess')} />
           )
         ) : (
-          <Placeholder label={TABS.find((t: { key: TabKey; label: string }) => t.key === activeTab)?.label ?? ''} />
+          <Placeholder label={t(tabTranslationPath(activeTab))} />
         )}
 
         {/* 프로젝트 목록 탭과 일감 탭, GMP Record 탭, 검색 탭에서 일감 수정 모달 표시 */}
@@ -2319,7 +2321,7 @@ export default function Home() {
                 if (process.env.NODE_ENV === 'development') {
                   console.error('Error saving task:', err)
                 }
-                alert(activeTab === 'gmp-record' ? 'GMP Record 저장에 실패했습니다.' : '일감 저장에 실패했습니다.')
+                alert(activeTab === 'gmp-record' ? t('page.alerts.saveGmpFailed') : t('page.alerts.saveTaskFailed'))
               }
             }}
           />
@@ -2345,7 +2347,7 @@ export default function Home() {
                 if (process.env.NODE_ENV === 'development') {
                   console.error('Error saving ticket:', err)
                 }
-                alert(err instanceof Error ? err.message : '티켓 저장에 실패했습니다.')
+                alert(err instanceof Error ? err.message : t('page.alerts.saveTicketFailed'))
               }
             }}
           />
@@ -2381,7 +2383,7 @@ export default function Home() {
                 })
                 if (!res.ok) {
                   const err = await res.json().catch(() => ({}))
-                  throw new Error(err.error || '일감 생성 실패')
+                  throw new Error(err.error || t('page.errors.taskCreateFailed'))
                 }
                 const data = await res.json()
                 applyProjectsPayload(data.projects)
@@ -2391,7 +2393,7 @@ export default function Home() {
                 return data.newTaskId || null
               } catch (e) {
                 if (process.env.NODE_ENV === 'development') console.error(e)
-                alert(e instanceof Error ? e.message : '일감 생성에 실패했습니다.')
+                alert(e instanceof Error ? e.message : t('page.errors.taskCreateFailedAlert'))
                 return null
               }
             }}
@@ -2456,7 +2458,7 @@ export default function Home() {
                 if (process.env.NODE_ENV === 'development') {
                   console.error('Error saving issue:', err)
                 }
-                alert('이슈 저장에 실패했습니다.')
+                alert(t('page.alerts.saveIssueFailed'))
               }
             }}
           />
@@ -2569,7 +2571,7 @@ export default function Home() {
                 if (process.env.NODE_ENV === 'development') {
                   console.error('Error saving meeting note:', err)
                 }
-                alert('회의록 저장에 실패했습니다.')
+                alert(t('page.alerts.saveMeetingFailed'))
               }
             }}
           />
@@ -2624,12 +2626,12 @@ export default function Home() {
                 if (process.env.NODE_ENV === 'development') {
                   console.error('Error saving task:', err)
                 }
-                alert('일감 저장에 실패했습니다.')
+                alert(t('page.alerts.saveTaskFailedGeneric'))
               }
             }}
           />
         )}
-        {/* 버전 정보 */}
+        {/* 버전 · 저작권 */}
         <footer style={{
           marginTop: '3rem',
           padding: '1.5rem',
@@ -2638,7 +2640,8 @@ export default function Home() {
           color: '#6b7280',
           fontSize: '0.875rem'
         }}>
-          <p>ITSM Application v{appVersion}</p>
+          <p style={{ margin: '0 0 0.5rem' }}>{t('footer.versionLine', { version: appVersion })}</p>
+          <p style={{ margin: 0, fontSize: '0.8125rem' }}>{t('footer.copyright', { year: new Date().getFullYear() })}</p>
         </footer>
       </div>
 
