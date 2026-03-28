@@ -1,0 +1,30 @@
+{
+  "search.followSymlinks": false,
+  "files.watcherExclude": {
+    "**/node_modules/**": true,
+    "**/.git/**": true,
+    "**/.next/**": true,
+    "**/.next-offline/**": true,
+    "**/release/**": true,
+    "**/coverage/**": true,
+    "**/uploads/**": true,
+    "**/backups/**": true,
+    "**/dist/**": true
+  },
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/.git": true,
+    "**/.next": true,
+    "**/.next-offline": true,
+    "**/release": true,
+    "**/coverage": true,
+    "**/dist": true,
+    "**/*.map": true,
+    "**/*.min.js": true
+  },
+  "files.exclude": {
+    "**/.next": true,
+    "**/.next-offline": true,
+    "**/release": true
+  }
+}

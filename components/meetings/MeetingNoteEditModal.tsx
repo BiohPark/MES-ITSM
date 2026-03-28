@@ -105,6 +105,16 @@ export function MeetingNoteEditModal({
     }
   }
 
+  /** × 버튼: 새 회의이고 제목을 입력하지 않았으면 저장 검증 없이 닫기(취소) */
+  const handleHeaderClose = () => {
+    if (saving) return
+    if (mode === 'create' && !formData.title?.trim()) {
+      onClose()
+      return
+    }
+    void handleSaveAndClose()
+  }
+
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
     setFormData((prev) => ({
@@ -195,7 +205,8 @@ export function MeetingNoteEditModal({
               type="button"
               disabled={saving}
               className="modal-close"
-              onClick={handleSaveAndClose}
+              aria-label={t('common.close')}
+              onClick={handleHeaderClose}
             >
               ×
             </button>

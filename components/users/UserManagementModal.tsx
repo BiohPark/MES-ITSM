@@ -1,7 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useI18n } from '@/lib/i18n/I18nProvider'
+import { useI18n } from '@/lib/i18n'
+
+type DeptRow = { id: number; name: string }
 
 /** DB에 저장된 role 값 → comp.userMgmt.* 표시 키 */
 const USER_ROLE_TO_I18N: Record<string, string> = {
@@ -30,15 +32,38 @@ export function UserManagementModal({ onClose, currentUser, embedInPanel, onBack
     return key ? t(key) : r
   }
 
-  const [users, setUsers] = useState<Array<{ id: string; name: string; username?: string; email?: string; role?: string; is_admin?: boolean; can_edit_wbs?: boolean }>>([])
+  const [users, setUsers] = useState<
+    Array<{
+      id: string
+      name: string
+      username?: string
+      email?: string
+      role?: string
+      is_admin?: boolean
+      can_edit_wbs?: boolean
+      department_id?: number | null
+      department_name?: string | null
+    }>
+  >([])
+  const [departments, setDepartments] = useState<DeptRow[]>([])
   const [loading, setLoading] = useState(true)
   const [newUserUsername, setNewUserUsername] = useState('')
   const [newUserName, setNewUserName] = useState('')
   const [newUserEmail, setNewUserEmail] = useState('')
   const [newUserPassword, setNewUserPassword] = useState('')
+  const [newUserDepartmentId, setNewUserDepartmentId] = useState('')
   const [newUserRole, setNewUserRole] = useState<string>('user')
   const [newUserIsAdmin, setNewUserIsAdmin] = useState(false)
-  const [editingUser, setEditingUser] = useState<{ id: string; username: string; name: string; email: string; role: string; is_admin?: boolean; can_edit_wbs?: boolean } | null>(null)
+  const [editingUser, setEditingUser] = useState<{
+    id: string
+    username: string
+    name: string
+    email: string
+    role: string
+    is_admin?: boolean
+    can_edit_wbs?: boolean
+    department_id?: number | null
+  } | null>(null)
   const [editUsername, setEditUsername] = useState('')
   const [editName, setEditName] = useState('')
   const [editEmail, setEditEmail] = useState('')
@@ -46,12 +71,26 @@ export function UserManagementModal({ onClose, currentUser, embedInPanel, onBack
   const [editRole, setEditRole] = useState<string>('user')
   const [editIsAdmin, setEditIsAdmin] = useState(false)
   const [editCanEditWbs, setEditCanEditWbs] = useState(false)
+  const [editDepartmentId, setEditDepartmentId] = useState('')
   const [addingUser, setAddingUser] = useState(false)
-  
+
   const isAdmin = currentUser?.role === 'admin' || !!currentUser?.isAdmin
 
   useEffect(() => {
     fetchUsers()
+  }, [])
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await fetch('/api/departments')
+        if (!res.ok) return
+        const data = await res.json()
+        setDepartments(data.departments || [])
+      } catch {
+        /* ignore */
+      }
+    })()
   }, [])
 
   const fetchUsers = async () => {
@@ -100,6 +139,11 @@ export function UserManagementModal({ onClose, currentUser, embedInPanel, onBack
       alert(t('comp.userMgmt.passwordDigit'))
       return
     }
+    const deptNum = newUserDepartmentId ? Number(newUserDepartmentId) : NaN
+    if (!Number.isFinite(deptNum) || deptNum < 1) {
+      alert(t('comp.userMgmt.departmentRequired'))
+      return
+    }
 
     setAddingUser(true)
     try {
@@ -117,6 +161,7 @@ export function UserManagementModal({ onClose, currentUser, embedInPanel, onBack
             password: newUserPassword,
             role: newUserRole,
             is_admin: newUserRole === 'Viewonly' ? false : newUserIsAdmin,
+            department_id: deptNum,
           },
         }),
       })
@@ -129,6 +174,7 @@ export function UserManagementModal({ onClose, currentUser, embedInPanel, onBack
         setNewUserName('')
         setNewUserEmail('')
         setNewUserPassword('')
+        setNewUserDepartmentId('')
         setNewUserRole('user')
         setNewUserIsAdmin(false)
         await fetchUsers()
@@ -143,7 +189,16 @@ export function UserManagementModal({ onClose, currentUser, embedInPanel, onBack
     }
   }
 
-  const handleRowClick = (user: { id: string; name: string; username?: string; email?: string; role?: string; is_admin?: boolean; can_edit_wbs?: boolean }) => {
+  const handleRowClick = (user: {
+    id: string
+    name: string
+    username?: string
+    email?: string
+    role?: string
+    is_admin?: boolean
+    can_edit_wbs?: boolean
+    department_id?: number | null
+  }) => {
     if (!isAdmin) {
       alert(t('comp.userMgmt.adminEditOnly'))
       return
@@ -157,7 +212,9 @@ export function UserManagementModal({ onClose, currentUser, embedInPanel, onBack
       role: user.role || 'user',
       is_admin: user.is_admin,
       can_edit_wbs: user.can_edit_wbs,
+      department_id: user.department_id ?? null,
     })
+    setEditDepartmentId(user.department_id != null ? String(user.department_id) : '')
     setEditUsername(user.username || '')
     setEditName(user.name)
     setEditEmail(user.email || '')
@@ -176,6 +233,7 @@ export function UserManagementModal({ onClose, currentUser, embedInPanel, onBack
     setEditRole('user')
     setEditIsAdmin(false)
     setEditCanEditWbs(false)
+    setEditDepartmentId('')
   }
 
   const handleUpdateUser = async () => {
@@ -215,6 +273,12 @@ export function UserManagementModal({ onClose, currentUser, embedInPanel, onBack
             role: editRole,
             is_admin: editRole === 'Viewonly' ? false : editIsAdmin,
             can_edit_wbs: isAdmin ? editCanEditWbs : undefined,
+            ...(isAdmin
+              ? {
+                  department_id:
+                    editDepartmentId === '' ? null : Number(editDepartmentId),
+                }
+              : {}),
           },
         }),
       })
@@ -339,6 +403,24 @@ export function UserManagementModal({ onClose, currentUser, embedInPanel, onBack
               placeholder={t('comp.userMgmt.passwordPh')}
               required
             />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="new-user-department">{t('comp.userMgmt.departmentLabel')}</label>
+            <select
+              id="new-user-department"
+              value={newUserDepartmentId}
+              onChange={(e) => setNewUserDepartmentId(e.target.value)}
+              className="form-input"
+              required
+            >
+              <option value="">{t('comp.userMgmt.departmentSelectPh')}</option>
+              {departments.map((d) => (
+                <option key={d.id} value={String(d.id)}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="form-group">
@@ -484,6 +566,25 @@ export function UserManagementModal({ onClose, currentUser, embedInPanel, onBack
                 </div>
               )}
 
+              {isAdmin && (
+                <div className="form-group">
+                  <label htmlFor="edit-user-department">{t('comp.userMgmt.departmentLabelOptional')}</label>
+                  <select
+                    id="edit-user-department"
+                    value={editDepartmentId}
+                    onChange={(e) => setEditDepartmentId(e.target.value)}
+                    className="form-input"
+                  >
+                    <option value="">{t('workload.noDept')}</option>
+                    {departments.map((d) => (
+                      <option key={d.id} value={String(d.id)}>
+                        {d.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <div className="form-actions">
                 <button
                   type="button"
@@ -518,6 +619,7 @@ export function UserManagementModal({ onClose, currentUser, embedInPanel, onBack
                     <th>{t('comp.userMgmt.colLoginId')}</th>
                     <th>{t('comp.userMgmt.colName')}</th>
                     <th>{t('comp.userMgmt.colEmail')}</th>
+                    <th>{t('comp.userMgmt.colDept')}</th>
                     <th>{t('comp.userMgmt.colRole')}</th>
                     {isAdmin && <th>{t('comp.userMgmt.colWbs')}</th>}
                     <th>{t('comp.userMgmt.colActions')}</th>
@@ -546,6 +648,7 @@ export function UserManagementModal({ onClose, currentUser, embedInPanel, onBack
                       <td>{user.username || '-'}</td>
                       <td>{user.name}</td>
                       <td>{user.email || '-'}</td>
+                      <td>{user.department_name || t('workload.noDept')}</td>
                       <td>{formatRoleForDisplay(user.role)}</td>
                       {isAdmin && <td>{user.can_edit_wbs ? '✓' : '-'}</td>}
                       <td>

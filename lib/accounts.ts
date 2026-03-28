@@ -19,6 +19,8 @@ export interface Account {
   /** 관리자 권한(다른 역할과 중복 가능). Viewonly는 관리자 불가 */
   is_admin?: boolean
   can_edit_wbs?: boolean
+  /** departments.id FK */
+  department_id?: number | null
   password_reset_token?: string | null
   password_reset_expires?: Date | null
   created_at?: string
@@ -56,6 +58,7 @@ export async function getAccountByUsername(username: string): Promise<Account | 
     role: (row.role || 'user') as UserRole,
     is_admin: parseIsAdmin(row),
     can_edit_wbs: parseCanEditWbs(row.can_edit_wbs),
+    department_id: row.department_id != null ? Number(row.department_id) : null,
     password_reset_token: row.password_reset_token || null,
     password_reset_expires: row.password_reset_expires ? new Date(row.password_reset_expires) : null,
     created_at: row.created_at ? new Date(row.created_at).toISOString() : undefined,
@@ -85,6 +88,7 @@ export async function getAccountByEmail(email: string): Promise<Account | null> 
     role: (row.role || 'user') as UserRole,
     is_admin: parseIsAdmin(row),
     can_edit_wbs: parseCanEditWbs(row.can_edit_wbs),
+    department_id: row.department_id != null ? Number(row.department_id) : null,
     password_reset_token: row.password_reset_token || null,
     password_reset_expires: row.password_reset_expires ? new Date(row.password_reset_expires) : null,
     created_at: row.created_at ? new Date(row.created_at).toISOString() : undefined,
@@ -114,6 +118,7 @@ export async function getAccountById(id: string): Promise<Account | null> {
     role: (row.role || 'user') as UserRole,
     is_admin: parseIsAdmin(row),
     can_edit_wbs: parseCanEditWbs(row.can_edit_wbs),
+    department_id: row.department_id != null ? Number(row.department_id) : null,
     password_reset_token: row.password_reset_token || null,
     password_reset_expires: row.password_reset_expires ? new Date(row.password_reset_expires) : null,
     created_at: row.created_at ? new Date(row.created_at).toISOString() : undefined,
@@ -128,7 +133,8 @@ export async function createAccount(
   email: string,
   password: string,
   role: UserRole = 'user',
-  is_admin: boolean = false
+  is_admin: boolean = false,
+  departmentId: number | null = null
 ): Promise<string> {
   // Viewonly는 다른 권한과 중복 불가 → 관리자 권한 부여 불가
   const effectiveIsAdmin = role === 'Viewonly' ? false : is_admin
@@ -197,6 +203,23 @@ export async function createAccount(
     }
   }
 
+  if (departmentId != null) {
+    try {
+      await pool.query(`UPDATE users SET department_id = ? WHERE id = ?`, [departmentId, userId])
+    } catch (e: any) {
+      if (e?.code === 'ER_BAD_FIELD_ERROR' || String(e?.message || '').includes('department_id')) {
+        try {
+          await pool.query(`ALTER TABLE users ADD COLUMN department_id INT NULL`)
+        } catch (ae: any) {
+          if (ae?.code !== 'ER_DUP_FIELDNAME') throw ae
+        }
+        await pool.query(`UPDATE users SET department_id = ? WHERE id = ?`, [departmentId, userId])
+      } else {
+        throw e
+      }
+    }
+  }
+
   return userId
 }
 
@@ -232,6 +255,7 @@ export async function updateAccount(
     role?: UserRole
     is_admin?: boolean
     can_edit_wbs?: boolean
+    department_id?: number | null
   }
 ): Promise<void> {
   // Viewonly는 관리자 권한과 중복 불가
@@ -296,6 +320,10 @@ export async function updateAccount(
   if (updates.can_edit_wbs !== undefined) {
     updateFields.push('can_edit_wbs = ?')
     updateValues.push(updates.can_edit_wbs ? 1 : 0)
+  }
+  if (updates.department_id !== undefined) {
+    updateFields.push('department_id = ?')
+    updateValues.push(updates.department_id)
   }
 
   if (updateFields.length === 0) {

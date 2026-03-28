@@ -68,11 +68,19 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'register') {
-      const { username, name, email, password, role } = body
+      const { username, name, email, password, role, department_id } = body
 
       if (!username || !name || !email || !password) {
         return NextResponse.json(
           { error: '모든 필드를 입력해주세요.' },
+          { status: 400 }
+        )
+      }
+
+      const deptNum = department_id != null && department_id !== '' ? Number(department_id) : NaN
+      if (!Number.isFinite(deptNum) || deptNum < 1) {
+        return NextResponse.json(
+          { error: '부서를 선택해주세요.' },
           { status: 400 }
         )
       }
@@ -94,7 +102,7 @@ export async function POST(request: NextRequest) {
             ? requestedRole
             : 'user'
 
-        const userId = await createAccount(username, name, email, password, finalRole)
+        const userId = await createAccount(username, name, email, password, finalRole, false, deptNum)
         
         // 자동 로그인
         const account = await verifyLogin(username, password)

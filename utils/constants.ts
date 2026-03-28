@@ -5,6 +5,7 @@ export type TabKey =
   | 'val-pkg'
   | 'tasks'
   | 'personal'
+  | 'workload'
   | 'gantt'
   | 'gantt-history'
   | 'issues'
@@ -31,6 +32,7 @@ export const TAB_KEYS: TabKey[] = [
   'val-pkg',
   'tasks',
   'personal',
+  'workload',
   'gantt',
   'gantt-history',
   'issues',

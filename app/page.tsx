@@ -30,6 +30,7 @@ import { TasksTable } from '@/components/tasks/TasksTable'
 import { TaskEditModal } from '@/components/tasks/TaskEditModal'
 import { ChildItemModal } from '@/components/tasks/ChildItemModal'
 import { PersonalTasksView, type GanttMyTaskItem } from '@/components/personal/PersonalTasksView'
+import { WorkloadView } from '@/components/workload/WorkloadView'
 import { GanttWorkspace } from '@/components/gantt/GanttWorkspace'
 import { GanttHistoryView } from '@/components/gantt/GanttHistoryView'
 import { SearchView } from '@/components/search/SearchView'
@@ -2087,6 +2088,8 @@ export default function Home() {
             }}
             currentUser={user ? { name: user.name, username: user.username } : undefined}
           />
+        ) : activeTab === 'workload' ? (
+          <WorkloadView />
         ) : activeTab === 'gantt-history' ? (
           <GanttHistoryView />
         ) : activeTab === 'gantt' ? (

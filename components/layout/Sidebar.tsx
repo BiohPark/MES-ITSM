@@ -33,7 +33,7 @@ export function Sidebar({ activeTab, onTabChange, user, isCollapsed = false, onT
         id: 'home',
         sectionLabelKey: 'sidebar.sections.home',
         defaultTab: 'dashboard',
-        items: [{ key: 'dashboard' }, { key: 'personal' }, { key: 'search' }],
+        items: [{ key: 'dashboard' }, { key: 'personal' }, { key: 'workload' }, { key: 'search' }],
       },
       {
         id: 'project-execution',

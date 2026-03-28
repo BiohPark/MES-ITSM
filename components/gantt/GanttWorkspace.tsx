@@ -2,7 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useI18n } from '@/lib/i18n'
-import { parsePredecessorString, formatPredecessorString } from '@/lib/predecessor-parser'
+import {
+  parsePredecessorString,
+  formatPredecessorString,
+  findPredecessorRefIssue,
+} from '@/lib/predecessor-parser'
 import { GanttTasksChart, type GanttChartEvent } from './GanttTasksChart'
 
 const LONG_PRESS_MS = 450
@@ -114,6 +118,21 @@ function buildTaskHierarchyMeta(list: { outlineLevel?: number }[]) {
 
 function normalizeAssigneeKey(value: string | null | undefined): string {
   return String(value || '').trim().toLocaleLowerCase()
+}
+
+/** 현재 행 기준 조상 작업의 배열 인덱스(0-based) — 선행 검증용 */
+function collectAncestorIndices0(tasks: { outlineLevel?: number | null }[], index: number): number[] {
+  const ancestorIndices: number[] = []
+  let currentLevel = tasks[index]?.outlineLevel ?? 1
+  for (let i = index - 1; i >= 0; i--) {
+    const lv = tasks[i]?.outlineLevel ?? 1
+    if (lv < currentLevel) {
+      ancestorIndices.push(i)
+      currentLevel = lv
+      if (currentLevel === 1) break
+    }
+  }
+  return ancestorIndices
 }
 
 /** 행 순서가 바뀐 경우(드래그 드롭 등), 기존 순서 기준 선행 인덱스를 새 순서 기준으로 재매핑 */
@@ -711,46 +730,18 @@ export function GanttWorkspace({
         }
       }
 
-      // 선행 작업 지정 시: 유효성 검증 + 시작일 = (모든 선행 작업의 종료일 중 가장 늦은 날) + 1일
+      // 선행 작업 지정 시: 시작일 = (모든 선행의 종료일 중 가장 늦은 날) + 1일
+      // 행 참조/조상/자기 검증은 onBlur·저장 시 알림 (입력 중 매 키마다 팝업·되돌림 방지)
       if (field === 'predecessors') {
         const parsed = parsePredecessorString(value || '')
+        const selfRow = index + 1
+        const ancestorIndices0 = collectAncestorIndices0(prev, index)
+        const predIssue =
+          parsed.length > 0
+            ? findPredecessorRefIssue(parsed, selfRow, prev.length, ancestorIndices0)
+            : null
 
-        // 선행 유효성 검증: 자기 자신/상위 작업/존재하지 않는 행은 허용하지 않음
-        if (parsed.length > 0) {
-          const selfRow = index + 1
-          const selfLevel = prev[index]?.outlineLevel ?? 1
-          // 상위(조상) 행 인덱스 수집
-          const ancestorIndices: number[] = []
-          let currentLevel = selfLevel
-          for (let i = index - 1; i >= 0; i--) {
-            const lv = prev[i]?.outlineLevel ?? 1
-            if (lv < currentLevel) {
-              ancestorIndices.push(i)
-              currentLevel = lv
-              if (currentLevel === 1) break
-            }
-          }
-
-          for (const p of parsed) {
-            // 존재하지 않는 행
-            if (p.index < 1 || p.index > prev.length) {
-              alert(tr('comp.gantt.predecessorInvalidRow', { index: p.index }))
-              return prev
-            }
-            // 자기 자신
-            if (p.index === selfRow) {
-              alert(tr('comp.gantt.predecessorSelf'))
-              return prev
-            }
-            // 상위(조상) 작업
-            if (ancestorIndices.includes(p.index - 1)) {
-              alert(tr('comp.gantt.predecessorAncestor'))
-              return prev
-            }
-          }
-        }
-
-        if (parsed.length > 0) {
+        if (parsed.length > 0 && !predIssue) {
           const predIndices = parsed
             .map((p) => p.index - 1) // 1-based → 0-based
             .filter((pi) => pi >= 0 && pi < copy.length)
@@ -1300,6 +1291,29 @@ export function GanttWorkspace({
         setAssigneeError(tr('comp.gantt.assigneeNotUser', { name: assignee }))
         return
       }
+    }
+    for (let i = 0; i < normalized.length; i++) {
+      const raw = (normalized[i].predecessors || '').trim()
+      if (!raw) continue
+      const parsed = parsePredecessorString(raw)
+      if (parsed.length === 0) continue
+      const issue = findPredecessorRefIssue(
+        parsed,
+        i + 1,
+        normalized.length,
+        collectAncestorIndices0(normalized, i)
+      )
+      if (!issue) continue
+      if (issue.type === 'invalid_row') {
+        alert(tr('comp.gantt.predecessorInvalidRow', { index: issue.row }))
+        return
+      }
+      if (issue.type === 'self') {
+        alert(tr('comp.gantt.predecessorSelf'))
+        return
+      }
+      alert(tr('comp.gantt.predecessorAncestor'))
+      return
     }
     // 부모(요약) 행은 재계산된 실적 저장, 리프는 원본 실적 유지
     const toSave = normalized.map((n, i) => ({
@@ -2315,6 +2329,27 @@ export function GanttWorkspace({
                         onChange={(e) =>
                           handleChangeTask(idx, 'predecessors', e.target.value)
                         }
+                        onBlur={(e) => {
+                          if (readOnlyWbs) return
+                          const raw = e.currentTarget.value.trim()
+                          if (!raw) return
+                          const parsed = parsePredecessorString(raw)
+                          if (parsed.length === 0) return
+                          const issue = findPredecessorRefIssue(
+                            parsed,
+                            idx + 1,
+                            tasks.length,
+                            collectAncestorIndices0(tasks, idx)
+                          )
+                          if (!issue) return
+                          if (issue.type === 'invalid_row') {
+                            alert(tr('comp.gantt.predecessorInvalidRow', { index: issue.row }))
+                          } else if (issue.type === 'self') {
+                            alert(tr('comp.gantt.predecessorSelf'))
+                          } else {
+                            alert(tr('comp.gantt.predecessorAncestor'))
+                          }
+                        }}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
                             e.preventDefault()

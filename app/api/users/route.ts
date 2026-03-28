@@ -22,11 +22,19 @@ export async function POST(request: NextRequest) {
 
     if (body.action === 'create') {
       // 로그인 가능한 계정 생성 (회원가입과 동일한 정보 필요)
-      const { username, name, email, password, role, is_admin } = body.user || body
+      const { username, name, email, password, role, is_admin, department_id } = body.user || body
 
       if (!username || !name || !email || !password) {
         return NextResponse.json(
           { error: 'ID, 이름, 이메일, 비밀번호를 모두 입력해주세요.' },
+          { status: 400 }
+        )
+      }
+
+      const deptNum = department_id != null && department_id !== '' ? Number(department_id) : NaN
+      if (!Number.isFinite(deptNum) || deptNum < 1) {
+        return NextResponse.json(
+          { error: '부서를 선택해주세요.' },
           { status: 400 }
         )
       }
@@ -41,7 +49,7 @@ export async function POST(request: NextRequest) {
       }
 
       try {
-        await createAccount(username, name, email, password, role || 'user', !!is_admin)
+        await createAccount(username, name, email, password, role || 'user', !!is_admin, deptNum)
         const users = await getUsers()
         return NextResponse.json({ success: true, users })
       } catch (error: any) {
@@ -97,6 +105,15 @@ export async function PUT(request: NextRequest) {
       }
       if (isAdmin && typeof user.can_edit_wbs === 'boolean') {
         updates.can_edit_wbs = user.can_edit_wbs
+      }
+      if (isAdmin && user.department_id !== undefined) {
+        const d = user.department_id
+        if (d === null || d === '') {
+          updates.department_id = null
+        } else {
+          const n = Number(d)
+          updates.department_id = Number.isFinite(n) && n >= 1 ? n : null
+        }
       }
 
       try {

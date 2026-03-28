@@ -3,9 +3,10 @@
 import { useState } from 'react'
 import { UserManagementModal } from '@/components/users/UserManagementModal'
 import { SystemSettingsPanel } from './SystemSettingsPanel'
+import { DepartmentSettingsPanel } from './DepartmentSettingsPanel'
 import { useI18n } from '@/lib/i18n'
 
-type SettingsView = 'list' | 'users' | 'system'
+type SettingsView = 'list' | 'users' | 'departments' | 'system'
 
 interface SettingsModalProps {
   onClose: () => void
@@ -49,6 +50,16 @@ export function SettingsModal({ onClose, currentUser }: SettingsModalProps) {
                   {t('comp.settingsPanel.userMgmt')}
                 </button>
               </li>
+              <li style={{ marginBottom: '0.5rem' }}>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  style={{ width: '100%', textAlign: 'left', padding: '0.75rem 1rem' }}
+                  onClick={() => setView('departments')}
+                >
+                  {t('comp.settingsPanel.departments')}
+                </button>
+              </li>
               <li>
                 <button
                   type="button"
@@ -69,6 +80,10 @@ export function SettingsModal({ onClose, currentUser }: SettingsModalProps) {
               embedInPanel
               onBack={() => setView('list')}
             />
+          )}
+
+          {view === 'departments' && (
+            <DepartmentSettingsPanel onBack={() => setView('list')} />
           )}
 
           {view === 'system' && (

@@ -1,0 +1,27 @@
+﻿# Cursor indexing exclude (reduce memory / OOM)
+.git/
+
+node_modules/
+.pnp.*
+.pnp.js
+.next/
+.next-offline/
+out/
+build/
+dist/
+release/
+coverage/
+uploads/
+backups/
+tmp/
+temp/
+
+**/*.map
+**/*.min.js
+
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.vercel
+.DS_Store

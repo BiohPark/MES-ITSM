@@ -9,26 +9,51 @@ export interface User {
   role?: string
   is_admin?: boolean
   can_edit_wbs?: boolean
+  department_id?: number | null
+  department_name?: string | null
   created_at?: string
 }
 
 // 로그인 가능한 사용자 목록 조회
-// 스키마에 can_edit_wbs 등이 없어도 동작하도록 SELECT * 사용
 export async function getUsers(): Promise<User[]> {
   const pool = getPool()
-  const [rows] = await pool.query<any[]>(
-    `SELECT * FROM users ORDER BY created_at DESC`
-  )
-  return (rows || []).map((row) => ({
-    id: String(row.id ?? ''),
-    name: String(row.name ?? ''),
-    username: row.username != null ? String(row.username) : '',
-    email: row.email != null ? String(row.email) : '',
-    role: row.role != null ? String(row.role) : 'user',
-    is_admin: row.role === 'admin' || !!row.is_admin,
-    can_edit_wbs: !!row.can_edit_wbs,
-    created_at: row.created_at ? new Date(row.created_at).toISOString() : '',
-  }))
+  try {
+    const [rows] = await pool.query<any[]>(
+      `SELECT u.*, d.name AS department_name
+       FROM users u
+       LEFT JOIN departments d ON d.id = u.department_id
+       ORDER BY u.created_at DESC`
+    )
+    return (rows || []).map((row) => ({
+      id: String(row.id ?? ''),
+      name: String(row.name ?? ''),
+      username: row.username != null ? String(row.username) : '',
+      email: row.email != null ? String(row.email) : '',
+      role: row.role != null ? String(row.role) : 'user',
+      is_admin: row.role === 'admin' || !!row.is_admin,
+      can_edit_wbs: !!row.can_edit_wbs,
+      department_id: row.department_id != null ? Number(row.department_id) : null,
+      department_name: row.department_name != null ? String(row.department_name) : null,
+      created_at: row.created_at ? new Date(row.created_at).toISOString() : '',
+    }))
+  } catch (e: any) {
+    if (e?.code === 'ER_BAD_FIELD_ERROR' || e?.code === 'ER_NO_SUCH_TABLE') {
+      const [rows] = await pool.query<any[]>(`SELECT * FROM users ORDER BY created_at DESC`)
+      return (rows || []).map((row) => ({
+        id: String(row.id ?? ''),
+        name: String(row.name ?? ''),
+        username: row.username != null ? String(row.username) : '',
+        email: row.email != null ? String(row.email) : '',
+        role: row.role != null ? String(row.role) : 'user',
+        is_admin: row.role === 'admin' || !!row.is_admin,
+        can_edit_wbs: !!row.can_edit_wbs,
+        department_id: null,
+        department_name: null,
+        created_at: row.created_at ? new Date(row.created_at).toISOString() : '',
+      }))
+    }
+    throw e
+  }
 }
 
 // 다음 사용자 ID 생성

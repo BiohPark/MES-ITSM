@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useI18n } from '@/lib/i18n'
@@ -15,9 +15,24 @@ export default function RegisterPage() {
     password: '',
     confirmPassword: '',
     role: 'user',
+    department_id: '',
   })
+  const [departments, setDepartments] = useState<Array<{ id: number; name: string }>>([])
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await fetch('/api/departments')
+        if (!res.ok) return
+        const data = await res.json()
+        setDepartments(data.departments || [])
+      } catch {
+        /* ignore */
+      }
+    })()
+  }, [])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({
@@ -41,6 +56,13 @@ export default function RegisterPage() {
       return
     }
 
+    const deptNum =
+      formData.department_id !== '' ? Number(formData.department_id) : NaN
+    if (!Number.isFinite(deptNum) || deptNum < 1) {
+      setError(t('auth.register.errorDepartment'))
+      return
+    }
+
     setLoading(true)
 
     try {
@@ -56,6 +78,7 @@ export default function RegisterPage() {
           email: formData.email,
           password: formData.password,
           role: formData.role,
+          department_id: deptNum,
         }),
       })
 
@@ -155,6 +178,40 @@ export default function RegisterPage() {
               <option value="Viewonly">{t('auth.register.roleViewonly')}</option>
               <option value="그룹 매니저">{t('auth.register.roleGroupManager')}</option>
               <option value="파트 매니저">{t('auth.register.rolePartManager')}</option>
+            </select>
+          </div>
+
+          <div style={{ marginBottom: '1rem' }}>
+            <label htmlFor="department_id" style={{
+              display: 'block',
+              fontSize: '0.875rem',
+              fontWeight: 500,
+              color: '#374151',
+              marginBottom: '0.5rem',
+            }}>
+              {t('auth.register.department')}
+            </label>
+            <select
+              id="department_id"
+              name="department_id"
+              value={formData.department_id}
+              onChange={handleChange}
+              required
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                border: '1px solid #d1d5db',
+                borderRadius: '0.5rem',
+                fontSize: '1rem',
+                boxSizing: 'border-box',
+              }}
+            >
+              <option value="">{t('auth.register.placeholderDepartment')}</option>
+              {departments.map((d) => (
+                <option key={d.id} value={String(d.id)}>
+                  {d.name}
+                </option>
+              ))}
             </select>
           </div>
 

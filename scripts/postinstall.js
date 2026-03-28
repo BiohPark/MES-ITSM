@@ -27,12 +27,15 @@ run('setup-db', () => {
   execSync('npm run setup-db', { stdio: 'inherit', cwd: root })
 })
 
-// setup-db 실패(예: DB 미실행) 시에도 누락된 테이블만 추가 시도 (CREATE TABLE IF NOT EXISTS)
+// setup-db 실패(예: DB 미실행) 시에도 누락된 테이블만 추가 시도 (CREATE TABLE IF NOT EXISTS 등)
 run('add-gantt-events-table', () => {
   execSync('npm run add-gantt-events-table', { stdio: 'inherit', cwd: root })
 })
 run('add-wbs-permission-and-history', () => {
   execSync('npm run add-wbs-permission-and-history', { stdio: 'inherit', cwd: root })
+})
+run('add-departments-migration', () => {
+  execSync('npm run add-departments-migration', { stdio: 'inherit', cwd: root })
 })
 
 process.exit(0)
