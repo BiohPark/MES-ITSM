@@ -8,6 +8,7 @@ export type TabKey =
   | 'workload'
   | 'gantt'
   | 'gantt-history'
+  | 'project-defects'
   | 'issues'
   | 'request'
   | 'incident'
@@ -35,6 +36,7 @@ export const TAB_KEYS: TabKey[] = [
   'workload',
   'gantt',
   'gantt-history',
+  'project-defects',
   'issues',
   'request',
   'incident',

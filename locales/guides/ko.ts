@@ -119,5 +119,26 @@ export const guidesKo: { default: TabGuide; tabs: Partial<Record<TabKey, TabGuid
         },
       ],
     },
+    'project-defects': {
+      title: '프로젝트 Defect',
+      summary: '진행 중 프로젝트의 테스트·품질 단계에서 발견한 결함을 기록하고, 조치·검증 이력을 남깁니다.',
+      purpose: '운영 이슈(ITSM 이슈 메뉴)와 구분해, 릴리스 전 Zero Defect 추적과 감사 증빙을 지원합니다.',
+      sections: [
+        {
+          title: '운영 이슈와의 차이',
+          bullets: [
+            '이 화면은 **프로젝트·테스트 관점**의 Defect입니다. 서비스 오픈 후 운영 장애/요청은 **이슈·티켓** 메뉴를 사용합니다.',
+            '프로젝트를 선택하고 테스트 단계(단위·통합·UAT 등), 심각도, 상태를 일관되게 기록합니다.',
+          ],
+        },
+        {
+          title: '감사·증빙',
+          bullets: [
+            '상세 화면의 **감사 이력**에 등록·수정·삭제(관리자) 등이 남습니다.',
+            '**CSV보내기**로 프로젝트·상태·심각도 필터에 맞는 목록을 파일로 보관할 수 있습니다.',
+          ],
+        },
+      ],
+    },
   },
 }

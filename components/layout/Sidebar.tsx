@@ -46,6 +46,7 @@ export function Sidebar({ activeTab, onTabChange, user, isCollapsed = false, onT
           { key: 'val-pkg' },
           { key: 'gantt' },
           { key: 'gantt-history' },
+          { key: 'project-defects' },
         ],
       },
       {

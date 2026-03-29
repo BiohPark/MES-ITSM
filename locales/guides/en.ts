@@ -119,5 +119,26 @@ export const guidesEn: { default: TabGuide; tabs: Partial<Record<TabKey, TabGuid
         },
       ],
     },
+    'project-defects': {
+      title: 'Project defects',
+      summary: 'Record defects found during in-project testing and QA, and track fix and verification history.',
+      purpose: 'Separate from post-go-live operational issues so you can drive zero-defect goals before release and support audits.',
+      sections: [
+        {
+          title: 'Vs. operational issues',
+          bullets: [
+            'This screen is for project and test defects. After go-live, use Issues and Tickets for operations.',
+            'Pick a project and record test phase, severity, and status consistently.',
+          ],
+        },
+        {
+          title: 'Audit evidence',
+          bullets: [
+            'The detail panel shows an audit trail of create, update, and admin delete events.',
+            'Use Export CSV to archive the current filtered list for evidence.',
+          ],
+        },
+      ],
+    },
   },
 }

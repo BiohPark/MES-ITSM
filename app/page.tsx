@@ -4,41 +4,21 @@ import { useMemo, useState, useEffect, useCallback, useRef } from 'react'
 import type { MouseEvent } from 'react'
 import type { Project, ProjectChild } from '@/types/project'
 import { APP_VERSION, isValidTabKey, type TabKey } from '@/utils/constants'
-import { useI18n, tabTranslationPath } from '@/lib/i18n'
-import { buildNewProject, buildNewChild, buildNewGmpRecord, buildNewIssue, buildNewTicket, buildNewValPackage } from '@/utils/project-utils'
+import { useI18n } from '@/lib/i18n'
+import { buildNewProject, buildNewTicket, buildNewValPackage } from '@/utils/project-utils'
 import type { Issue } from '@/types/issue'
 import type { Ticket, TicketType } from '@/types/ticket'
-import { IssuesTable } from '@/components/issues/IssuesTable'
 import { IssueEditModal } from '@/components/issues/IssueEditModal'
-import { TicketsTable } from '@/components/tickets/TicketsTable'
 import { TicketEditModal } from '@/components/tickets/TicketEditModal'
-import { ApprovalInboxView } from '@/components/tickets/ApprovalInboxView'
-import { NotificationsView } from '@/components/tickets/NotificationsView'
-import { AuditLogView } from '@/components/tickets/AuditLogView'
-import { TicketPoliciesView } from '@/components/tickets/TicketPoliciesView'
 import { MeetingNotesView } from '@/components/meetings/MeetingNotesView'
 import { MeetingNoteEditModal } from '@/components/meetings/MeetingNoteEditModal'
 import { MeetingNoteTemplateModal } from '@/components/meetings/MeetingNoteTemplateModal'
 import { ActionItemsView } from '@/components/action-items/ActionItemsView'
 import type { MeetingNote } from '@/types/meeting'
-import { DashboardView } from '@/components/dashboard/DashboardView'
-import { ProjectsTable } from '@/components/projects/ProjectsTable'
-import { ProjectEditModal } from '@/components/projects/ProjectEditModal'
-import { ValPackagesTable } from '@/components/val-packages/ValPackagesTable'
-import { ValPackageEditModal } from '@/components/val-packages/ValPackageEditModal'
-import { TasksTable } from '@/components/tasks/TasksTable'
 import { TaskEditModal } from '@/components/tasks/TaskEditModal'
-import { ChildItemModal } from '@/components/tasks/ChildItemModal'
-import { PersonalTasksView, type GanttMyTaskItem } from '@/components/personal/PersonalTasksView'
-import { WorkloadView } from '@/components/workload/WorkloadView'
-import { GanttWorkspace } from '@/components/gantt/GanttWorkspace'
-import { GanttHistoryView } from '@/components/gantt/GanttHistoryView'
-import { SearchView } from '@/components/search/SearchView'
-import { VocView } from '@/components/voc/VocView'
-import { BackupView } from '@/components/backup/BackupView'
+import type { GanttMyTaskItem } from '@/components/personal/PersonalTasksView'
 import { SettingsModal } from '@/components/settings/SettingsModal'
-import { ContextMenu } from '@/components/common/ContextMenu'
-import { Placeholder } from '@/components/common/Placeholder'
+import { HomeTabContent } from '@/components/home/HomeTabContent'
 import { SettingsIcon, SearchIcon } from '@/components/common/Icons'
 import { ServiceNowLayout } from '@/components/layout/ServiceNowLayout'
 
@@ -1686,556 +1666,92 @@ export default function Home() {
       user={user}
     >
       <div className="servicenow-content">
-        {activeTab === 'dashboard' ? (
-          <DashboardView
-            projects={projects}
-            issues={issues}
-            orphanTasks={orphanTasks}
-            loading={loading}
-            error={error}
-            onRefresh={async () => {
-              await Promise.all([
-                fetchProjects(),
-                fetchIssues(),
-                fetchOrphanTasks(),
-              ])
-            }}
-          />
-        ) : activeTab === 'list' ? (
-          <>
-            <ProjectsTable
-              projects={projects}
-              loading={loading}
-              error={error}
-              onRefresh={fetchProjects}
-              onProjectClick={(project: Project) => {
-                if (!isDeleteMode) {
-                  // 다른 모달들 닫기
-                  setIsTaskEditing(false)
-                  setSelectedTask(null)
-                  setIsIssueEditing(false)
-                  setSelectedIssue(null)
-                  setIsValPackageEditing(false)
-                  setSelectedValPackage(null)
-                  setIsChildModalOpen(false)
-                  setChildTarget(null)
-                  
-                  setSelectedProject(project)
-                  setEditMode('edit')
-                  setIsEditing(true)
-                }
-              }}
-              onNewProject={handleNewProject}
-              onProjectContextMenu={handleProjectContextMenu}
-              isDeleteMode={isDeleteMode}
-              selectedProjectIds={selectedProjectIds}
-              onToggleProjectSelection={(projectId: string) => {
-                const newSet = new Set(selectedProjectIds)
-                if (newSet.has(projectId)) {
-                  newSet.delete(projectId)
-                } else {
-                  newSet.add(projectId)
-                }
-                setSelectedProjectIds(newSet)
-              }}
-              onDeleteModeChange={(enabled: boolean) => {
-                setIsDeleteMode(enabled)
-                if (!enabled) {
-                  setSelectedProjectIds(new Set())
-                  setSelectedChildIds(new Set())
-                }
-              }}
-              onBatchDelete={handleBatchDeleteProjects}
-              selectedChildIds={selectedChildIds}
-              onToggleChildSelection={(childId: string) => {
-                const newSet = new Set(selectedChildIds)
-                if (newSet.has(childId)) {
-                  newSet.delete(childId)
-                } else {
-                  newSet.add(childId)
-                }
-                setSelectedChildIds(newSet)
-              }}
-              onBatchDeleteChildren={handleBatchDeleteChildren}
-              onChildClick={(child: ProjectChild, projectId: string, projectName: string) => {
-                // 다른 모달들 닫기
-                setIsEditing(false)
-                setSelectedProject(null)
-                setIsIssueEditing(false)
-                setSelectedIssue(null)
-                setIsValPackageEditing(false)
-                setSelectedValPackage(null)
-                setIsChildModalOpen(false)
-                setChildTarget(null)
-                
-                // GMP Record인지 확인 (kind_number 필드 존재 여부)
-                const isGmpRecord = !!(child as any).kind_number || !!(child as any).isGmpRecord
-                
-                if (isGmpRecord) {
-                  // GMP Record 모달을 열기 위해 activeTab을 변경하지 않고 GMP Record 모달 열기
-                  setSelectedTask({
-                    task: child,
-                    projectId: projectId,
-                    projectName: projectName,
-                  })
-                  setTaskEditMode('edit')
-                  setIsTaskEditing(true)
-                  // activeTab을 'gmp-record'로 변경하지 않음 (프로젝트 목록 탭 유지)
-                } else {
-                  // 일반 일감 모달 열기
-                  setSelectedTask({
-                    task: child,
-                    projectId: projectId,
-                    projectName: projectName,
-                  })
-                  setTaskEditMode('edit')
-                  setIsTaskEditing(true)
-                }
-              }}
-            />
-            {isEditing && selectedProject && (
-              <ProjectEditModal
-                project={selectedProject}
-                mode={editMode}
-                onClose={() => {
-                  setIsEditing(false)
-                  setSelectedProject(null)
-                  setEditMode('edit')
-                }}
-                onSave={(updatedProject: Project) => handleProjectSave(updatedProject, editMode)}
-                currentUser={user ? { name: user.name, username: user.username } : undefined}
-              />
-            )}
-
-            {isChildModalOpen && childTarget && (
-              <ChildItemModal
-                project={childTarget}
-                onClose={() => {
-                  setIsChildModalOpen(false)
-                  setChildTarget(null)
-                }}
-                onSave={(child: ProjectChild) => handleAddChild(childTarget.id, child)}
-              />
-            )}
-
-            {contextMenu && (
-              <ContextMenu
-                x={contextMenu.x}
-                y={contextMenu.y}
-                projectName={contextMenu.project.name}
-                onAddChild={() => {
-                  setChildTarget(contextMenu.project)
-                  setIsChildModalOpen(true)
-                  setContextMenu(null)
-                }}
-              />
-            )}
-          </>
-        ) : activeTab === 'gmp-record' ? (
-          <>
-            <TasksTable
-              records={gmpRecords}
-              loading={gmpRecordsLoading}
-              error={gmpRecordsError}
-              title={t('page.gmpRecordListTitle')}
-              onRefresh={async () => {
-                await fetchGmpRecords()
-              }}
-              onTaskClick={(task: ProjectChild, projectId: string | null, projectName: string) => {
-                if (!isDeleteMode) {
-                  // 다른 모달들 닫기
-                  setIsEditing(false)
-                  setSelectedProject(null)
-                  setIsIssueEditing(false)
-                  setSelectedIssue(null)
-                  setIsValPackageEditing(false)
-                  setSelectedValPackage(null)
-                  setIsChildModalOpen(false)
-                  setChildTarget(null)
-                  
-                  setSelectedTask({ 
-                    task, 
-                    projectId: (projectId === 'N/A' || !projectId) ? null : projectId, 
-                    projectName: projectName || 'N/A' 
-                  })
-                  setTaskEditMode('edit')
-                  setIsTaskEditing(true)
-                }
-              }}
-              onNewTask={async () => {
-                // 다른 모달들 닫기
-                setIsEditing(false)
-                setSelectedProject(null)
-                setIsIssueEditing(false)
-                setSelectedIssue(null)
-                setIsValPackageEditing(false)
-                setSelectedValPackage(null)
-                setIsChildModalOpen(false)
-                setChildTarget(null)
-                
-                const newRecord = await buildNewGmpRecord()
-                setSelectedTask({
-                  task: newRecord,
-                  projectId: null,
-                  projectName: 'N/A',
-                })
-                setTaskEditMode('create')
-                setIsTaskEditing(true)
-              }}
-              isDeleteMode={isDeleteMode}
-              selectedTaskIds={selectedTaskIds}
-              onToggleTaskSelection={(taskId: string) => {
-                const newSet = new Set(selectedTaskIds)
-                if (newSet.has(taskId)) {
-                  newSet.delete(taskId)
-                } else {
-                  newSet.add(taskId)
-                }
-                setSelectedTaskIds(newSet)
-              }}
-              onDeleteModeChange={(enabled: boolean) => {
-                setIsDeleteMode(enabled)
-                if (!enabled) {
-                  setSelectedTaskIds(new Set())
-                }
-              }}
-              onBatchDelete={handleBatchDeleteGmpRecords}
-            />
-          </>
-        ) : activeTab === 'val-pkg' ? (
-          <>
-            <ValPackagesTable
-              valPackages={valPackages}
-              loading={valPackagesLoading}
-              error={valPackagesError}
-              onRefresh={fetchValPackages}
-              onValPackageClick={(valPackage: Project) => {
-                if (!isDeleteMode) {
-                  // 다른 모달들 닫기
-                  setIsEditing(false)
-                  setSelectedProject(null)
-                  setIsTaskEditing(false)
-                  setSelectedTask(null)
-                  setIsIssueEditing(false)
-                  setSelectedIssue(null)
-                  setIsChildModalOpen(false)
-                  setChildTarget(null)
-                  
-                  setSelectedValPackage(valPackage)
-                  setValPackageEditMode('edit')
-                  setIsValPackageEditing(true)
-                }
-              }}
-              onNewValPackage={handleNewValPackage}
-              isDeleteMode={isDeleteMode}
-              selectedValPackageIds={selectedValPackageIds}
-              onToggleValPackageSelection={(valPackageId: string) => {
-                const newSet = new Set(selectedValPackageIds)
-                if (newSet.has(valPackageId)) {
-                  newSet.delete(valPackageId)
-                } else {
-                  newSet.add(valPackageId)
-                }
-                setSelectedValPackageIds(newSet)
-              }}
-              onDeleteModeChange={(enabled: boolean) => {
-                setIsDeleteMode(enabled)
-                if (!enabled) {
-                  setSelectedValPackageIds(new Set())
-                }
-              }}
-              onBatchDelete={handleBatchDeleteValPackages}
-            />
-            {isValPackageEditing && selectedValPackage && (
-              <ValPackageEditModal
-                valPackage={selectedValPackage}
-                mode={valPackageEditMode}
-                onClose={() => {
-                  setIsValPackageEditing(false)
-                  setSelectedValPackage(null)
-                  setValPackageEditMode('edit')
-                }}
-                onSave={(updatedValPackage: Project) => handleValPackageSave(updatedValPackage, valPackageEditMode)}
-                currentUser={user ? { name: user.name, username: user.username } : undefined}
-              />
-            )}
-          </>
-        ) : activeTab === 'tasks' ? (
-          <>
-            <TasksTable
-              projects={projects}
-              loading={loading}
-              error={error}
-              onRefresh={async () => {
-                await fetchProjects()
-              }}
-              onTaskClick={(task: ProjectChild, projectId: string | null, projectName: string) => {
-                if (!isDeleteMode) {
-                  // 다른 모달들 닫기
-                  setIsEditing(false)
-                  setSelectedProject(null)
-                  setIsIssueEditing(false)
-                  setSelectedIssue(null)
-                  setIsValPackageEditing(false)
-                  setSelectedValPackage(null)
-                  setIsChildModalOpen(false)
-                  setChildTarget(null)
-                  
-                  setSelectedTask({ 
-                    task, 
-                    projectId: (projectId === 'N/A' || !projectId) ? null : projectId, 
-                    projectName: projectName || 'N/A' 
-                  })
-                  setTaskEditMode('edit')
-                  setIsTaskEditing(true)
-                }
-              }}
-              onNewTask={async () => {
-                // 다른 모달들 닫기
-                setIsEditing(false)
-                setSelectedProject(null)
-                setIsIssueEditing(false)
-                setSelectedIssue(null)
-                setIsValPackageEditing(false)
-                setSelectedValPackage(null)
-                setIsChildModalOpen(false)
-                setChildTarget(null)
-                
-                const newTask = await buildNewChild()
-                setSelectedTask({
-                  task: newTask,
-                  projectId: projects.length > 0 ? projects[0].id : null,
-                  projectName: projects.length > 0 ? projects[0].name : 'N/A',
-                })
-                setTaskEditMode('create')
-                setIsTaskEditing(true)
-              }}
-              isDeleteMode={isDeleteMode}
-              selectedTaskIds={selectedTaskIds}
-              onToggleTaskSelection={(taskId: string) => {
-                const newSet = new Set(selectedTaskIds)
-                if (newSet.has(taskId)) {
-                  newSet.delete(taskId)
-                } else {
-                  newSet.add(taskId)
-                }
-                setSelectedTaskIds(newSet)
-              }}
-              onDeleteModeChange={(enabled: boolean) => {
-                setIsDeleteMode(enabled)
-                if (!enabled) {
-                  setSelectedTaskIds(new Set())
-                }
-              }}
-              onBatchDelete={handleBatchDeleteTasks}
-            />
-          </>
-        ) : activeTab === 'personal' ? (
-          <PersonalTasksView
-            projects={projects}
-            gmpRecords={gmpRecords}
-            orphanTasks={orphanTasks}
-            ganttMyTasks={ganttMyTasks}
-            loading={loading}
-            error={error}
-            searchOwner={searchOwner}
-            onSearchOwnerChange={setSearchOwner}
-            onRefresh={async () => {
-              await Promise.all([
-                fetchProjects(),
-                fetchGmpRecords(),
-                fetchOrphanTasks(),
-                fetchGanttMyTasks(),
-              ])
-            }}
-            onGanttTaskClick={(projectId, _projectName) => {
-              setPendingGanttProjectId(projectId)
-              setActiveTab('gantt')
-            }}
-            onTaskClick={(task: ProjectChild, projectId: string | null, projectName: string) => {
-              // 다른 모달들 닫기
-              setIsEditing(false)
-              setSelectedProject(null)
-              setIsIssueEditing(false)
-              setSelectedIssue(null)
-              setIsValPackageEditing(false)
-              setSelectedValPackage(null)
-              setIsChildModalOpen(false)
-              setChildTarget(null)
-              
-              setSelectedTask({
-                task,
-                projectId: (projectId === 'N/A' || !projectId) ? null : projectId,
-                projectName: projectName || 'N/A',
-              })
-              setTaskEditMode('edit')
-              setIsTaskEditing(true)
-            }}
-            onProjectClick={(project: Project) => {
-              // 다른 모달들 닫기
-              setIsTaskEditing(false)
-              setSelectedTask(null)
-              setIsIssueEditing(false)
-              setSelectedIssue(null)
-              setIsValPackageEditing(false)
-              setSelectedValPackage(null)
-              setIsChildModalOpen(false)
-              setChildTarget(null)
-              
-              setSelectedProject(project)
-              setEditMode('edit')
-              setIsEditing(true)
-            }}
-            currentUser={user ? { name: user.name, username: user.username } : undefined}
-          />
-        ) : activeTab === 'workload' ? (
-          <WorkloadView />
-        ) : activeTab === 'gantt-history' ? (
-          <GanttHistoryView />
-        ) : activeTab === 'gantt' ? (
-          <GanttWorkspace
-            initialProjectId={pendingGanttProjectId ?? undefined}
-            onInitialProjectIdConsumed={() => setPendingGanttProjectId(null)}
-          />
-        ) : activeTab === 'request' || activeTab === 'incident' || activeTab === 'problem' || activeTab === 'change' ? (
-          <TicketsTable
-            ticketType={activeTab}
-            tickets={ticketsByType[activeTab] || []}
-            loading={ticketsLoading}
-            error={ticketsError}
-            onRefresh={() => void fetchTickets(activeTab)}
-            onNewTicket={() => void handleCreateTicket(activeTab)}
-            onTicketClick={(ticket) => void handleOpenTicketDetail(ticket.id)}
-          />
-        ) : activeTab === 'approval-inbox' ? (
-          <ApprovalInboxView onOpenTicket={(ticketId) => void handleOpenTicketDetail(ticketId)} />
-        ) : activeTab === 'notifications' ? (
-          <NotificationsView />
-        ) : activeTab === 'audit-log' ? (
-          <AuditLogView />
-        ) : activeTab === 'priority-policy' ? (
-          <TicketPoliciesView mode="priority" isAdmin={!!(user?.role === 'admin' || user?.isAdmin)} />
-        ) : activeTab === 'sla-policy' ? (
-          <TicketPoliciesView mode="sla" isAdmin={!!(user?.role === 'admin' || user?.isAdmin)} />
-        ) : activeTab === 'issues' ? (
-          <>
-            <IssuesTable
-              issues={issues}
-              loading={issuesLoading}
-              error={issuesError}
-              onRefresh={async () => {
-                await fetchIssues()
-              }}
-              onIssueClick={(issue: Issue) => {
-                if (!isDeleteMode) {
-                  // 다른 모달들 닫기
-                  setIsEditing(false)
-                  setSelectedProject(null)
-                  setIsTaskEditing(false)
-                  setSelectedTask(null)
-                  setIsValPackageEditing(false)
-                  setSelectedValPackage(null)
-                  setIsChildModalOpen(false)
-                  setChildTarget(null)
-                  
-                  setSelectedIssue(issue)
-                  setIssueEditMode('edit')
-                  setIsIssueEditing(true)
-                }
-              }}
-              onNewIssue={async () => {
-                // 다른 모달들 닫기
-                setIsEditing(false)
-                setSelectedProject(null)
-                setIsTaskEditing(false)
-                setSelectedTask(null)
-                setIsValPackageEditing(false)
-                setSelectedValPackage(null)
-                setIsChildModalOpen(false)
-                setChildTarget(null)
-                
-                const newIssue = await buildNewIssue()
-                setSelectedIssue(newIssue)
-                setIssueEditMode('create')
-                setIsIssueEditing(true)
-              }}
-              isDeleteMode={isDeleteMode}
-              selectedIssueIds={selectedIssueIds}
-              onToggleIssueSelection={(issueId: string) => {
-                const newSet = new Set(selectedIssueIds)
-                if (newSet.has(issueId)) {
-                  newSet.delete(issueId)
-                } else {
-                  newSet.add(issueId)
-                }
-                setSelectedIssueIds(newSet)
-              }}
-              onDeleteModeChange={(enabled: boolean) => {
-                setIsDeleteMode(enabled)
-                if (!enabled) {
-                  setSelectedIssueIds(new Set())
-                }
-              }}
-              onBatchDelete={handleBatchDeleteIssues}
-            />
-          </>
-        ) : activeTab === 'search' ? (
-          <SearchView
-            onProjectClick={(project: Project) => {
-              // 다른 모달들 닫기
-              setIsTaskEditing(false)
-              setSelectedTask(null)
-              setIsIssueEditing(false)
-              setSelectedIssue(null)
-              setIsValPackageEditing(false)
-              setSelectedValPackage(null)
-              setIsChildModalOpen(false)
-              setChildTarget(null)
-              
-              setSelectedProject(project)
-              setEditMode('edit')
-              setIsEditing(true)
-            }}
-            onTaskClick={(task: ProjectChild, projectId: string | null, projectName: string) => {
-              // 다른 모달들 닫기
-              setIsEditing(false)
-              setSelectedProject(null)
-              setIsIssueEditing(false)
-              setSelectedIssue(null)
-              setIsValPackageEditing(false)
-              setSelectedValPackage(null)
-              setIsChildModalOpen(false)
-              setChildTarget(null)
-              
-              // GMP Record인지 확인
-              const isGmpRecord = !!(task as any).kind_number || !!(task as any).isGmpRecord || (task as any).type === 'gmp-record'
-              
-              setSelectedTask({
-                task,
-                projectId: projectId,
-                projectName: projectName || 'N/A',
-              })
-              setTaskEditMode('edit')
-              setIsTaskEditing(true)
-            }}
-            onGanttTaskClick={(projectId) => {
-              setPendingGanttProjectId(projectId)
-              setActiveTab('gantt')
-            }}
-          />
-        ) : activeTab === 'voc' ? (
-          <VocView
-            currentUser={user ? { name: user.name, username: user.username, role: user.role } : undefined}
-          />
-        ) : activeTab === 'backup' ? (
-          user && (user.role === 'admin' || user.isAdmin) ? (
-            <BackupView />
-          ) : (
-            <Placeholder label={t('page.noAccess')} />
-          )
-        ) : (
-          <Placeholder label={t(tabTranslationPath(activeTab))} />
-        )}
+        <HomeTabContent
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          user={user}
+          projects={projects}
+          loading={loading}
+          error={error}
+          fetchProjects={fetchProjects}
+          issues={issues}
+          issuesLoading={issuesLoading}
+          issuesError={issuesError}
+          fetchIssues={fetchIssues}
+          orphanTasks={orphanTasks}
+          fetchOrphanTasks={fetchOrphanTasks}
+          fetchGanttMyTasks={async () => { await fetchGanttMyTasks() }}
+          gmpRecords={gmpRecords}
+          gmpRecordsLoading={gmpRecordsLoading}
+          gmpRecordsError={gmpRecordsError}
+          fetchGmpRecords={fetchGmpRecords}
+          valPackages={valPackages}
+          valPackagesLoading={valPackagesLoading}
+          valPackagesError={valPackagesError}
+          fetchValPackages={fetchValPackages}
+          ticketsByType={ticketsByType}
+          ticketsLoading={ticketsLoading}
+          ticketsError={ticketsError}
+          fetchTickets={fetchTickets}
+          handleCreateTicket={handleCreateTicket}
+          handleOpenTicketDetail={handleOpenTicketDetail}
+          ganttMyTasks={ganttMyTasks}
+          searchOwner={searchOwner}
+          setSearchOwner={setSearchOwner}
+          pendingGanttProjectId={pendingGanttProjectId}
+          setPendingGanttProjectId={setPendingGanttProjectId}
+          isDeleteMode={isDeleteMode}
+          setIsDeleteMode={setIsDeleteMode}
+          selectedProjectIds={selectedProjectIds}
+          setSelectedProjectIds={setSelectedProjectIds}
+          selectedChildIds={selectedChildIds}
+          setSelectedChildIds={setSelectedChildIds}
+          selectedTaskIds={selectedTaskIds}
+          setSelectedTaskIds={setSelectedTaskIds}
+          selectedValPackageIds={selectedValPackageIds}
+          setSelectedValPackageIds={setSelectedValPackageIds}
+          selectedIssueIds={selectedIssueIds}
+          setSelectedIssueIds={setSelectedIssueIds}
+          isEditing={isEditing}
+          setIsEditing={setIsEditing}
+          selectedProject={selectedProject}
+          setSelectedProject={setSelectedProject}
+          editMode={editMode}
+          setEditMode={setEditMode}
+          isTaskEditing={isTaskEditing}
+          setIsTaskEditing={setIsTaskEditing}
+          selectedTask={selectedTask}
+          setSelectedTask={setSelectedTask}
+          taskEditMode={taskEditMode}
+          setTaskEditMode={setTaskEditMode}
+          isValPackageEditing={isValPackageEditing}
+          setIsValPackageEditing={setIsValPackageEditing}
+          selectedValPackage={selectedValPackage}
+          setSelectedValPackage={setSelectedValPackage}
+          valPackageEditMode={valPackageEditMode}
+          setValPackageEditMode={setValPackageEditMode}
+          setIsIssueEditing={setIsIssueEditing}
+          setSelectedIssue={setSelectedIssue}
+          setIssueEditMode={setIssueEditMode}
+          isChildModalOpen={isChildModalOpen}
+          setIsChildModalOpen={setIsChildModalOpen}
+          childTarget={childTarget}
+          setChildTarget={setChildTarget}
+          contextMenu={contextMenu}
+          setContextMenu={setContextMenu}
+          handleNewProject={handleNewProject}
+          handleProjectContextMenu={handleProjectContextMenu}
+          handleBatchDeleteProjects={handleBatchDeleteProjects}
+          handleBatchDeleteChildren={handleBatchDeleteChildren}
+          handleAddChild={handleAddChild}
+          handleProjectSave={handleProjectSave}
+          handleBatchDeleteGmpRecords={handleBatchDeleteGmpRecords}
+          handleBatchDeleteTasks={handleBatchDeleteTasks}
+          handleValPackageSave={handleValPackageSave}
+          handleNewValPackage={handleNewValPackage}
+          handleBatchDeleteValPackages={handleBatchDeleteValPackages}
+          handleBatchDeleteIssues={handleBatchDeleteIssues}
+        />
 
         {/* 프로젝트 목록 탭과 일감 탭, GMP Record 탭, 검색 탭에서 일감 수정 모달 표시 */}
         {(activeTab === 'list' || activeTab === 'tasks' || activeTab === 'gmp-record' || activeTab === 'search') && isTaskEditing && selectedTask && (

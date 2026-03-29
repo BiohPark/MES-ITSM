@@ -37,5 +37,8 @@ run('add-wbs-permission-and-history', () => {
 run('add-departments-migration', () => {
   execSync('npm run add-departments-migration', { stdio: 'inherit', cwd: root })
 })
+run('add-project-defects-tables', () => {
+  execSync('npm run add-project-defects-tables', { stdio: 'inherit', cwd: root })
+})
 
 process.exit(0)

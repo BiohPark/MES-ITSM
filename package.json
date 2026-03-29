@@ -12,7 +12,7 @@
     "start:https": "node scripts/https-proxy.js",
     "start:https:lan": "node scripts/https-proxy.js --lan",
     "lint": "next lint",
-    "setup-db": "npm run init-db && npm run add-users-table && npm run add-auth-columns && npm run add-task-phases-column && npm run add-task-link-columns && npm run add-srb-ver-column && npm run add-comments-table && npm run add-issues-table && npm run add-resolved-sw-version-column && npm run add-workflow-tables && npm run add-development-workflow && npm run add-voc-table && npm run add-backup-table && npm run add-system-settings-table && npm run add-attachments-table && npm run add-predecessors-table && npm run add-gantt-tables && npm run add-gantt-progress-column && npm run add-gantt-events-table && npm run fix-gantt-owner-id && npm run add-meetings-table && npm run add-meeting-status-column && npm run add-project-cc-columns && npm run add-task-issue-reason-column && npm run add-wbs-permission-and-history && npm run add-departments-migration && npm run create-admin",
+    "setup-db": "npm run init-db && npm run add-users-table && npm run add-auth-columns && npm run add-task-phases-column && npm run add-task-link-columns && npm run add-srb-ver-column && npm run add-comments-table && npm run add-issues-table && npm run add-resolved-sw-version-column && npm run add-workflow-tables && npm run add-development-workflow && npm run add-voc-table && npm run add-backup-table && npm run add-system-settings-table && npm run add-attachments-table && npm run add-predecessors-table && npm run add-gantt-tables && npm run add-gantt-progress-column && npm run add-gantt-events-table && npm run fix-gantt-owner-id && npm run add-meetings-table && npm run add-meeting-status-column && npm run add-project-cc-columns && npm run add-task-issue-reason-column && npm run add-wbs-permission-and-history && npm run add-departments-migration && npm run add-project-defects-tables && npm run create-admin",
     "postinstall": "node scripts/postinstall.js",
     "install-python-deps": "node scripts/install-python-deps.js",
     "init-db": "tsx scripts/init-db.ts",
@@ -71,6 +71,7 @@
     "add-task-issue-reason-column": "tsx scripts/add-task-issue-reason-column.ts",
     "add-wbs-permission-and-history": "tsx scripts/add-wbs-permission-and-history.ts",
     "add-departments-migration": "tsx scripts/add-departments-migration.ts",
+    "add-project-defects-tables": "tsx scripts/add-project-defects-tables.ts",
     "grant-wbs-permission": "tsx scripts/grant-wbs-permission.ts",
     "auto-backup": "tsx scripts/setup-auto-backup.ts",
     "analyze-logs": "tsx scripts/analyze-logs.ts"
