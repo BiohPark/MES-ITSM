@@ -106,4 +106,10 @@ export const ganttEn = {
   dayCount: '{n} days',
   wbsDragHint:
     'Press and hold a row for 0.5s to drag · pick predecessors from the dropdown',
+  linkItsmProject: 'Linked ITSM project',
+  linkItsmProjectHint:
+    'Link a project from the Tasks/Projects tab to sync its work items with WBS rows.',
+  linkItsmNone: '(none)',
+  linkItsmProjectFailed: 'Could not save the ITSM project link.',
+  loadingItsmProjects: 'Loading ITSM projects…',
 }

@@ -784,6 +784,15 @@ export async function addChildToProject(
   if (projectId) {
     await updateProjectDueDate(projectId)
   }
+
+  try {
+    const { syncProjectChildRowToGantt } = await import('@/lib/gantt-project-child-sync')
+    await syncProjectChildRowToGantt(projectId, child)
+  } catch (e) {
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('[addChildToProject] gantt sync skipped:', e)
+    }
+  }
 }
 
 // 하위 아이템 업데이트 (projectId가 null일 수 있음)
@@ -929,6 +938,18 @@ export async function updateChild(
     // 새 프로젝트의 마감일 업데이트
     await updateProjectDueDate(projectId)
   }
+
+  try {
+    const { syncProjectChildRowToGantt } = await import('@/lib/gantt-project-child-sync')
+    await syncProjectChildRowToGantt(projectId, {
+      ...child,
+      status: finalStatus,
+    })
+  } catch (e) {
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('[updateChild] gantt sync skipped:', e)
+    }
+  }
 }
 
 /** 일감(project_children)의 연결 이슈 ID만 설정 (이슈 ↔ 일감 링크) */
@@ -986,6 +1007,15 @@ export async function deleteChild(
     // 프로젝트가 있는 경우 마감일 자동 업데이트
     if (actualProjectId) {
       await updateProjectDueDate(actualProjectId)
+    }
+
+    try {
+      const { deleteGanttTaskByProjectChildId } = await import('@/lib/gantt-project-child-sync')
+      await deleteGanttTaskByProjectChildId(childId)
+    } catch (e) {
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('[deleteChild] gantt row delete skipped:', e)
+      }
     }
   } catch (error) {
     if (process.env.NODE_ENV === 'development') {

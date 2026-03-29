@@ -160,11 +160,11 @@
     "confirmDelete": "Delete this defect?",
     "close": "Close",
     "phUnit": "Unit",
-    "phIntegration": "Integration",
-    "phSystem": "System",
+    "phAcceptance": "Acceptance",
+    "phDryRun": "Dry Run",
+    "phUt": "UT",
     "phUat": "UAT",
-    "phRegression": "Regression",
-    "phOther": "Other"
+    "phPvt": "PVT"
   },
   "auth": {
     "login": {

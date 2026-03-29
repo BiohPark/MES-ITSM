@@ -16,7 +16,7 @@ async function main() {
         description TEXT,
         severity VARCHAR(32) NOT NULL DEFAULT 'Major',
         status VARCHAR(50) NOT NULL DEFAULT 'Open',
-        test_phase VARCHAR(100) NOT NULL DEFAULT 'Other',
+        test_phase VARCHAR(100) NOT NULL DEFAULT 'UT',
         reporter_user_id VARCHAR(64) NULL,
         reporter_name VARCHAR(200) NOT NULL DEFAULT '',
         assignee VARCHAR(200) NULL,

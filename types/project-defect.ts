@@ -4,13 +4,37 @@ export type ProjectDefectSeverity = 'Critical' | 'Major' | 'Minor' | 'Trivial'
 
 export type ProjectDefectStatus = 'Open' | 'InProgress' | 'Resolved' | 'Closed' | 'Deferred'
 
-export type ProjectDefectTestPhase =
-  | 'Unit'
-  | 'Integration'
-  | 'System'
-  | 'UAT'
-  | 'Regression'
-  | 'Other'
+/** DB/API 저장용 키 (표시는 i18n) */
+export const PROJECT_DEFECT_TEST_PHASES = [
+  'Unit',
+  'Acceptance',
+  'DryRun',
+  'UT',
+  'UAT',
+  'PVT',
+] as const
+
+export type ProjectDefectTestPhase = (typeof PROJECT_DEFECT_TEST_PHASES)[number]
+
+/** 구 스키마 → 신 Phase (Integration→UT, System→UAT, Regression→PVT, Other→DryRun; Unit·UAT 유지) */
+const LEGACY_TEST_PHASE_MAP: Record<string, ProjectDefectTestPhase> = {
+  Integration: 'UT',
+  System: 'UAT',
+  Regression: 'PVT',
+  Other: 'DryRun',
+}
+
+const VALID_TEST_PHASE = new Set<string>([...PROJECT_DEFECT_TEST_PHASES])
+
+export function normalizeProjectDefectTestPhase(
+  raw: string | null | undefined
+): ProjectDefectTestPhase {
+  const s = String(raw ?? '').trim()
+  if (VALID_TEST_PHASE.has(s)) return s as ProjectDefectTestPhase
+  const mapped = LEGACY_TEST_PHASE_MAP[s]
+  if (mapped) return mapped
+  return 'UT'
+}
 
 export type ProjectDefect = {
   id: string

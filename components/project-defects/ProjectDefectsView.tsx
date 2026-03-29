@@ -2,18 +2,19 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { Project } from '@/types/project'
-import type {
-  ProjectDefect,
-  ProjectDefectAuditEntry,
-  ProjectDefectSeverity,
-  ProjectDefectStatus,
-  ProjectDefectTestPhase,
+import {
+  PROJECT_DEFECT_TEST_PHASES,
+  type ProjectDefect,
+  type ProjectDefectAuditEntry,
+  type ProjectDefectSeverity,
+  type ProjectDefectStatus,
+  type ProjectDefectTestPhase,
 } from '@/types/project-defect'
 import { useI18n } from '@/lib/i18n'
 
 const SEVERITIES: ProjectDefectSeverity[] = ['Critical', 'Major', 'Minor', 'Trivial']
 const STATUSES: ProjectDefectStatus[] = ['Open', 'InProgress', 'Resolved', 'Closed', 'Deferred']
-const PHASES: ProjectDefectTestPhase[] = ['Unit', 'Integration', 'System', 'UAT', 'Regression', 'Other']
+const PHASES: ProjectDefectTestPhase[] = [...PROJECT_DEFECT_TEST_PHASES]
 
 type Props = {
   isAdmin?: boolean
@@ -27,7 +28,7 @@ function emptyForm(): Partial<ProjectDefect> & { project_id: string } {
     description: '',
     severity: 'Major',
     status: 'Open',
-    test_phase: 'Other',
+    test_phase: 'UT',
     assignee: '',
     detected_at: today,
     resolved_at: '',
@@ -261,11 +262,11 @@ export function ProjectDefectsView({ isAdmin }: Props) {
   const phaseLabel = (p: ProjectDefectTestPhase) => {
     const map: Record<ProjectDefectTestPhase, string> = {
       Unit: t('defect.phUnit'),
-      Integration: t('defect.phIntegration'),
-      System: t('defect.phSystem'),
+      Acceptance: t('defect.phAcceptance'),
+      DryRun: t('defect.phDryRun'),
+      UT: t('defect.phUt'),
       UAT: t('defect.phUat'),
-      Regression: t('defect.phRegression'),
-      Other: t('defect.phOther'),
+      PVT: t('defect.phPvt'),
     }
     return map[p] || p
   }

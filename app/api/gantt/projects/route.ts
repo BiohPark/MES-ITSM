@@ -7,6 +7,7 @@ type GanttProjectRow = {
   name: string
   description?: string | null
   ownerId?: string | null
+  canonicalProjectId?: string | null
   createdAt?: string
   updatedAt?: string
 }
@@ -34,7 +35,9 @@ export async function GET() {
 
     const pool = getPool()
     const [rawRows] = await pool.query(
-      `SELECT id, name, description, owner_id as ownerId, created_at as createdAt, updated_at as updatedAt
+      `SELECT id, name, description, owner_id as ownerId,
+              canonical_project_id as canonicalProjectId,
+              created_at as createdAt, updated_at as updatedAt
        FROM gantt_projects
        ORDER BY id DESC`
     )
@@ -64,7 +67,12 @@ export async function POST(req: NextRequest) {
   try {
     const session = await getSession()
     const body = await req.json()
-    const { id, name, description } = body
+    const { id, name, description, canonicalProjectId } = body as {
+      id?: number
+      name?: string
+      description?: string | null
+      canonicalProjectId?: string | null
+    }
 
     if (!name || typeof name !== 'string') {
       return NextResponse.json(
@@ -76,16 +84,33 @@ export async function POST(req: NextRequest) {
     const pool = getPool()
 
     if (id) {
-      await pool.query(
-        `UPDATE gantt_projects SET name = ?, description = ? WHERE id = ?`,
-        [name, description ?? null, id]
-      )
+      const canon =
+        canonicalProjectId === undefined
+          ? undefined
+          : canonicalProjectId === '' || canonicalProjectId == null
+            ? null
+            : String(canonicalProjectId)
+      if (canon !== undefined) {
+        await pool.query(
+          `UPDATE gantt_projects SET name = ?, description = ?, canonical_project_id = ? WHERE id = ?`,
+          [name, description ?? null, canon, id]
+        )
+      } else {
+        await pool.query(
+          `UPDATE gantt_projects SET name = ?, description = ? WHERE id = ?`,
+          [name, description ?? null, id]
+        )
+      }
       ganttProjectsCacheState.__itsmGanttProjectsCache = undefined
       return NextResponse.json({ success: true, id })
     } else {
+      const canon =
+        canonicalProjectId === undefined || canonicalProjectId === '' || canonicalProjectId == null
+          ? null
+          : String(canonicalProjectId)
       const [result] = await pool.query<any>(
-        `INSERT INTO gantt_projects (name, description, owner_id) VALUES (?, ?, ?)`,
-        [name, description ?? null, session?.userId ?? null]
+        `INSERT INTO gantt_projects (name, description, owner_id, canonical_project_id) VALUES (?, ?, ?, ?)`,
+        [name, description ?? null, session?.userId ?? null, canon]
       )
       ganttProjectsCacheState.__itsmGanttProjectsCache = undefined
       return NextResponse.json({ success: true, id: result.insertId })

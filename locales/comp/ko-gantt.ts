@@ -104,4 +104,10 @@ export const ganttKo = {
   createProjectBtn: '새로 만들기',
   dayCount: '{n}일',
   wbsDragHint: '행을 0.5초 이상 누르면 드래그로 이동 · 선행 작업은 드롭다운으로 선택',
+  linkItsmProject: '연결 ITSM 프로젝트',
+  linkItsmProjectHint:
+    '프로젝트(일감) 탭의 프로젝트와 연결하면 해당 프로젝트의 일감과 WBS 행이 서로 동기화됩니다.',
+  linkItsmNone: '(연결 없음)',
+  linkItsmProjectFailed: 'ITSM 프로젝트 연결을 저장하지 못했습니다.',
+  loadingItsmProjects: 'ITSM 프로젝트 목록을 불러오는 중…',
 }

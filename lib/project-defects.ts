@@ -1,10 +1,11 @@
 import { getPool } from './db'
-import type {
-  ProjectDefect,
-  ProjectDefectAuditEntry,
-  ProjectDefectSeverity,
-  ProjectDefectStatus,
-  ProjectDefectTestPhase,
+import {
+  normalizeProjectDefectTestPhase,
+  type ProjectDefect,
+  type ProjectDefectAuditEntry,
+  type ProjectDefectSeverity,
+  type ProjectDefectStatus,
+  type ProjectDefectTestPhase,
 } from '@/types/project-defect'
 
 function d(v: unknown): string {
@@ -29,7 +30,7 @@ function mapDefect(row: Record<string, unknown>): ProjectDefect {
     description: String(row.description ?? ''),
     severity: (row.severity as ProjectDefectSeverity) || 'Major',
     status: (row.status as ProjectDefectStatus) || 'Open',
-    test_phase: (row.test_phase as ProjectDefectTestPhase) || 'Other',
+    test_phase: normalizeProjectDefectTestPhase(row.test_phase as string),
     reporter_user_id: row.reporter_user_id != null ? String(row.reporter_user_id) : null,
     reporter_name: String(row.reporter_name ?? ''),
     assignee: String(row.assignee ?? ''),
@@ -145,6 +146,7 @@ export async function insertProjectDefect(
 ): Promise<string> {
   const pool = getPool()
   const id = row.id || (await getNextProjectDefectId())
+  const phase = normalizeProjectDefectTestPhase(row.test_phase as string)
   await pool.query(
     `INSERT INTO project_defects (
       id, project_id, title, description, severity, status, test_phase,
@@ -158,7 +160,7 @@ export async function insertProjectDefect(
       row.description || null,
       row.severity,
       row.status,
-      row.test_phase,
+      phase,
       row.reporter_user_id,
       row.reporter_name || '',
       row.assignee || null,
@@ -217,7 +219,11 @@ export async function updateProjectDefect(
   const before = await getProjectDefectById(id)
   if (!before) throw new Error('Defect not found')
 
-  const merged: ProjectDefect = { ...before, ...patch }
+  const patchNorm = { ...patch }
+  if (patchNorm.test_phase !== undefined) {
+    patchNorm.test_phase = normalizeProjectDefectTestPhase(String(patchNorm.test_phase))
+  }
+  const merged: ProjectDefect = { ...before, ...patchNorm }
   const pool = getPool()
   await pool.query(
     `UPDATE project_defects SET
@@ -242,7 +248,7 @@ export async function updateProjectDefect(
       id,
     ]
   )
-  const changes = diffDefect(before, patch)
+  const changes = diffDefect(before, patchNorm)
   if (Object.keys(changes).length > 0) {
     await appendAudit(id, 'updated', actor, 'Defect updated', { fields: changes })
   }

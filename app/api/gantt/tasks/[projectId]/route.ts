@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
+import type { ResultSetHeader, RowDataPacket } from 'mysql2'
 import { getPool } from '@/lib/db'
 import { getSession } from '@/lib/auth'
 import { getAccountById } from '@/lib/accounts'
+import { syncGanttRowToProjectChild } from '@/lib/gantt-project-child-sync'
 
 // 특정 Gantt 프로젝트의 태스크 목록 조회 및 저장
 
@@ -50,7 +52,8 @@ export async function GET(
         progress_percent as progressPercent,
         predecessors,
         assignee,
-        is_milestone as isMilestone
+        is_milestone as isMilestone,
+        project_child_id as projectChildId
       FROM gantt_tasks
       WHERE project_id = ?
       ORDER BY sort_order ASC, id ASC
@@ -98,6 +101,7 @@ export async function POST(
     const { tasks } = body as {
       tasks: Array<{
         id?: number
+        projectChildId?: string | null
         wbsCode?: string | null
         outlineLevel: number
         sortOrder: number
@@ -132,11 +136,6 @@ export async function POST(
     try {
       await conn.beginTransaction()
 
-      // 기존 태스크는 일단 삭제하고 다시 넣는 단순 방식 (1차 버전)
-      await conn.query(`DELETE FROM gantt_tasks WHERE project_id = ?`, [
-        projectId,
-      ])
-
       const toDateStr = (d: unknown): string | null => {
         if (d == null || d === '') return null
         const s = typeof d === 'string' ? d : (d instanceof Date ? d.toISOString() : String(d))
@@ -144,24 +143,26 @@ export async function POST(
         return part && /^\d{4}-\d{2}-\d{2}$/.test(part) ? part : null
       }
 
-      for (let i = 0; i < tasks.length; i++) {
-        const t = tasks[i]
-        const name = t.name != null ? String(t.name) : ''
-        const startDate = toDateStr(t.startDate)
-        const finishDate = toDateStr(t.finishDate)
+      const keptIds: number[] = []
 
-        const progressPercent =
-          t.progressPercent != null
-            ? Math.min(100, Math.max(0, Math.round(Number(t.progressPercent))))
-            : null
-        await conn.query(
-          `
-          INSERT INTO gantt_tasks
-            (project_id, wbs_code, outline_level, sort_order, name, start_date, finish_date, duration_days, progress_percent, predecessors, assignee, is_milestone)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `,
-          [
-            projectId,
+      if (tasks.length === 0) {
+        await conn.query(`DELETE FROM gantt_tasks WHERE project_id = ?`, [projectId])
+      } else {
+        for (let i = 0; i < tasks.length; i++) {
+          const t = tasks[i]
+          const name = t.name != null ? String(t.name) : ''
+          const startDate = toDateStr(t.startDate)
+          const finishDate = toDateStr(t.finishDate)
+          const progressPercent =
+            t.progressPercent != null
+              ? Math.min(100, Math.max(0, Math.round(Number(t.progressPercent))))
+              : null
+          const projectChildId =
+            t.projectChildId != null && String(t.projectChildId).trim() !== ''
+              ? String(t.projectChildId).trim()
+              : null
+
+          const commonUpdate = [
             t.wbsCode ?? null,
             t.outlineLevel ?? 1,
             t.sortOrder ?? i + 1,
@@ -173,7 +174,88 @@ export async function POST(
             t.predecessors ?? null,
             t.assignee ?? null,
             t.isMilestone ? 1 : 0,
-          ]
+            projectChildId,
+          ] as const
+
+          let rowId: number | null = null
+
+          if (t.id != null && Number.isFinite(Number(t.id))) {
+            const idNum = Number(t.id)
+            const [byIdRows] = await conn.query<RowDataPacket[]>(
+              'SELECT id FROM gantt_tasks WHERE id = ? AND project_id = ?',
+              [idNum, projectId]
+            )
+            if (byIdRows.length > 0) {
+              await conn.query(
+                `UPDATE gantt_tasks SET
+                  wbs_code = ?, outline_level = ?, sort_order = ?, name = ?, start_date = ?, finish_date = ?,
+                  duration_days = ?, progress_percent = ?, predecessors = ?, assignee = ?, is_milestone = ?, project_child_id = ?
+                 WHERE id = ?`,
+                [...commonUpdate, idNum]
+              )
+              rowId = idNum
+            }
+          }
+
+          if (rowId == null && projectChildId) {
+            const [byPcRows] = await conn.query<RowDataPacket[]>(
+              'SELECT id, project_id FROM gantt_tasks WHERE project_child_id = ?',
+              [projectChildId]
+            )
+            const hit = byPcRows[0] as
+              | { id: number; project_id: number }
+              | undefined
+            if (hit) {
+              if (Number(hit.project_id) !== projectId) {
+                await conn.query(`UPDATE gantt_tasks SET project_id = ? WHERE id = ?`, [
+                  projectId,
+                  hit.id,
+                ])
+              }
+              await conn.query(
+                `UPDATE gantt_tasks SET
+                  wbs_code = ?, outline_level = ?, sort_order = ?, name = ?, start_date = ?, finish_date = ?,
+                  duration_days = ?, progress_percent = ?, predecessors = ?, assignee = ?, is_milestone = ?, project_child_id = ?
+                 WHERE id = ?`,
+                [...commonUpdate, hit.id]
+              )
+              rowId = hit.id
+            }
+          }
+
+          if (rowId == null) {
+            const [ins] = await conn.query<ResultSetHeader>(
+              `
+              INSERT INTO gantt_tasks
+                (project_id, project_child_id, wbs_code, outline_level, sort_order, name, start_date, finish_date, duration_days, progress_percent, predecessors, assignee, is_milestone)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              `,
+              [
+                projectId,
+                projectChildId,
+                t.wbsCode ?? null,
+                t.outlineLevel ?? 1,
+                t.sortOrder ?? i + 1,
+                name,
+                startDate,
+                finishDate,
+                t.durationDays ?? null,
+                progressPercent,
+                t.predecessors ?? null,
+                t.assignee ?? null,
+                t.isMilestone ? 1 : 0,
+              ]
+            )
+            rowId = ins.insertId
+          }
+
+          keptIds.push(rowId!)
+        }
+
+        const placeholders = keptIds.map(() => '?').join(',')
+        await conn.query(
+          `DELETE FROM gantt_tasks WHERE project_id = ? AND id NOT IN (${placeholders})`,
+          [projectId, ...keptIds]
         )
       }
 
@@ -192,6 +274,34 @@ export async function POST(
         )
       } catch (histErr) {
         console.error('[gantt/tasks] history insert failed:', histErr)
+      }
+
+      const toDateStrPost = (d: unknown): string | null => {
+        if (d == null || d === '') return null
+        const s = typeof d === 'string' ? d : (d instanceof Date ? d.toISOString() : String(d))
+        const part = s.split('T')[0]
+        return part && /^\d{4}-\d{2}-\d{2}$/.test(part) ? part : null
+      }
+      for (const t of tasks) {
+        const pcId =
+          t.projectChildId != null && String(t.projectChildId).trim() !== ''
+            ? String(t.projectChildId).trim()
+            : null
+        if (!pcId) continue
+        try {
+          await syncGanttRowToProjectChild(projectId, pcId, {
+            name: t.name != null ? String(t.name) : '',
+            assignee: t.assignee != null ? String(t.assignee) : null,
+            startDate: toDateStrPost(t.startDate),
+            finishDate: toDateStrPost(t.finishDate),
+            progressPercent:
+              t.progressPercent != null
+                ? Math.min(100, Math.max(0, Math.round(Number(t.progressPercent))))
+                : null,
+          })
+        } catch (syncErr) {
+          console.error('[gantt/tasks] project_child sync failed:', syncErr)
+        }
       }
 
       return NextResponse.json({ success: true })

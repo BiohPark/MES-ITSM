@@ -6,7 +6,11 @@ import {
   insertProjectDefect,
   listProjectDefects,
 } from '@/lib/project-defects'
-import type { ProjectDefectSeverity, ProjectDefectStatus, ProjectDefectTestPhase } from '@/types/project-defect'
+import {
+  normalizeProjectDefectTestPhase,
+  type ProjectDefectSeverity,
+  type ProjectDefectStatus,
+} from '@/types/project-defect'
 
 async function projectExists(projectId: string): Promise<boolean> {
   const pool = getPool()
@@ -57,7 +61,9 @@ export async function POST(request: NextRequest) {
         description: String(body.description || ''),
         severity: (body.severity as ProjectDefectSeverity) || 'Major',
         status: (body.status as ProjectDefectStatus) || 'Open',
-        test_phase: (body.test_phase as ProjectDefectTestPhase) || 'Other',
+        test_phase: normalizeProjectDefectTestPhase(
+          body.test_phase != null ? String(body.test_phase) : 'UT'
+        ),
         reporter_user_id: session.userId,
         reporter_name: session.name || session.username || '',
         assignee: String(body.assignee || ''),

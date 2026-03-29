@@ -7,7 +7,11 @@ import {
   listAuditForDefect,
   updateProjectDefect,
 } from '@/lib/project-defects'
-import type { ProjectDefectSeverity, ProjectDefectStatus, ProjectDefectTestPhase } from '@/types/project-defect'
+import {
+  normalizeProjectDefectTestPhase,
+  type ProjectDefectSeverity,
+  type ProjectDefectStatus,
+} from '@/types/project-defect'
 
 export async function GET(
   _request: NextRequest,
@@ -42,7 +46,9 @@ export async function PUT(
     if (body.description !== undefined) patch.description = String(body.description)
     if (body.severity !== undefined) patch.severity = body.severity as ProjectDefectSeverity
     if (body.status !== undefined) patch.status = body.status as ProjectDefectStatus
-    if (body.test_phase !== undefined) patch.test_phase = body.test_phase as ProjectDefectTestPhase
+    if (body.test_phase !== undefined) {
+      patch.test_phase = normalizeProjectDefectTestPhase(String(body.test_phase))
+    }
     if (body.assignee !== undefined) patch.assignee = String(body.assignee)
     if (body.detected_at !== undefined) patch.detected_at = String(body.detected_at)
     if (body.resolved_at !== undefined) patch.resolved_at = String(body.resolved_at)

@@ -218,6 +218,8 @@ interface GanttProject {
   id: number
   name: string
   description?: string | null
+  /** ITSM `projects.id` — 연결 시 일감↔WBS 동기화 */
+  canonicalProjectId?: string | null
 }
 
 interface GanttTask {
@@ -234,6 +236,8 @@ interface GanttTask {
   predecessors?: string | null
   assignee?: string | null
   isMilestone?: boolean
+  /** `project_children.id` — 동기화된 일감과 1:1 */
+  projectChildId?: string | null
 }
 
 type SubTabKey = 'wbs' | 'chart'
@@ -292,6 +296,12 @@ export function GanttWorkspace({
   const registeredUserNamesRef = useRef<Set<string>>(new Set())
   const projectsLoadedRef = useRef(false)
   const projectsLoadPromiseRef = useRef<Promise<void> | null>(null)
+  /** WBS ↔ ITSM 프로젝트 연결용 드롭다운 */
+  const [itsmProjectsForLink, setItsMProjectsForLink] = useState<
+    { id: string; name: string }[]
+  >([])
+  const [itsmProjectsLoading, setItsMProjectsLoading] = useState(false)
+  const [canonicalLinkSaving, setCanonicalLinkSaving] = useState(false)
 
   const selectedProject = useMemo(
     () => projects.find((p) => p.id === selectedProjectId) || null,
@@ -358,6 +368,68 @@ export function GanttWorkspace({
       })
     return () => { cancelled = true }
   }, [])
+
+  useEffect(() => {
+    if (!selectedProjectId) {
+      setItsMProjectsForLink([])
+      return
+    }
+    let cancelled = false
+    setItsMProjectsLoading(true)
+    fetch('/api/projects?detail=lite')
+      .then((res) => res.json())
+      .then((data) => {
+        if (cancelled) return
+        const list = Array.isArray(data) ? data : []
+        setItsMProjectsForLink(
+          list.map((p: { id: string; name: string }) => ({
+            id: String(p.id),
+            name: String(p.name ?? p.id),
+          }))
+        )
+      })
+      .catch(() => {
+        if (!cancelled) setItsMProjectsForLink([])
+      })
+      .finally(() => {
+        if (!cancelled) setItsMProjectsLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [selectedProjectId])
+
+  const updateGanttCanonicalLink = useCallback(
+    async (canonicalProjectId: string | null) => {
+      if (!selectedProjectId || !selectedProject) return
+      setCanonicalLinkSaving(true)
+      try {
+        const res = await fetch('/api/gantt/projects', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: selectedProjectId,
+            name: selectedProject.name,
+            description: selectedProject.description ?? null,
+            canonicalProjectId,
+          }),
+        })
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}))
+          throw new Error(
+            data.error || data.details || tr('comp.gantt.linkItsmProjectFailed')
+          )
+        }
+        await loadProjects(true)
+      } catch (e: any) {
+        alert(e?.message || tr('comp.gantt.linkItsmProjectFailed'))
+        await loadProjects(true)
+      } finally {
+        setCanonicalLinkSaving(false)
+      }
+    },
+    [selectedProjectId, selectedProject, loadProjects, tr]
+  )
 
   /** 담당자 검증용 사용자 목록은 수정/저장 시점에 지연 로드 */
   const ensureAssignableUsersLoaded = useCallback(async (): Promise<Set<string>> => {
@@ -1582,6 +1654,63 @@ export function GanttWorkspace({
               </button>
             )}
           </div>
+          {selectedProjectId != null && selectedProject && (
+            <div
+              className="servicenow-toolbar__row"
+              style={{
+                marginTop: '0.5rem',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                gap: '0.5rem',
+              }}
+            >
+              <label
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  flex: '1 1 14rem',
+                  minWidth: 0,
+                }}
+              >
+                <span style={{ whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
+                  {tr('comp.gantt.linkItsmProject')}
+                </span>
+                <select
+                  className="servicenow-form-select"
+                  style={{ flex: 1, minWidth: '10rem' }}
+                  value={selectedProject.canonicalProjectId ?? ''}
+                  disabled={
+                    readOnlyWbs || itsmProjectsLoading || canonicalLinkSaving
+                  }
+                  onChange={(e) => {
+                    const v = e.target.value
+                    void updateGanttCanonicalLink(v === '' ? null : v)
+                  }}
+                >
+                  <option value="">
+                    {itsmProjectsLoading
+                      ? tr('comp.gantt.loadingItsmProjects')
+                      : tr('comp.gantt.linkItsmNone')}
+                  </option>
+                  {itsmProjectsForLink.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} ({p.id})
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <span
+                style={{
+                  fontSize: '0.72rem',
+                  color: 'var(--sn-text-secondary, #666)',
+                  flex: '1 1 100%',
+                }}
+              >
+                {tr('comp.gantt.linkItsmProjectHint')}
+              </span>
+            </div>
+          )}
           <div className="servicenow-toolbar__row" style={{ marginTop: '0.5rem' }}>
             <input
               type="text"

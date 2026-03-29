@@ -160,11 +160,11 @@
     "confirmDelete": "이 Defect을 삭제할까요?",
     "close": "닫기",
     "phUnit": "단위",
-    "phIntegration": "통합",
-    "phSystem": "시스템",
+    "phAcceptance": "인수",
+    "phDryRun": "Dry Run",
+    "phUt": "UT",
     "phUat": "UAT",
-    "phRegression": "회귀",
-    "phOther": "기타"
+    "phPvt": "PVT"
   },
   "auth": {
     "login": {
